@@ -1,6 +1,8 @@
 import os
-from serpapi import GoogleSearch
+
 from langchain.tools import tool
+from serpapi import GoogleSearch
+
 
 @tool
 def search_linkedin_for_employees(company_name: str) -> str:
@@ -16,12 +18,7 @@ def search_linkedin_for_employees(company_name: str) -> str:
 
         query = f'site:linkedin.com/in "people" "works at {company_name}" OR "worked at {company_name}"'
 
-        params = {
-            "q": query,
-            "engine": "google",
-            "num": 20,
-            "api_key": api_key
-        }
+        params = {"q": query, "engine": "google", "num": 20, "api_key": api_key}
 
         search = GoogleSearch(params)
         results = search.get_dict()
@@ -31,12 +28,13 @@ def search_linkedin_for_employees(company_name: str) -> str:
         if not profiles:
             return f"No employee profiles found for {company_name} on LinkedIn via Google search."
 
-        output = [f"Found {len(profiles)} potential employee profiles for {company_name}:\n"]
+        output = [
+            f"Found {len(profiles)} potential employee profiles for {company_name}:\n"
+        ]
         for profile in profiles:
             title = profile.get("title", "No title found")
             link = profile.get("link", "No link found")
             snippet = profile.get("snippet", "No snippet found")
-            
 
             name_and_role = title.replace(" - LinkedIn", "").strip()
             output.append(f"- Profile: {name_and_role}")

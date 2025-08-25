@@ -1,38 +1,40 @@
-from langchain.tools import tool
-import requests
-from bs4 import BeautifulSoup
 import re
 from urllib.parse import urlparse
+
+import requests
+from bs4 import BeautifulSoup
+from langchain.tools import tool
+
 
 class WebpageExtractor:
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+        )
 
     def extract_text_from_html(self, html_content):
         """Extrai texto relevante do conteúdo HTML."""
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, "html.parser")
 
-
-        for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
 
-
         text_elements = []
-        for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        for tag in soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"]):
             text = tag.get_text(strip=True)
             if text and len(text) > 20:
                 text_elements.append(text)
 
-        return '\n'.join(text_elements)
+        return "\n".join(text_elements)
 
     def is_valid_url(self, url):
         """Verifica se a URL é válida e segura para acessar."""
         try:
             parsed = urlparse(url)
-            return all([parsed.scheme in ['http', 'https'], parsed.netloc])
+            return all([parsed.scheme in ["http", "https"], parsed.netloc])
         except:
             return False
 
@@ -45,16 +47,17 @@ class WebpageExtractor:
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
 
-
-            content_type = response.headers.get('content-type', '').lower()
-            if 'text/html' not in content_type:
+            content_type = response.headers.get("content-type", "").lower()
+            if "text/html" not in content_type:
                 return f"Conteúdo não é HTML: {content_type}"
 
             return self.extract_text_from_html(response.text)
         except requests.exceptions.RequestException as e:
             return f"Erro ao acessar {url}: {str(e)}"
 
+
 extractor = WebpageExtractor()
+
 
 @tool
 def extract_webpage_content(url: str) -> str:

@@ -1,9 +1,11 @@
-import os
-from langchain.tools import tool
-import requests
 import asyncio
-import aiohttp
+import os
 from typing import Dict, List
+
+import aiohttp
+import requests
+from langchain.tools import tool
+
 
 class EmailAnalyzer:
     def __init__(self):
@@ -17,17 +19,32 @@ class EmailAnalyzer:
         async with aiohttp.ClientSession() as session:
 
             services = [
-                ("Twitter", "https://api.twitter.com/i/users/email_available.json", {"email": email}),
-                ("Instagram", "https://www.instagram.com/accounts/check_email/", {"email": email}),
+                (
+                    "Twitter",
+                    "https://api.twitter.com/i/users/email_available.json",
+                    {"email": email},
+                ),
+                (
+                    "Instagram",
+                    "https://www.instagram.com/accounts/check_email/",
+                    {"email": email},
+                ),
                 ("LinkedIn", "https://www.linkedin.com/login-submit", {"email": email}),
-                ("Spotify", "https://spclient.wg.spotify.com/signup/public/v1/account", {"email": email}),
-                ("Discord", "https://discord.com/api/v9/auth/register", {"email": email}),
+                (
+                    "Spotify",
+                    "https://spclient.wg.spotify.com/signup/public/v1/account",
+                    {"email": email},
+                ),
+                (
+                    "Discord",
+                    "https://discord.com/api/v9/auth/register",
+                    {"email": email},
+                ),
             ]
 
             for service_name, url, data in services:
                 try:
                     async with session.post(url, json=data, timeout=10) as response:
-
 
                         exists = response.status in [400, 409]
                         results[service_name] = exists
@@ -37,12 +54,12 @@ class EmailAnalyzer:
 
         return results
 
+
 @tool
 def analyze_email(email: str) -> str:
     """Analisa um e-mail usando múltiplas fontes."""
     results = []
     analyzer = EmailAnalyzer()
-
 
     try:
         loop = asyncio.new_event_loop()
@@ -57,33 +74,33 @@ def analyze_email(email: str) -> str:
         except:
             pass
 
-
     if services:
         results.append("\n=== Serviços Verificados ===")
         for service, exists in services.items():
-            results.append(f"- {service}: {'Encontrado' if exists else 'Não encontrado'}")
-
+            results.append(
+                f"- {service}: {'Encontrado' if exists else 'Não encontrado'}"
+            )
 
     if analyzer.hibp_api_key:
         try:
             headers = {
-                'hibp-api-key': analyzer.hibp_api_key,
-                'user-agent': 'OSINT-Tool'
+                "hibp-api-key": analyzer.hibp_api_key,
+                "user-agent": "OSINT-Tool",
             }
 
             response = requests.get(
-                f'https://haveibeenpwned.com/api/v3/breachedaccount/{email}',
+                f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
                 headers=headers,
-                timeout=10
+                timeout=10,
             )
 
             if response.status_code == 200:
                 results.append("\n=== Vazamentos de Dados ===")
                 breaches = response.json()
                 for breach in breaches:
-                    name = breach.get('Name', 'Desconhecido')
-                    domain = breach.get('Domain', 'Desconhecido')
-                    date = breach.get('BreachDate', 'Data desconhecida')
+                    name = breach.get("Name", "Desconhecido")
+                    domain = breach.get("Domain", "Desconhecido")
+                    date = breach.get("BreachDate", "Data desconhecida")
                     results.append(f"- {name} ({domain}) - {date}")
             elif response.status_code == 404:
                 results.append("\n=== Vazamentos de Dados ===")
@@ -91,27 +108,24 @@ def analyze_email(email: str) -> str:
         except Exception as e:
             print(f"[Debug] Erro ao verificar vazamentos: {e}")
 
-
     if analyzer.emailrep_api_key:
         try:
-            headers = {'Key': analyzer.emailrep_api_key}
+            headers = {"Key": analyzer.emailrep_api_key}
             response = requests.get(
-                f'https://emailrep.io/{email}',
-                headers=headers,
-                timeout=10
+                f"https://emailrep.io/{email}", headers=headers, timeout=10
             )
 
             if response.status_code == 200:
                 reputation = response.json()
                 results.append("\n=== Reputação do E-mail ===")
-                suspicious = reputation.get('suspicious', False)
+                suspicious = reputation.get("suspicious", False)
                 results.append(f"- Suspeito: {'Sim' if suspicious else 'Não'}")
                 results.append(f"- Reputação: {reputation.get('reputation', 'N/A')}")
-                if 'details' in reputation:
+                if "details" in reputation:
                     results.append("- Detalhes:")
-                    for key, value in reputation['details'].items():
+                    for key, value in reputation["details"].items():
                         results.append(f"  * {key}: {value}")
         except Exception as e:
             print(f"[Debug] Erro ao verificar reputação: {e}")
 
-    return '\n'.join(results) if results else "Nenhuma informação encontrada"
+    return "\n".join(results) if results else "Nenhuma informação encontrada"

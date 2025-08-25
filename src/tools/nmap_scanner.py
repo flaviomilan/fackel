@@ -1,6 +1,8 @@
+import re
+
 import nmap
 from langchain.tools import tool
-import re
+
 
 @tool
 def nmap_port_scan(host: str) -> str:
@@ -14,7 +16,7 @@ def nmap_port_scan(host: str) -> str:
         # -sV: Probe open ports to determine service/version info
         # -T4: Aggressive timing template (for faster scans)
         # --script vulners: Check for vulnerabilities using the Vulners database
-        arguments = '-sV -T4 --script vulners'
+        arguments = "-sV -T4 --script vulners"
         nm.scan(hosts=host, arguments=arguments)
 
         if not nm.all_hosts():
@@ -36,23 +38,26 @@ def nmap_port_scan(host: str) -> str:
                 port_info += f"\n    Extra Info: {service.get('extrainfo', 'N/A')}"
                 output.append(port_info)
 
-
-                if 'script' in service and 'vulners' in service['script']:
+                if "script" in service and "vulners" in service["script"]:
                     output.append(f"    **Vulnerabilities (CVEs) Found:**")
 
-                    vulners_output = service['script']['vulners']
+                    vulners_output = service["script"]["vulners"]
 
-                    cve_matches = re.finditer(r'(CVE-\d{4}-\d{4,7})\s*(\d+\.\d+)', vulners_output)
+                    cve_matches = re.finditer(
+                        r"(CVE-\d{4}-\d{4,7})\s*(\d+\.\d+)", vulners_output
+                    )
                     found_cves = False
                     for match in cve_matches:
                         cve_id = match.group(1)
                         cvss_score = match.group(2)
                         output.append(f"      - {cve_id} (CVSS: {cvss_score})")
                         found_cves = True
-                    
+
                     if not found_cves:
-                        output.append("      - No specific CVEs listed by Vulners, but vulnerabilities may exist.")
-        
+                        output.append(
+                            "      - No specific CVEs listed by Vulners, but vulnerabilities may exist."
+                        )
+
         return "\n".join(output)
 
     except nmap.PortScannerError as e:

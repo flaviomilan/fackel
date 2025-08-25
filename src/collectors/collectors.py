@@ -1,18 +1,19 @@
 from src.tools.censys_tool import censys_lookup
 from src.tools.censys_web_tool import censys_web_lookup
-from src.tools.virustotal_tool import virustotal_subdomain_enum
+from src.tools.dnsdumpster_tool import dnsdumpster_lookup
+from src.tools.duckduckgo_tool import duckduckgo_lookup
+from src.tools.email_analyzer import analyze_email
+from src.tools.host_prober import probe_host
+from src.tools.job_search import job_search
 from src.tools.linkedin_employee_search import search_linkedin_for_employees
 from src.tools.nmap_scanner import nmap_port_scan
-from src.tools.dnsdumpster_tool import dnsdumpster_lookup
-from src.tools.host_prober import probe_host
-from src.tools.whois import whois_lookup
-from src.tools.shodan_tool import shodan_lookup
-from src.tools.duckduckgo_tool import duckduckgo_lookup
-from src.tools.webpage_extractor import extract_webpage_content
-from src.tools.job_search import job_search
-from src.tools.serpapi_tool import serp_search
-from src.tools.email_analyzer import analyze_email
 from src.tools.profile_analyzer import analyze_professional_profile
+from src.tools.serpapi_tool import serp_search
+from src.tools.shodan_tool import shodan_lookup
+from src.tools.virustotal_tool import virustotal_subdomain_enum
+from src.tools.webpage_extractor import extract_webpage_content
+from src.tools.whois import whois_lookup
+
 
 def get_passive_tools():
     """Returns a list of all available passive OSINT tools."""
@@ -32,9 +33,11 @@ def get_passive_tools():
         censys_web_lookup,
     ]
 
+
 def get_active_tools():
     """Returns a list of all available active scanning tools."""
     return [probe_host, nmap_port_scan]
+
 
 def get_all_tools(active_scan: bool = False):
     """Returns a list of tools based on the scanning mode."""

@@ -1,10 +1,13 @@
-from langchain.tools import tool
 import asyncio
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
-from typing import Dict, Any, List
-import re
 import json
+import re
 import traceback
+from typing import Any, Dict, List
+
+from langchain.tools import tool
+from playwright.async_api import TimeoutError as PlaywrightTimeout
+from playwright.async_api import async_playwright
+
 
 class CensysWebScraper:
     def __init__(self):
@@ -15,12 +18,11 @@ class CensysWebScraper:
         print("[Debug] Iniciando setup do browser...")
         playwright = await async_playwright().start()
         browser = await playwright.chromium.launch(
-            headless=True,
-            args=['--no-sandbox', '--disable-setuid-sandbox']
+            headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         context = await browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+            viewport={"width": 1920, "height": 1080},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
         )
 
         return context, playwright, browser
@@ -32,49 +34,47 @@ class CensysWebScraper:
         try:
             print("[Debug] Aguardando carregamento da página...")
 
-            await page.wait_for_load_state('networkidle')
+            await page.wait_for_load_state("networkidle")
 
-
-            no_results = await page.query_selector('.no-results')
+            no_results = await page.query_selector(".no-results")
             if no_results:
                 print("[Debug] Nenhum resultado encontrado")
                 return {"message": "Nenhum resultado encontrado"}
 
             print("[Debug] Extraindo informações...")
 
-
             ips = await page.query_selector_all('text="IP Address:"')
             if ips:
-                info['ips'] = []
+                info["ips"] = []
                 for ip_elem in ips:
                     try:
-                        parent = await ip_elem.evaluate('node => node.parentElement')
+                        parent = await ip_elem.evaluate("node => node.parentElement")
                         if parent:
-                            ip_text = await parent.evaluate('node => node.textContent')
+                            ip_text = await parent.evaluate("node => node.textContent")
                             if ip_text:
-                                info['ips'].append(ip_text.replace('IP Address:', '').strip())
+                                info["ips"].append(
+                                    ip_text.replace("IP Address:", "").strip()
+                                )
                     except Exception as e:
                         print(f"[Debug] Erro ao extrair IP: {e}")
 
-
-            services = await page.query_selector_all('.service-info')
+            services = await page.query_selector_all(".service-info")
             if services:
-                info['services'] = []
+                info["services"] = []
                 for service in services:
                     try:
                         service_text = await service.inner_text()
-                        info['services'].append(service_text.strip())
+                        info["services"].append(service_text.strip())
                     except Exception as e:
                         print(f"[Debug] Erro ao extrair serviço: {e}")
 
-
-            ssl_info = await page.query_selector_all('.ssl-info')
+            ssl_info = await page.query_selector_all(".ssl-info")
             if ssl_info:
-                info['ssl'] = []
+                info["ssl"] = []
                 for ssl in ssl_info:
                     try:
                         ssl_text = await ssl.inner_text()
-                        info['ssl'].append(ssl_text.strip())
+                        info["ssl"].append(ssl_text.strip())
                     except Exception as e:
                         print(f"[Debug] Erro ao extrair SSL: {e}")
 
@@ -99,13 +99,12 @@ class CensysWebScraper:
             print(f"[Debug] Iniciando busca para domínio: {domain}")
             context, playwright, browser = await self.setup_browser()
 
-
             page = await context.new_page()
             print(f"[Debug] Navegando para {self.base_url}/search?q={domain}")
 
-
-            await page.goto(f"{self.base_url}/search?q={domain}", wait_until='networkidle')
-
+            await page.goto(
+                f"{self.base_url}/search?q={domain}", wait_until="networkidle"
+            )
 
             info = await self.extract_host_info(page)
             if info:
@@ -127,14 +126,15 @@ class CensysWebScraper:
             if playwright:
                 await playwright.stop()
 
+
 scraper = CensysWebScraper()
+
 
 @tool
 def censys_web_lookup(domain: str) -> str:
     """Realiza web scraping na interface web do Censys para encontrar hosts e informações técnicas de um domínio. Use como uma alternativa caso a API (censys_lookup) não retorne resultados ou falhe."""
     try:
         print(f"\n[Censys] Iniciando busca para: {domain}")
-
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -146,7 +146,6 @@ def censys_web_lookup(domain: str) -> str:
 
         if not results:
             return "Nenhuma informação encontrada"
-
 
         output = []
         for result in results:

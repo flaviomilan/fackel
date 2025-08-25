@@ -1,13 +1,13 @@
 import os
+
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_community.cache import SQLiteCache
 from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 from src.collectors.collectors import get_all_tools
-
 
 set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
@@ -29,9 +29,7 @@ class OsintProcessor:
             raise ValueError("OPENAI_API_KEY not found in environment variables.")
 
         self.llm = ChatOpenAI(
-            temperature=0,
-            model="gpt-4-turbo-preview",
-            streaming=True
+            temperature=0, model="gpt-4-turbo-preview", streaming=True
         )
         self.active_scan = active_scan
         self.tools = get_all_tools(active_scan=active_scan)
@@ -88,14 +86,9 @@ METHODOLOGY:
         prompt = self._build_prompt(self.active_scan)
         agent = create_openai_tools_agent(self.llm, self.tools, prompt)
         agent_executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            handle_parsing_errors=True
+            agent=agent, tools=self.tools, verbose=True, handle_parsing_errors=True
         )
 
-        result = agent_executor.invoke(
-            {"input": f"Investigue o domínio: {domain}"}
-        )
+        result = agent_executor.invoke({"input": f"Investigue o domínio: {domain}"})
 
         return result["output"]

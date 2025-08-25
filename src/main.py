@@ -1,9 +1,11 @@
 import argparse
-import sys
 import os
+import sys
+
 import markdown2
 
 from processors.osint_processor import OsintProcessor
+
 
 def save_report_as_html(markdown_content: str, filename: str):
     """
@@ -12,8 +14,9 @@ def save_report_as_html(markdown_content: str, filename: str):
     print(f"\n[Exporter] Converting report to HTML and saving as {filename}...")
     try:
 
-        html_body = markdown2.markdown(markdown_content, extras=["tables", "fenced-code-blocks", "strike"])
-
+        html_body = markdown2.markdown(
+            markdown_content, extras=["tables", "fenced-code-blocks", "strike"]
+        )
 
         css_style = """
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0 auto; max-width: 800px; padding: 20px; color: #333; }
@@ -30,7 +33,6 @@ def save_report_as_html(markdown_content: str, filename: str):
         blockquote { border-left: 4px solid #3498db; padding-left: 15px; color: #7f8c8d; }
         """
 
-
         full_html = f"""<!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -45,7 +47,7 @@ def save_report_as_html(markdown_content: str, filename: str):
 </body>
 </html>"""
 
-        with open(filename, 'w', encoding='utf-8') as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(full_html)
         print(f"[Exporter] Report successfully saved to {filename}")
 
@@ -60,16 +62,18 @@ def main():
     parser = argparse.ArgumentParser(
         description="Fackel - An OSINT analysis tool powered by a LangChain agent."
     )
-    parser.add_argument("domain", type=str, help="The domain to perform OSINT analysis on.")
+    parser.add_argument(
+        "domain", type=str, help="The domain to perform OSINT analysis on."
+    )
     parser.add_argument(
         "--active-scan",
         action="store_true",
-        help="Enable active scanning tools like Nmap. Use with caution and only with permission."
+        help="Enable active scanning tools like Nmap. Use with caution and only with permission.",
     )
     parser.add_argument(
         "--output",
         type=str,
-        help="Save the final report to an HTML file (e.g., --output report.html)."
+        help="Save the final report to an HTML file (e.g., --output report.html).",
     )
 
     args = parser.parse_args()
@@ -80,19 +84,19 @@ def main():
         sys.exit(1)
 
     if args.active_scan:
-        print("""
+        print(
+            """
         *** WARNING: Active Scanning Enabled ***
         You have enabled active scanning tools. This will send packets directly to the target.
         Ensure you have explicit permission to scan the target domain.
-        """)
+        """
+        )
 
     try:
 
         processor = OsintProcessor(active_scan=args.active_scan)
 
-
         report_content = processor.process_domain(args.domain)
-
 
         if args.output and report_content:
             save_report_as_html(report_content, args.output)
@@ -103,6 +107,7 @@ def main():
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
