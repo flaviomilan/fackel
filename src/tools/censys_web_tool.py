@@ -13,6 +13,12 @@ class CensysWebScraper:
     def __init__(self):
         self.base_url = "https://search.censys.io"
 
+    def _normalize_domain(self, domain: str) -> str:
+        """Remove schema/trailing slash so Censys query is clean."""
+        cleaned = re.sub(r"^https?://", "", domain.strip())
+        cleaned = cleaned.rstrip("/")
+        return cleaned
+
     async def setup_browser(self):
         """Configura o browser com configurações anti-detecção."""
         print("[Debug] Iniciando setup do browser...")
@@ -100,11 +106,12 @@ class CensysWebScraper:
             context, playwright, browser = await self.setup_browser()
 
             page = await context.new_page()
-            print(f"[Debug] Navegando para {self.base_url}/search?q={domain}")
+            page.set_default_timeout(45000)
+            clean_domain = self._normalize_domain(domain)
+            target_url = f"{self.base_url}/search?q={clean_domain}"
+            print(f"[Debug] Navegando para {target_url}")
 
-            await page.goto(
-                f"{self.base_url}/search?q={domain}", wait_until="networkidle"
-            )
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
 
             info = await self.extract_host_info(page)
             if info:

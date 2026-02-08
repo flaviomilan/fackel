@@ -46,6 +46,7 @@ class OsintProcessor:
             "secret_key": os.getenv("LANGFUSE_SECRET_KEY"),
             "host": os.getenv("LANGFUSE_HOST"),
             "user_id": os.getenv("LANGFUSE_USER_ID") or "fackel",
+            "session_id": os.getenv("LANGFUSE_SESSION_ID"),
         }
 
     def _build_prompt(self, active_scan: bool = False):
@@ -104,12 +105,14 @@ Your mission is to conduct a comprehensive OSINT investigation of a given domain
         try:
             from langfuse.callback import CallbackHandler
 
+            session_id = self._langfuse_config.get("session_id") or domain
+
             handler = CallbackHandler(
                 public_key=pk,
                 secret_key=sk,
                 host=self._langfuse_config.get("host"),
                 user_id=self._langfuse_config.get("user_id"),
-                session_id=domain,
+                session_id=session_id,
                 metadata={"active_scan": self.active_scan},
             )
             return [handler]

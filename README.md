@@ -157,6 +157,27 @@ sudo apt-get update && sudo apt-get install nmap
 
 ## ⚙️ Configuration
 
+### Observabilidade com Langfuse
+
+1. Suba a stack local (Langfuse + Postgres + ClickHouse + Redis):
+
+```bash
+docker-compose up -d langfuse
+```
+
+2. Acesse o painel em http://localhost:3000, crie o projeto e copie PUBLIC_KEY/SECRET_KEY.
+
+3. Exporte as variáveis no `.env` para habilitar tracing no agente LangGraph:
+
+```env
+LANGFUSE_PUBLIC_KEY="..."
+LANGFUSE_SECRET_KEY="..."
+LANGFUSE_HOST="http://localhost:3000"
+LANGFUSE_USER_ID="fackel"  # opcional
+```
+
+O tracing é opcional: se as chaves não estiverem definidas, o agente roda normalmente.
+
 
 ## 🧪 Dev & Qualidade
 

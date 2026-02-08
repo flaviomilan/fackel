@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 import typer
 
 from fackel.agents.graph_agent import LangGraphAgent
+
+
+def _safe_stem(target: str) -> str:
+    """Generate a filesystem-safe stem from a domain or URL."""
+    parsed = urlparse(target)
+    base = parsed.netloc or parsed.path or target
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
+    return safe or "report"
 
 app = typer.Typer(help="Fackel – Agente Autônomo de OSINT")
 
@@ -35,7 +45,8 @@ def run(
             typer.echo(f"[Exporter] JSON estruturado salvo em {json_path}")
     else:
         if save_json:
-            json_path = Path(f"{domain}_report.json")
+            safe_stem = _safe_stem(domain)
+            json_path = Path(f"{safe_stem}_report.json")
             store.save_json(str(json_path))
             typer.echo(f"[Exporter] JSON estruturado salvo em {json_path}")
 

@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict
 
 from ..store import StructuredStore
 
-NormalizerFn = Callable[[Any, StructuredStore], None]
+NormalizerFn = Callable[[str, Any, StructuredStore], None]
 
 
 class NormalizerRegistry:
@@ -17,4 +17,4 @@ class NormalizerRegistry:
     def normalize(self, tool: str, output: Any, store: StructuredStore) -> None:
         fn = self._registry.get(tool)
         if fn:
-            fn(output, store)
+            fn(tool, output, store)
