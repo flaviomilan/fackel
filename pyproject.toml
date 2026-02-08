@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fackel"
+version = "0.1.0"
+description = "Autonomous OSINT and security intelligence agent"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Fackel Team" }]
+dependencies = [
+  "python-whois",
+  "shodan",
+  "ddgs>=1.1.1",
+  "censys>=2.2",
+  "langchain",
+  "langchain-openai",
+  "langchain-community",
+  "langgraph",
+  "markdown2",
+  "beautifulsoup4",
+  "requests",
+  "python-dotenv",
+  "google-search-results>=2.4.2",
+  "holehe",
+  "aiohttp",
+  "playwright",
+  "python-nmap",
+  "langfuse",
+  "pydantic>=2.6",
+  "typer>=0.12",
+]
+
+[project.scripts]
+fackel = "cli.main:app"
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.4",
+  "mypy>=1.9",
+  "pytest>=8.2",
+  "coverage>=7.5",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["*"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+select = ["E", "F", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unreachable = true
+disallow_untyped_defs = true
+disallow_any_unimported = true
+mypy_path = ["src"]
+plugins = ["pydantic.mypy"]
+exclude = ["tests/fixtures"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true

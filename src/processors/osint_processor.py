@@ -7,7 +7,11 @@ from langchain_community.cache import SQLiteCache
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
+from src.capabilities import Capabilities, detect_capabilities
 from src.collectors.collectors import get_all_tools
+from src.normalizers import normalize_and_store
+from src.reporting import render_structured_summary
+from src.store import StructuredStore
 
 set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
@@ -28,23 +32,41 @@ class OsintProcessor:
         if not os.getenv("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY not found in environment variables.")
 
+        self.capabilities: Capabilities = detect_capabilities()
         self.llm = ChatOpenAI(
             temperature=0, model="gpt-4-turbo-preview", streaming=True
         )
         self.active_scan = active_scan
-        self.tools = get_all_tools(active_scan=active_scan)
+        self.tools = get_all_tools(
+            active_scan=active_scan, available_tool_names=self.capabilities.available
+        )
+        self.last_store: StructuredStore | None = None
+        self._langfuse_config = {
+            "public_key": os.getenv("LANGFUSE_PUBLIC_KEY"),
+            "secret_key": os.getenv("LANGFUSE_SECRET_KEY"),
+            "host": os.getenv("LANGFUSE_HOST"),
+            "user_id": os.getenv("LANGFUSE_USER_ID") or "fackel",
+        }
 
     def _build_prompt(self, active_scan: bool = False):
         """
         Builds the system prompt for the agent based on the scanning mode.
         """
+        capability_lines = self.capabilities.summary_lines()
+        capability_section = "\n".join(capability_lines) if capability_lines else ""
+
         system_prompt = """You are Fackel, a world-class cybersecurity analyst and OSINT specialist.
 Your mission is to conduct a comprehensive OSINT investigation of a given domain.
 
-METHODOLOGY:
-1.  **Initial Reconnaissance**: Start by gathering basic domain information with `whois_lookup`.
-2.  **Subdomain and Host Enumeration**: Use `dnsdumpster_lookup` and `virustotal_subdomain_enum` as your primary tools to get a comprehensive list of subdomains and their IP addresses. If you don't have access to Shodan or Censys API keys, `dnsdumpster_lookup` is your best alternative for mapping infrastructure.
-"""
+    AVAILABLE TOOLS (filtered by API keys):
+    """
+
+        system_prompt += capability_section + "\n"
+
+        system_prompt += """METHODOLOGY:
+    1.  **Initial Reconnaissance**: Start by gathering basic domain information with `whois_lookup`.
+    2.  **Subdomain and Host Enumeration**: Use `dnsdumpster_lookup` and `virustotal_subdomain_enum` as your primary tools to get a comprehensive list of subdomains and their IP addresses. If you don't have access to Shodan or Censys API keys, `dnsdumpster_lookup` is your best alternative for mapping infrastructure.
+    """
 
         if active_scan:
             system_prompt += """3.  **Active Host Probing and Scanning**: This is a two-stage process.
@@ -63,7 +85,7 @@ METHODOLOGY:
 6.  **Synthesize and Report**: Once you have exhausted all available tools and gathered sufficient information, synthesize all findings into a single, coherent, and well-structured final report in Portuguese. The report should be detailed and provide a clear picture of the domain's OSINT profile.
 """
 
-        system_prompt += "\nIMPORTANT:\n- Execute tools logically and sequentially. Use the output of one tool to inform the input of the next.\n- If a tool fails or returns no information, note it down and move to the next logical step.\n- Structure your final report using Markdown for clear formatting (e.g., use headings, lists, and bold text).\n- Your final output MUST be the comprehensive report in Portuguese."
+        system_prompt += "\nIMPORTANT:\n- Execute tools logically and sequentially. Use the output of one tool to inform the input of the next.\n- If a tool fails or returns no information, note it down and move to the next logical step.\n- Use only the tools listed as habilitadas; ignore those desabilitadas.\n- Structure your final report using Markdown for clear formatting (e.g., use headings, lists, and bold text).\n- Your final output MUST be the comprehensive report in Portuguese."
 
         return ChatPromptTemplate.from_messages(
             [
@@ -73,22 +95,55 @@ METHODOLOGY:
             ]
         )
 
-    def process_domain(self, domain: str) -> str:
-        """
-        Process a domain using the OSINT tools and return a comprehensive report.
+    def _build_trace_callbacks(self, domain: str):
+        """Create Langfuse callback handler when configured."""
+        pk = self._langfuse_config.get("public_key")
+        sk = self._langfuse_config.get("secret_key")
+        if not (pk and sk):
+            return []
+        try:
+            from langfuse.callback import CallbackHandler
 
-        Args:
-            domain: The domain to investigate
+            handler = CallbackHandler(
+                public_key=pk,
+                secret_key=sk,
+                host=self._langfuse_config.get("host"),
+                user_id=self._langfuse_config.get("user_id"),
+                session_id=domain,
+                metadata={"active_scan": self.active_scan},
+            )
+            return [handler]
+        except Exception as exc:
+            print(f"[Langfuse] Tracing disabled: {exc}")
+            return []
 
-        Returns:
-            str: The investigation report in Portuguese
-        """
+    def process_domain(self, domain: str):
+        """Process a domain and return (report_markdown, structured_store)."""
+        self.last_store = StructuredStore(domain=domain)
+
+        callbacks = self._build_trace_callbacks(domain)
+
         prompt = self._build_prompt(self.active_scan)
         agent = create_openai_tools_agent(self.llm, self.tools, prompt)
         agent_executor = AgentExecutor(
-            agent=agent, tools=self.tools, verbose=True, handle_parsing_errors=True
+            agent=agent,
+            tools=self.tools,
+            verbose=False,
+            handle_parsing_errors=True,
+            max_iterations=20,
+            max_execution_time=900,
+            return_intermediate_steps=True,
+            callbacks=callbacks,
         )
 
         result = agent_executor.invoke({"input": f"Investigue o domínio: {domain}"})
 
-        return result["output"]
+        for action, output in result.get("intermediate_steps", []):
+            if action and getattr(action, "tool", None):
+                normalize_and_store(action.tool, output, self.last_store)
+
+        structured_md = render_structured_summary(self.last_store)
+
+        final_report = f"{result['output']}\n\n---\n\n## Resumo Estruturado\n{structured_md}"
+
+        return final_report, self.last_store

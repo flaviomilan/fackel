@@ -5,43 +5,56 @@ from langchain.tools import tool
 
 
 @tool
-def probe_host(domain: str) -> str:
-    """Takes a domain/subdomain, resolves its IP address, and checks for active HTTP/HTTPS web servers.
-    Use this to quickly validate if a discovered subdomain is a live web target before running a full Nmap scan.
-    WARNING: This is an ACTIVE scanning tool. It directly connects to the target.
-    """
-    output = [f"Probing results for {domain}:"]
-
+def probe_host(domain: str):
+    """Resolve IP and probe HTTP/HTTPS with timeouts; returns structured payload."""
     try:
         ip_address = socket.gethostbyname(domain)
-        output.append(f"- IP Address: {ip_address}")
     except socket.gaierror:
-        return f"DNS resolution failed for {domain}. Host may not exist."
+        return {
+            "tool": "probe_host",
+            "status": "error",
+            "domain": domain,
+            "error": "DNS resolution failed. Host may not exist.",
+        }
     except Exception as e:
-        return f"An unexpected error occurred during DNS resolution: {e}"
+        return {
+            "tool": "probe_host",
+            "status": "error",
+            "domain": domain,
+            "error": f"Unexpected DNS resolution error: {e}",
+        }
 
+    services = []
     ports_to_check = {80: "http", 443: "https"}
-    found_services = False
-
     for port, scheme in ports_to_check.items():
         url = f"{scheme}://{domain}"
         try:
             response = requests.get(
                 url, timeout=5, verify=(scheme == "https"), allow_redirects=True
             )
-            output.append(
-                f"- {scheme.upper()} (Port {port}): Found - Status Code: {response.status_code}"
+            services.append(
+                {
+                    "scheme": scheme,
+                    "port": port,
+                    "status": "up",
+                    "status_code": response.status_code,
+                    "server": response.headers.get("Server", "N/A"),
+                }
+            )
+        except requests.exceptions.RequestException:
+            services.append(
+                {
+                    "scheme": scheme,
+                    "port": port,
+                    "status": "down",
+                    "status_code": None,
+                }
             )
 
-            server_header = response.headers.get("Server", "N/A")
-            output.append(f"  - Server: {server_header}")
-            found_services = True
-        except requests.exceptions.RequestException as e:
-            output.append(
-                f"- {scheme.upper()} (Port {port}): Not found or no response."
-            )
-
-    if not found_services:
-        output.append("- No common web services found on ports 80 or 443.")
-
-    return "\n".join(output)
+    return {
+        "tool": "probe_host",
+        "status": "ok",
+        "host": domain,
+        "ip": ip_address,
+        "services": services,
+    }

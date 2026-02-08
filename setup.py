@@ -10,11 +10,12 @@ setup(
         'duckduckgo-search',
         'langchain',
         'langchain-openai',
+        'langfuse',
         'markdown2',
         'beautifulsoup4',
         'requests',
         'python-dotenv',
-        'google-search-results>=2.4.2',  # versão atualizada do serpapi
+        'google-search-results>=2.4.2',
         'holehe',
         'aiohttp',
         'playwright',

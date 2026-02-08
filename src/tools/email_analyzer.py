@@ -56,9 +56,8 @@ class EmailAnalyzer:
 
 
 @tool
-def analyze_email(email: str) -> str:
-    """Analisa um e-mail usando múltiplas fontes."""
-    results = []
+def analyze_email(email: str):
+    """Analisa um e-mail usando múltiplas fontes (serviços, vazamentos, reputação)."""
     analyzer = EmailAnalyzer()
 
     try:
@@ -71,61 +70,43 @@ def analyze_email(email: str) -> str:
     finally:
         try:
             loop.close()
-        except:
+        except Exception:
             pass
 
-    if services:
-        results.append("\n=== Serviços Verificados ===")
-        for service, exists in services.items():
-            results.append(
-                f"- {service}: {'Encontrado' if exists else 'Não encontrado'}"
-            )
-
+    breaches: List[Dict] = []
     if analyzer.hibp_api_key:
         try:
             headers = {
                 "hibp-api-key": analyzer.hibp_api_key,
                 "user-agent": "OSINT-Tool",
             }
-
             response = requests.get(
                 f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
                 headers=headers,
                 timeout=10,
             )
-
             if response.status_code == 200:
-                results.append("\n=== Vazamentos de Dados ===")
                 breaches = response.json()
-                for breach in breaches:
-                    name = breach.get("Name", "Desconhecido")
-                    domain = breach.get("Domain", "Desconhecido")
-                    date = breach.get("BreachDate", "Data desconhecida")
-                    results.append(f"- {name} ({domain}) - {date}")
-            elif response.status_code == 404:
-                results.append("\n=== Vazamentos de Dados ===")
-                results.append("Nenhum vazamento encontrado")
         except Exception as e:
             print(f"[Debug] Erro ao verificar vazamentos: {e}")
 
+    reputation = None
     if analyzer.emailrep_api_key:
         try:
             headers = {"Key": analyzer.emailrep_api_key}
             response = requests.get(
                 f"https://emailrep.io/{email}", headers=headers, timeout=10
             )
-
             if response.status_code == 200:
                 reputation = response.json()
-                results.append("\n=== Reputação do E-mail ===")
-                suspicious = reputation.get("suspicious", False)
-                results.append(f"- Suspeito: {'Sim' if suspicious else 'Não'}")
-                results.append(f"- Reputação: {reputation.get('reputation', 'N/A')}")
-                if "details" in reputation:
-                    results.append("- Detalhes:")
-                    for key, value in reputation["details"].items():
-                        results.append(f"  * {key}: {value}")
         except Exception as e:
             print(f"[Debug] Erro ao verificar reputação: {e}")
 
-    return "\n".join(results) if results else "Nenhuma informação encontrada"
+    return {
+        "tool": "analyze_email",
+        "status": "ok",
+        "email": email,
+        "services": services,
+        "breaches": breaches,
+        "reputation": reputation,
+    }

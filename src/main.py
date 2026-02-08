@@ -96,10 +96,16 @@ def main():
 
         processor = OsintProcessor(active_scan=args.active_scan)
 
-        report_content = processor.process_domain(args.domain)
+        report_content, store = processor.process_domain(args.domain)
 
         if args.output and report_content:
             save_report_as_html(report_content, args.output)
+
+        # Persist structured data for correlação posterior
+        if store:
+            store_path = args.output.replace(".html", ".json") if args.output else f"{args.domain}_report.json"
+            store.save_json(store_path)
+            print(f"[Exporter] Structured report saved to {store_path}")
 
     except ValueError as e:
         print(f"Configuration Error: {e}")

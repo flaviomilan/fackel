@@ -131,11 +131,9 @@ scraper = CensysWebScraper()
 
 
 @tool
-def censys_web_lookup(domain: str) -> str:
-    """Realiza web scraping na interface web do Censys para encontrar hosts e informações técnicas de um domínio. Use como uma alternativa caso a API (censys_lookup) não retorne resultados ou falhe."""
+def censys_web_lookup(domain: str):
+    """Web scraping do Censys (fallback). Retorna hosts/serviços estruturados."""
     try:
-        print(f"\n[Censys] Iniciando busca para: {domain}")
-
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
@@ -144,41 +142,31 @@ def censys_web_lookup(domain: str) -> str:
         finally:
             loop.close()
 
-        if not results:
-            return "Nenhuma informação encontrada"
-
-        output = []
+        hosts = []
+        errors = []
         for result in results:
             if "error" in result:
-                output.append(f"Erro: {result['error']}")
+                errors.append(result["error"])
                 continue
+            hosts.append(
+                {
+                    "ip": result.get("ips", [None])[0] if result.get("ips") else None,
+                    "services": [{"raw": s} for s in result.get("services", [])],
+                }
+            )
 
-            if "message" in result:
-                output.append(result["message"])
-                continue
-
-            output.append("\n=== Host Encontrado ===")
-
-            if "ips" in result:
-                output.append("IPs:")
-                for ip in result["ips"]:
-                    output.append(f"- {ip}")
-
-            if "services" in result:
-                output.append("\nServiços:")
-                for service in result["services"]:
-                    output.append(f"- {service}")
-
-            if "ssl" in result:
-                output.append("\nInformações SSL:")
-                for ssl in result["ssl"]:
-                    output.append(ssl)
-
-            output.append("-" * 40)
-
-        return "\n".join(output)
+        return {
+            "tool": "censys_web_lookup",
+            "status": "ok" if hosts else "error",
+            "domain": domain,
+            "hosts": hosts,
+            "errors": errors,
+        }
 
     except Exception as e:
-        print(f"[Erro] Falha ao realizar busca no Censys: {str(e)}")
-        print(f"[Debug] Traceback:\n{traceback.format_exc()}")
-        return f"Erro ao realizar busca no Censys: {str(e)}"
+        return {
+            "tool": "censys_web_lookup",
+            "status": "error",
+            "domain": domain,
+            "error": f"Erro ao realizar busca no Censys: {str(e)}",
+        }

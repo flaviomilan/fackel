@@ -3,8 +3,15 @@ from typing import Dict, List
 
 import requests
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
 from langchain.tools import tool
+
+try:
+    from ddgs import DDGS
+except ImportError:
+    try:
+        from duckduckgo_search import DDGS
+    except ImportError:
+        DDGS = None
 
 
 class ProfileAnalyzer:
@@ -51,6 +58,9 @@ class ProfileAnalyzer:
             f'"{name}" curriculum vitae OR resume',
             f'"{name}" "{company}" conference OR speaker OR article',
         ]
+
+        if DDGS is None:
+            return results
 
         with DDGS() as ddgs:
             for query in queries:

@@ -1,12 +1,21 @@
 import re
 
-from duckduckgo_search import DDGS
 from langchain.tools import tool
+
+try:
+    from ddgs import DDGS
+except ImportError:
+    try:
+        from duckduckgo_search import DDGS
+    except ImportError:
+        DDGS = None
 
 
 @tool
 def job_search(company_name: str) -> str:
     """Busca vagas de emprego da empresa para identificar tecnologias e sistemas utilizados."""
+    if DDGS is None:
+        return "Erro: ddgs não está instalado. pip install ddgs"
     try:
         with DDGS() as ddgs:
 
