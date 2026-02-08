@@ -74,11 +74,9 @@ def render_structured_summary(store: StructuredStore) -> str:
         lines.append("")
 
     if report.evidence:
-        lines.append("### Evidências (resumo)")
-        for ev in report.evidence[:10]:
-            preview = ev.content.strip().splitlines()[0][:160]
-            lines.append(f"- {ev.source_tool}: {preview}...")
-        if len(report.evidence) > 10:
-            lines.append(f"- (+{len(report.evidence) - 10} evidências ocultas)")
+        lines.append("### Evidências")
+        for ev in report.evidence:
+            content = ev.content.strip()
+            lines.append(f"- {ev.source_tool}: {content}")
 
     return "\n".join(lines)
