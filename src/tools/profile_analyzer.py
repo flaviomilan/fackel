@@ -89,6 +89,7 @@ class ProfileAnalyzer:
 
         results["skills"] = sorted(list(results["skills"]))
         results["roles"] = sorted(list(results["roles"]))
+
         results["education"] = sorted(list(results["education"]))
 
         return results
@@ -96,37 +97,24 @@ class ProfileAnalyzer:
 
 analyzer = ProfileAnalyzer()
 
+from .utils import format_tool_output
+
 
 @tool
-def analyze_professional_profile(name: str, company: str = "") -> str:
+def analyze_professional_profile(name: str, company: str = "") -> dict:
     """Analisa o perfil profissional de uma pessoa, buscando informações sobre carreira, habilidades e educação."""
-    results = analyzer.search_professional_info(name, company)
-
-    output = [f"=== Análise Profissional: {name} ===\n"]
-
-    if results["profile_summary"]:
-        output.append("Resumo Profissional:")
-        for profile in results["profile_summary"]:
-            output.append(f"- {profile['title']}")
-            output.append(f"  {profile['summary']}")
-            output.append(f"  URL: {profile['url']}\n")
-
-    if results["roles"]:
-        output.append("Cargos Identificados:")
-        for role in results["roles"]:
-            output.append(f"- {role}")
-        output.append("")
-
-    if results["skills"]:
-        output.append("Habilidades Técnicas:")
-        for skill in results["skills"]:
-            output.append(f"- {skill}")
-        output.append("")
-
-    if results["education"]:
-        output.append("Formação Acadêmica:")
-        for edu in results["education"]:
-            output.append(f"- {edu}")
-        output.append("")
-
-    return "\n".join(output)
+    try:
+        results = analyzer.search_professional_info(name, company)
+        return format_tool_output(
+            "analyze_professional_profile",
+            f"{name} ({company})",
+            "ok",
+            data=results,
+        )
+    except Exception as e:
+        return format_tool_output(
+            "analyze_professional_profile",
+            f"{name} ({company})",
+            "error",
+            error=str(e),
+        )

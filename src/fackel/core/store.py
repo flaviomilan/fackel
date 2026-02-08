@@ -94,6 +94,24 @@ class StructuredStore:
     def to_dict(self) -> dict[str, Any]:
         return self.report.to_dict()
 
+
     def save_json(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def load_json(cls, path: str) -> StructuredStore:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            # Reconstruct domain from report data or filename
+            # Ideally the report data has the domain
+            domain = data.get("domain", "unknown")
+            store = cls(domain)
+            
+            # Rehydrate Pydantic model
+            store.report = DomainReport.model_validate(data)
+            return store
+        except Exception as e:
+            raise ValueError(f"Failed to load store from {path}: {e}")

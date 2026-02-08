@@ -54,6 +54,10 @@ class EmailAnalyzer:
         return results
 
 
+
+from .utils import format_tool_output
+
+
 @tool
 def analyze_email(email: str):
     """Analisa um e-mail usando múltiplas fontes (serviços, vazamentos, reputação)."""
@@ -101,11 +105,13 @@ def analyze_email(email: str):
         except Exception as e:
             print(f"[Debug] Erro ao verificar reputação: {e}")
 
-    return {
-        "tool": "analyze_email",
-        "status": "ok",
-        "email": email,
-        "services": services,
-        "breaches": breaches,
-        "reputation": reputation,
-    }
+    return format_tool_output(
+        "analyze_email",
+        email,
+        "ok",
+        data={
+            "services": services,
+            "breaches": breaches,
+            "reputation": reputation,
+        },
+    )

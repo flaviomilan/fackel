@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fackel Query Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .query-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .query-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .query-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .query-button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .query-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        .query-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filter-input {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .example-queries {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .example-query {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .example-query:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            padding: 15px;
+            background: #fee;
+            border-left: 4px solid #f44;
+            border-radius: 8px;
+            color: #c33;
+            margin-bottom: 20px;
+        }
+
+        .result {
+            margin-top: 20px;
+        }
+
+        .answer {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        .metadata {
+            display: flex;
+            gap: 20px;
+            padding: 15px;
+            background: #e8f4f8;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .confidence-bar {
+            width: 100px;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f44336, #ff9800, #4caf50);
+            transition: width 0.5s;
+        }
+
+        .sources {
+            margin-top: 20px;
+        }
+
+        .sources h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .source-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .source-domain {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .source-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .scan-list {
+            margin-top: 20px;
+        }
+
+        .scan-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .scan-item:hover {
+            background: #e8f4f8;
+            transform: translateX(5px);
+        }
+
+        .scan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .scan-domain {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .scan-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Fackel Query Interface</h1>
+            <p>Pergunte sobre resultados de scans de segurança</p>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('query')">Perguntas</button>
+                <button class="tab" onclick="switchTab('scans')">Scans</button>
+            </div>
+
+            <!-- Query Tab -->
+            <div id="query-tab" class="tab-content active">
+                <div class="query-form">
+                    <input
+                        type="text"
+                        id="question-input"
+                        class="query-input"
+                        placeholder="Ex: Quais vulnerabilidades críticas foram encontradas?"
+                    />
+                    <button class="query-button" onclick="submitQuery()" id="query-button">
+                        Perguntar
+                    </button>
+                </div>
+
+                <div class="filters">
+                    <input
+                        type="text"
+                        id="domain-filter"
+                        class="filter-input"
+                        placeholder="Filtrar por domínio (opcional)"
+                    />
+                    <input
+                        type="number"
+                        id="max-scans"
+                        class="filter-input"
+                        value="3"
+                        min="1"
+                        max="10"
+                        style="width: 120px;"
+                        placeholder="Max scans"
+                    />
+                </div>
+
+                <div class="example-queries">
+                    <div class="example-query" onclick="setQuery('Quais vulnerabilidades críticas foram encontradas?')">
+                        Vulnerabilidades críticas
+                    </div>
+                    <div class="example-query" onclick="setQuery('Liste os CVEs com CVSS maior que 7')">
+                        CVEs CVSS > 7
+                    </div>
+                    <div class="example-query" onclick="setQuery('Quais tecnologias estão sendo usadas?')">
+                        Tecnologias
+                    </div>
+                    <div class="example-query" onclick="setQuery('Quantos hosts foram encontrados?')">
+                        Hosts encontrados
+                    </div>
+                    <div class="example-query" onclick="setQuery('Existem serviços sem criptografia?')">
+                        Serviços inseguros
+                    </div>
+                </div>
+
+                <div id="loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Processando sua pergunta...</p>
+                </div>
+
+                <div id="error" class="error" style="display: none;"></div>
+
+                <div id="result" class="result" style="display: none;">
+                    <div class="answer" id="answer"></div>
+
+                    <div class="metadata">
+                        <div class="metadata-item">
+                            <strong>Confiança:</strong>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" id="confidence-fill"></div>
+                            </div>
+                            <span id="confidence-text"></span>
+                        </div>
+                        <div class="metadata-item">
+                            <strong>Tempo:</strong>
+                            <span id="processing-time"></span>
+                        </div>
+                    </div>
+
+                    <div class="sources" id="sources" style="display: none;">
+                        <h3>📚 Fontes</h3>
+                        <div id="sources-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scans Tab -->
+            <div id="scans-tab" class="tab-content">
+                <div class="filters">
+                    <input
+                        type="text"
+                        id="scan-domain-filter"
+                        class="filter-input"
+                        placeholder="Filtrar por domínio"
+                    />
+                    <button class="query-button" onclick="loadScans()">
+                        Carregar Scans
+                    </button>
+                </div>
+
+                <div id="scans-loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Carregando scans...</p>
+                </div>
+
+                <div id="scans-list" class="scan-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(`${tab}-tab`).classList.add('active');
+
+            if (tab === 'scans') {
+                loadScans();
+            }
+        }
+
+        function setQuery(question) {
+            document.getElementById('question-input').value = question;
+        }
+
+        async function submitQuery() {
+            const question = document.getElementById('question-input').value.trim();
+            if (!question) return;
+
+            const domain = document.getElementById('domain-filter').value.trim() || null;
+            const maxScans = parseInt(document.getElementById('max-scans').value);
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('query-button').disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question, domain, max_scans: maxScans })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Query failed');
+                }
+
+                const result = await response.json();
+                displayResult(result);
+
+            } catch (error) {
+                document.getElementById('error').textContent = `❌ Erro: ${error.message}`;
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('query-button').disabled = false;
+            }
+        }
+
+        function displayResult(result) {
+            document.getElementById('answer').textContent = result.answer;
+            
+            const confidence = (result.confidence * 100).toFixed(1);
+            document.getElementById('confidence-text').textContent = `${confidence}%`;
+            document.getElementById('confidence-fill').style.width = `${confidence}%`;
+
+            if (result.processing_time_ms) {
+                document.getElementById('processing-time').textContent = `${result.processing_time_ms.toFixed(0)}ms`;
+            }
+
+            if (result.sources && result.sources.length > 0) {
+                const sourcesList = document.getElementById('sources-list');
+                sourcesList.innerHTML = result.sources.map(source => `
+                    <div class="source-item">
+                        <div class="source-domain">${source.domain}</div>
+                        <div class="source-meta">
+                            <span>📄 ${source.scan_id.substring(0, 8)}...</span>
+                            <span>📅 ${new Date(source.timestamp).toLocaleString('pt-BR')}</span>
+                            <span>🎯 ${(source.similarity * 100).toFixed(1)}% similar</span>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('sources').style.display = 'block';
+            }
+
+            document.getElementById('result').style.display = 'block';
+        }
+
+        async function loadScans() {
+            const domain = document.getElementById('scan-domain-filter').value.trim() || null;
+            
+            document.getElementById('scans-loading').style.display = 'block';
+            document.getElementById('scans-list').innerHTML = '';
+
+            try {
+                const params = new URLSearchParams({ limit: '20' });
+                if (domain) params.append('domain', domain);
+
+                const response = await fetch(`${API_BASE}/scans?${params}`);
+                const data = await response.json();
+
+                displayScans(data.scans);
+
+            } catch (error) {
+                document.getElementById('scans-list').innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+            } finally {
+                document.getElementById('scans-loading').style.display = 'none';
+            }
+        }
+
+        function displayScans(scans) {
+            if (scans.length === 0) {
+                document.getElementById('scans-list').innerHTML = '<p style="text-align: center; color: #666;">Nenhum scan encontrado</p>';
+                return;
+            }
+
+            document.getElementById('scans-list').innerHTML = scans.map(scan => `
+                <div class="scan-item" onclick="viewScan('${scan.scan_id}')">
+                    <div class="scan-header">
+                        <div class="scan-domain">${scan.domain}</div>
+                        <div style="font-size: 14px; color: #666;">
+                            ${new Date(scan.timestamp).toLocaleString('pt-BR')}
+                        </div>
+                    </div>
+                    <div class="scan-stats">
+                        <span>🖥️ ${scan.host_count} hosts</span>
+                        <span>🔌 ${scan.service_count} services</span>
+                        <span>🔍 ${scan.finding_count} findings</span>
+                        <span>🚨 ${scan.cve_count} CVEs</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function viewScan(scanId) {
+            alert(`View scan details: ${scanId}\n\nImplement modal or new page to show full scan details.`);
+        }
+
+        // Enter key support
+        document.getElementById('question-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') submitQuery();
+        });
+
+        // Check health on load
+        fetch(`${API_BASE}/health`)
+            .then(r => r.json())
+            .then(health => {
+                if (!health.features.query_system) {
+                    document.getElementById('error').textContent = '⚠️ Query system unavailable. Check MongoDB and OpenAI configuration.';
+                    document.getElementById('error').style.display = 'block';
+                }
+            })
+            .catch(() => {
+                document.getElementById('error').textContent = '❌ Cannot connect to API. Make sure the server is running on http://localhost:8000';
+                document.getElementById('error').style.display = 'block';
+            });
+    </script>
+</body>
+</html>

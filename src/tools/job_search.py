@@ -1,4 +1,3 @@
-
 from langchain.tools import tool
 
 try:
@@ -6,15 +5,23 @@ try:
 except ImportError:
     try:
         from duckduckgo_search import DDGS
+
     except ImportError:
         DDGS = None
 
+from .utils import format_tool_output
+
 
 @tool
-def job_search(company_name: str) -> str:
+def job_search(company_name: str) -> dict:
     """Busca vagas de emprego da empresa para identificar tecnologias e sistemas utilizados."""
     if DDGS is None:
-        return "Erro: ddgs não está instalado. pip install ddgs"
+        return format_tool_output(
+            "job_search",
+            company_name,
+            "error",
+            error="ddgs não está instalado. pip install ddgs",
+        )
     try:
         with DDGS() as ddgs:
 
@@ -26,7 +33,8 @@ def job_search(company_name: str) -> str:
                 title = r.get("title", "")
                 body = r.get("body", "")
                 url = r.get("href", "")
-                job_posts.append(f"Vaga: {title}\nDescrição: {body}\nURL: {url}\n---")
+                # job_posts.append(f"Vaga: {title}\nDescrição: {body}\nURL: {url}\n---")
+                job_posts.append({"title": title, "body": body, "url": url, "type": "job"})
 
             careers_query = f'"{company_name}" (trabalhe-conosco OR carreiras OR opportunities OR careers)'
             career_results = ddgs.text(careers_query, max_results=2)
@@ -44,14 +52,21 @@ def job_search(company_name: str) -> str:
                         "career",
                     ]
                 ):
-                    job_posts.append(
-                        f"Página de Carreiras: {title}\nConteúdo: {body}\nURL: {url}\n---"
-                    )
+                    # job_posts.append(
+                    #     f"Página de Carreiras: {title}\nConteúdo: {body}\nURL: {url}\n---"
+                    # )
+                    job_posts.append({"title": title, "body": body, "url": url, "type": "career_page"})
 
-            return (
-                "\n".join(job_posts)
-                if job_posts
-                else "Nenhuma vaga ou página de carreiras encontrada."
+            return format_tool_output(
+                "job_search",
+                company_name,
+                "ok",
+                data={"results": job_posts},
             )
     except Exception as e:
-        return f"Erro ao buscar vagas: {e}"
+        return format_tool_output(
+            "job_search",
+            company_name,
+            "error",
+            error=f"Erro ao buscar vagas: {e}",
+        )

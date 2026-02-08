@@ -55,15 +55,40 @@ class WebpageExtractor:
             return f"Erro ao acessar {url}: {e!s}"
 
 
+
 extractor = WebpageExtractor()
+
+from .utils import format_tool_output
 
 
 @tool
-def extract_webpage_content(url: str) -> str:
+def extract_webpage_content(url: str) -> dict:
     """Extrai o conteúdo relevante de uma página web, removendo elementos HTML."""
-    content = extractor.extract_content(url)
+    try:
+        content = extractor.extract_content(url)
 
-    max_length = 2000
-    if len(content) > max_length:
-        content = content[:max_length] + "... (conteúdo truncado)"
-    return content
+        max_length = 2000
+        if "Erro ao acessar" in content or "URL inválida" in content:
+            return format_tool_output(
+                "extract_webpage_content",
+                url,
+                "error",
+                error=content,
+            )
+
+        if len(content) > max_length:
+            content = content[:max_length] + "... (conteúdo truncado)"
+        
+        return format_tool_output(
+            "extract_webpage_content",
+            url,
+            "ok",
+            data={"content": content},
+        )
+    except Exception as e:
+        return format_tool_output(
+            "extract_webpage_content",
+            url,
+            "error",
+            error=str(e),
+        )

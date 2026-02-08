@@ -5,20 +5,23 @@ try:
 except ImportError:
     try:
         from duckduckgo_search import DDGS
+
     except ImportError:
         DDGS = None
+
+from .utils import format_tool_output
 
 
 @tool
 def duckduckgo_lookup(domain: str):
     """Busca OSINT no DuckDuckGo e retorna resultados estruturados."""
     if DDGS is None:
-        return {
-            "tool": "duckduckgo_lookup",
-            "status": "error",
-            "query": domain,
-            "error": "ddgs não está instalado. pip install ddgs",
-        }
+        return format_tool_output(
+            "duckduckgo_lookup",
+            domain,
+            "error",
+            error="ddgs não está instalado. pip install ddgs",
+        )
     try:
         with DDGS() as ddgs:
             results = ddgs.text(domain, max_results=5)
@@ -31,16 +34,16 @@ def duckduckgo_lookup(domain: str):
                         "link": r.get("href", ""),
                     }
                 )
-            return {
-                "tool": "duckduckgo_lookup",
-                "status": "ok",
-                "query": domain,
-                "results": normalized,
-            }
+            return format_tool_output(
+                "duckduckgo_lookup",
+                domain,
+                "ok",
+                data={"results": normalized},
+            )
     except Exception as e:
-        return {
-            "tool": "duckduckgo_lookup",
-            "status": "error",
-            "query": domain,
-            "error": f"Erro ao buscar no DuckDuckGo: {e}",
-        }
+        return format_tool_output(
+            "duckduckgo_lookup",
+            domain,
+            "error",
+            error=f"Erro ao buscar no DuckDuckGo: {e}",
+        )

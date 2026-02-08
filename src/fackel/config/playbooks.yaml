@@ -1,0 +1,145 @@
+# Default playbooks for adaptive tool selection
+# Each rule declares signal patterns and tools to enqueue when matched.
+
+- name: graphql
+  description: Detected GraphQL stack or endpoints
+  signals:
+    any:
+      - graphql
+      - graphiql
+      - hasura
+      - apollo
+  tools:
+    - name: nuclei_scan
+      reason: GraphQL indicators detected; run nuclei GraphQL templates
+
+- name: wordpress
+  description: Detected WordPress CMS
+  signals:
+    any:
+      - wordpress
+      - wp-content
+      - wp-json
+      - wp-admin
+      - woocommerce
+  tools:
+    - name: nuclei_scan
+      reason: WordPress indicators detected; run nuclei CMS templates
+
+- name: web_surface
+  description: HTTP(S) surface discovered
+  signals:
+    any:
+      - http
+      - https
+      - web server
+      - "server"
+      - content-type
+      - ssl
+      - tls
+  tools:
+    - name: httpx_scan
+      reason: HTTP service detected; enrich with httpx
+    - name: katana_crawl
+      reason: HTTP service detected; crawl paths with katana
+    - name: feroxbuster_scan
+      reason: HTTP service detected; brute-force dirs with feroxbuster
+    - name: wafw00f_detect
+      reason: HTTP service detected; confirm WAF presence
+
+- name: api_rest
+  description: Detected REST API patterns
+  signals:
+    any:
+      - /api/
+      - /v1/
+      - /v2/
+      - rest api
+      - application/json
+      - swagger
+      - openapi
+  tools:
+    - name: nuclei_scan
+      reason: REST API detected; run nuclei API templates
+    - name: katana_crawl
+      reason: API endpoints detected; crawl with katana
+
+- name: nodejs
+  description: Detected Node.js/Express stack
+  signals:
+    any:
+      - express
+      - node.js
+      - nodejs
+      - npm
+      - next.js
+      - nuxt
+  tools:
+    - name: nuclei_scan
+      reason: Node.js stack detected; run node-specific templates
+
+- name: react_spa
+  description: Detected React/SPA frontend
+  signals:
+    any:
+      - react
+      - vuejs
+      - angular
+      - single page
+      - spa
+  tools:
+    - name: katana_crawl
+      reason: SPA detected; deep crawl with JS rendering
+
+- name: cloud_aws
+  description: Detected AWS infrastructure
+  signals:
+    any:
+      - amazonaws.com
+      - cloudfront
+      - s3.amazonaws
+      - elasticbeanstalk
+      - aws
+  tools:
+    - name: nuclei_scan
+      reason: AWS infrastructure detected; check cloud misconfigs
+
+- name: cdn_cloudflare
+  description: Detected Cloudflare CDN/WAF
+  signals:
+    any:
+      - cloudflare
+      - cf-ray
+      - __cfduid
+  tools:
+    - name: wafw00f_detect
+      reason: Cloudflare indicators; confirm WAF presence
+
+- name: database_exposed
+  description: Potential database exposure
+  signals:
+    any:
+      - mongodb
+      - mysql
+      - postgres
+      - redis
+      - database
+      - "3306"
+      - "5432"
+      - "27017"
+      - "6379"
+  tools:
+    - name: nuclei_scan
+      reason: Database ports/services detected; check exposure
+
+- name: jenkins_ci
+  description: Detected Jenkins CI/CD
+  signals:
+    any:
+      - jenkins
+      - /jenkins
+      - hudson
+  tools:
+    - name: nuclei_scan
+      reason: Jenkins detected; check for exposed instances
+

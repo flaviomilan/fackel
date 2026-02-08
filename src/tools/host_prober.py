@@ -1,33 +1,46 @@
 import socket
+from urllib.parse import urlparse
+
 
 import requests
 from langchain.tools import tool
+
+from .utils import format_tool_output
 
 
 @tool
 def probe_host(domain: str):
     """Resolve IP and probe HTTP/HTTPS with timeouts; returns structured payload."""
+    parsed = urlparse(domain)
+    target = parsed.netloc or parsed.path or domain
+    if not target:
+        return format_tool_output(
+            "probe_host",
+            domain,
+            "error",
+            error="alvo inválido",
+        )
     try:
-        ip_address = socket.gethostbyname(domain)
+        ip_address = socket.gethostbyname(target)
     except socket.gaierror:
-        return {
-            "tool": "probe_host",
-            "status": "error",
-            "domain": domain,
-            "error": "DNS resolution failed. Host may not exist.",
-        }
+        return format_tool_output(
+            "probe_host",
+            domain,
+            "error",
+            error="DNS resolution failed. Host may not exist.",
+        )
     except Exception as e:
-        return {
-            "tool": "probe_host",
-            "status": "error",
-            "domain": domain,
-            "error": f"Unexpected DNS resolution error: {e}",
-        }
+        return format_tool_output(
+            "probe_host",
+            domain,
+            "error",
+            error=f"Unexpected DNS resolution error: {e}",
+        )
 
     services = []
     ports_to_check = {80: "http", 443: "https"}
     for port, scheme in ports_to_check.items():
-        url = f"{scheme}://{domain}"
+        url = f"{scheme}://{target}"
         try:
             response = requests.get(
                 url, timeout=5, verify=(scheme == "https"), allow_redirects=True
@@ -51,10 +64,13 @@ def probe_host(domain: str):
                 }
             )
 
-    return {
-        "tool": "probe_host",
-        "status": "ok",
-        "host": domain,
-        "ip": ip_address,
-        "services": services,
-    }
+    return format_tool_output(
+        "probe_host",
+        domain,
+        "ok",
+        data={
+            "host": target,
+            "ip": ip_address,
+            "services": services,
+        },
+    )

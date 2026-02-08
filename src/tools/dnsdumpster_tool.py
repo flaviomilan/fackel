@@ -121,24 +121,43 @@ def dnsdumpster_lookup(domain: str) -> str:
                         records[key] = parse_table(table)
                         break
 
+
         for title, data in records.items():
             if data:
                 output.append(f"\n--- {title} ---")
                 output.extend(data)
 
-        result = "\n".join(output)
-        final_result = (
-            result
-            if result.strip()
-            else f"No meaningful data found for {domain} on DNSDumpster."
-        )
+        # result = "\n".join(output)
+        # final_result = (
+        #     result
+        #     if result.strip()
+        #     else f"No meaningful data found for {domain} on DNSDumpster."
+        # )
 
-        final_result = "".join(
-            c for c in final_result if c.isprintable() or c in "\n\r\t"
+        # final_result = "".join(
+        #     c for c in final_result if c.isprintable() or c in "\n\r\t"
+        # )
+        # return final_result
+        from .utils import format_tool_output
+
+        return format_tool_output(
+            "dnsdumpster_lookup",
+            domain,
+            "ok",
+            data=records,
         )
-        return final_result
 
     except requests.exceptions.RequestException as e:
-        return f"Error connecting to DNSDumpster: {e}"
+        return format_tool_output(
+            "dnsdumpster_lookup",
+            domain,
+            "error",
+            error=f"Error connecting to DNSDumpster: {e}",
+        )
     except Exception as e:
-        return f"An unexpected error occurred while querying DNSDumpster: {e}. Please try again later."
+        return format_tool_output(
+            "dnsdumpster_lookup",
+            domain,
+            "error",
+            error=f"An unexpected error occurred while querying DNSDumpster: {e}. Please try again later.",
+        )

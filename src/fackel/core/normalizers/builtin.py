@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, Callable
 
 from ..models import CVE
 from ..store import StructuredStore
+
+StructuredIngester = Callable[[dict[str, Any], StructuredStore], None]
+TextIngester = Callable[[str, StructuredStore], None]
 
 
 def _as_dict(output: Any) -> dict[str, Any] | None:
@@ -28,35 +31,36 @@ def normalize_output(tool: str, output: Any, store: StructuredStore) -> None:
             evidence_content = str(output)
     else:
         evidence_content = str(output)
+
     store.add_evidence(tool, evidence_content)
 
     data = _as_dict(output)
+
+    # Unwrap standard tool output format
+    if (
+        data
+        and "status" in data
+        and "data" in data
+        and "target" in data
+        and isinstance(data["data"], dict)
+    ):
+        target = data["target"]
+        data = data["data"].copy()
+        if "domain" not in data:
+            data["domain"] = target
+        if "host" not in data:
+            data["host"] = target
+
     if data:
-        if tool == "virustotal_subdomain_enum":
-            _ingest_virustotal(data, store)
-        elif tool == "probe_host":
-            _ingest_probe(data, store)
-        elif tool == "nmap_port_scan":
-            _ingest_nmap(data, store)
-        elif tool == "shodan_lookup":
-            _ingest_shodan(data, store)
-        elif tool == "analyze_email":
-            _ingest_email(data, store)
-        elif tool == "censys_lookup" or tool == "censys_web_lookup":
-            _ingest_censys(data, store)
-        elif tool == "serp_search" or tool == "duckduckgo_lookup":
-            _ingest_search(data, store)
+        ingestor = _STRUCTURED_INGESTORS.get(tool)
+        if ingestor:
+            ingestor(data, store)
         return
 
     if isinstance(output, str):
-        if tool == "nmap_port_scan":
-            _ingest_nmap_text(output, store)
-        elif tool == "probe_host":
-            _ingest_probe_text(output, store)
-        elif tool == "virustotal_subdomain_enum":
-            _ingest_virustotal_text(output, store)
-        elif tool == "shodan_lookup":
-            _ingest_shodan_text(output, store)
+        text_ingestor = _TEXT_INGESTORS.get(tool)
+        if text_ingestor:
+            text_ingestor(output, store)
 
 
 def _ingest_virustotal(data: dict[str, Any], store: StructuredStore) -> None:
@@ -91,7 +95,10 @@ def _ingest_nmap(data: dict[str, Any], store: StructuredStore) -> None:
     if not host:
         return
     for svc in data.get("services", []):
-        cves = [CVE(cve_id=c.get("id"), cvss=c.get("cvss"), source="nmap") for c in svc.get("cves", [])]
+        cves = [
+            CVE(cve_id=c.get("id"), cvss=c.get("cvss"), source="nmap")
+            for c in svc.get("cves", [])
+        ]
         store.add_service(
             hostname=host,
             port=svc.get("port", 0),
@@ -135,7 +142,12 @@ def _ingest_nmap_text(text: str, store: StructuredStore) -> None:
         if port_match:
             if current_port:
                 services.append(current_port)
-            current_port = {"port": int(port_match.group(1)), "protocol": "tcp", "state": "open", "cves": []}
+            current_port = {
+                "port": int(port_match.group(1)),
+                "protocol": "tcp",
+                "state": "open",
+                "cves": [],
+            }
             continue
         if current_port:
             if "State:" in line:
@@ -173,9 +185,13 @@ def _ingest_probe_text(text: str, store: StructuredStore) -> None:
     if not host:
         return
     if "HTTP (Port 80): Found" in text:
-        store.add_service(hostname=host, port=80, protocol="tcp", state="open", name="http")
+        store.add_service(
+            hostname=host, port=80, protocol="tcp", state="open", name="http"
+        )
     if "HTTPS (Port 443): Found" in text:
-        store.add_service(hostname=host, port=443, protocol="tcp", state="open", name="https")
+        store.add_service(
+            hostname=host, port=443, protocol="tcp", state="open", name="https"
+        )
     store.add_host(hostname=host, ip=ip)
 
 
@@ -200,7 +216,9 @@ def _ingest_email(data: dict[str, Any], store: StructuredStore) -> None:
     services = data.get("services") or {}
     if services:
         summary = {"email": email, "services": services}
-        store.add_evidence("analyze_email:services", json.dumps(summary, ensure_ascii=False))
+        store.add_evidence(
+            "analyze_email:services", json.dumps(summary, ensure_ascii=False)
+        )
 
     breaches = data.get("breaches") or []
     for breach in breaches:
@@ -251,10 +269,112 @@ def _ingest_censys(data: dict[str, Any], store: StructuredStore) -> None:
         store.add_host(str(host))
 
 
-def _ingest_search(data: dict[str, Any], store: StructuredStore) -> None:
+def _ingest_search(
+    data: dict[str, Any], store: StructuredStore, source_tool: str = "search"
+) -> None:
     # For search results, only evidence is stored; normalization is minimal
     summary = json.dumps(data, ensure_ascii=False)
-    store.add_evidence("search", summary)
+    store.add_evidence(source_tool, summary)
+
+
+def _ingest_httpx(data: dict[str, Any], store: StructuredStore) -> None:
+    for entry in data.get("results", []):
+        url = entry.get("url")
+        host = entry.get("ip") or url
+        port = entry.get("port") or (443 if str(url).startswith("https") else 80)
+        store.add_evidence("httpx", json.dumps(entry, ensure_ascii=False))
+        if host:
+            store.add_service(
+                hostname=str(host),
+                port=int(port),
+                protocol="tcp",
+                state="open",
+                name="http",
+                product=entry.get("webserver"),
+                version=entry.get("tls_version"),
+            )
+
+
+def _ingest_naabu(data: dict[str, Any], store: StructuredStore) -> None:
+    for entry in data.get("results", []):
+        host = entry.get("ip") or data.get("host")
+        port = entry.get("port") or 0
+        proto = entry.get("proto") or "tcp"
+        if host:
+            store.add_service(
+                hostname=str(host), port=int(port), protocol=proto, state="open"
+            )
+
+
+def _ingest_nuclei(data: dict[str, Any], store: StructuredStore) -> None:
+    for finding in data.get("findings", []):
+        host = finding.get("host") or finding.get("ip") or data.get("target")
+        matched = finding.get("matched")
+        sev = finding.get("severity")
+        title = finding.get("name") or finding.get("template_id")
+        store.add_evidence("nuclei", json.dumps(finding, ensure_ascii=False))
+        if matched:
+            store.add_host(matched)
+        if host:
+            store.add_host(str(host))
+        if title:
+            store.add_evidence(
+                "nuclei:finding",
+                json.dumps(
+                    {"title": title, "severity": sev, "matched": matched},
+                    ensure_ascii=False,
+                ),
+            )
+
+
+def _ingest_katana(data: dict[str, Any], store: StructuredStore) -> None:
+    for url in data.get("urls", []):
+        store.add_evidence("katana", url)
+
+
+def _ingest_feroxbuster(data: dict[str, Any], store: StructuredStore) -> None:
+    for entry in data.get("results", []):
+        url = entry.get("url")
+        store.add_evidence("feroxbuster", json.dumps(entry, ensure_ascii=False))
+        if url:
+            store.add_host(url)
+
+
+def _ingest_wafw00f(data: dict[str, Any], store: StructuredStore) -> None:
+    name = data.get("waf_name")
+    if name:
+        store.add_evidence("wafw00f", json.dumps(data, ensure_ascii=False))
+
+
+_STRUCTURED_INGESTORS: dict[str, StructuredIngester] = {
+    "virustotal_subdomain_enum": _ingest_virustotal,
+    "probe_host": _ingest_probe,
+    "nmap_port_scan": _ingest_nmap,
+    "shodan_lookup": _ingest_shodan,
+    "analyze_email": _ingest_email,
+    "censys_lookup": _ingest_censys,
+    "censys_web_lookup": _ingest_censys,
+    "serp_search": lambda data, store: _ingest_search(
+        data, store, source_tool="serp_search"
+    ),
+    "duckduckgo_lookup": lambda data, store: _ingest_search(
+        data, store, source_tool="duckduckgo_lookup"
+    ),
+    "httpx_scan": _ingest_httpx,
+    "naabu_scan": _ingest_naabu,
+    "nuclei_scan": _ingest_nuclei,
+    "katana_crawl": _ingest_katana,
+    "feroxbuster_scan": _ingest_feroxbuster,
+    "wafw00f_detect": _ingest_wafw00f,
+}
+
+
+_TEXT_INGESTORS: dict[str, TextIngester] = {
+    "nmap_port_scan": _ingest_nmap_text,
+    "probe_host": _ingest_probe_text,
+    "virustotal_subdomain_enum": _ingest_virustotal_text,
+    "shodan_lookup": _ingest_shodan_text,
+}
 
 
 BUILTIN_NORMALIZERS = normalize_output

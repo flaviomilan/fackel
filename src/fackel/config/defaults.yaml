@@ -1,0 +1,42 @@
+# Default configuration for Fackel
+# Override values via environment variables or CLI flags
+
+# LLM Models
+llm:
+  planner_model: gpt-4o-mini
+  reporter_model: gpt-4o-mini
+  temperature: 0.3
+
+# Embedding Configuration
+embeddings:
+  model: text-embedding-3-small
+  dimensions: 1536
+
+# Vector Store
+vector_store:
+  similarity_threshold: 0.6
+  top_k_matches: 5
+
+# Cache Configuration
+cache:
+  redis:
+    enabled: true
+    ttl_playbook: 0  # Never expire (static rules)
+    ttl_query: 3600  # 1 hour (dynamic queries)
+
+# Tool Execution
+tools:
+  timeout_seconds: 300
+  max_retries: 2
+
+# Incremental Analysis
+analysis:
+  min_output_length: 50
+  max_output_length: 32000
+  skip_on_error: true
+
+# Telemetry
+telemetry:
+  langfuse_enabled: true
+  trace_tools: true
+  trace_llm: true

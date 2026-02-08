@@ -1,7 +1,10 @@
 import os
 
+
 from censys.search import CensysHosts
 from langchain.tools import tool
+
+from .utils import format_tool_output
 
 
 @tool
@@ -11,12 +14,12 @@ def censys_lookup(domain: str):
     api_secret = os.getenv("CENSYS_API_SECRET")
 
     if not api_id or not api_secret:
-        return {
-            "tool": "censys_lookup",
-            "status": "error",
-            "domain": domain,
-            "error": "CENSYS_API_ID e CENSYS_API_SECRET não configurados.",
-        }
+        return format_tool_output(
+            "censys_lookup",
+            domain,
+            "error",
+            error="CENSYS_API_ID e CENSYS_API_SECRET não configurados.",
+        )
 
     try:
         h = CensysHosts(api_id=api_id, api_secret=api_secret)
@@ -41,17 +44,17 @@ def censys_lookup(domain: str):
                 }
             )
 
-        return {
-            "tool": "censys_lookup",
-            "status": "ok",
-            "domain": domain,
-            "hosts": hosts,
-        }
+        return format_tool_output(
+            "censys_lookup",
+            domain,
+            "ok",
+            data={"hosts": hosts},
+        )
 
     except Exception as e:
-        return {
-            "tool": "censys_lookup",
-            "status": "error",
-            "domain": domain,
-            "error": f"Erro ao consultar Censys: {e}",
-        }
+        return format_tool_output(
+            "censys_lookup",
+            domain,
+            "error",
+            error=f"Erro ao consultar Censys: {e}",
+        )

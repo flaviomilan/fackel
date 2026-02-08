@@ -1,7 +1,10 @@
+
 import os
 
 import shodan
 from langchain.tools import tool
+
+from .utils import format_tool_output
 
 
 @tool
@@ -9,12 +12,12 @@ def shodan_lookup(query: str):
     """Busca informações OSINT no Shodan para o domínio ou IP informado (retorna payload estruturado)."""
     api_key = os.getenv("SHODAN_API_KEY")
     if not api_key:
-        return {
-            "tool": "shodan_lookup",
-            "status": "error",
-            "query": query,
-            "error": "SHODAN_API_KEY não configurada nas variáveis de ambiente.",
-        }
+        return format_tool_output(
+            "shodan_lookup",
+            query,
+            "error",
+            error="SHODAN_API_KEY não configurada nas variáveis de ambiente.",
+        )
 
     api = shodan.Shodan(api_key)
     try:
@@ -31,17 +34,16 @@ def shodan_lookup(query: str):
                 }
             )
 
-        return {
-            "tool": "shodan_lookup",
-            "status": "ok",
-            "query": query,
-            "total": result.get("total", 0),
-            "matches": matches,
-        }
+        return format_tool_output(
+            "shodan_lookup",
+            query,
+            "ok",
+            data={"total": result.get("total", 0), "matches": matches},
+        )
     except Exception as e:
-        return {
-            "tool": "shodan_lookup",
-            "status": "error",
-            "query": query,
-            "error": f"Erro ao consultar Shodan: {e}",
-        }
+        return format_tool_output(
+            "shodan_lookup",
+            query,
+            "error",
+            error=f"Erro ao consultar Shodan: {e}",
+        )

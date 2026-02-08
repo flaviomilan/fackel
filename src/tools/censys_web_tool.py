@@ -132,7 +132,10 @@ class CensysWebScraper:
                 await playwright.stop()
 
 
+
 scraper = CensysWebScraper()
+
+from .utils import format_tool_output
 
 
 @tool
@@ -160,18 +163,18 @@ def censys_web_lookup(domain: str):
                 }
             )
 
-        return {
-            "tool": "censys_web_lookup",
-            "status": "ok" if hosts else "error",
-            "domain": domain,
-            "hosts": hosts,
-            "errors": errors,
-        }
+        return format_tool_output(
+            "censys_web_lookup",
+            domain,
+            "ok" if hosts else "error",
+            data={"hosts": hosts, "errors": errors},
+            error=str(errors) if not hosts else None,
+        )
 
     except Exception as e:
-        return {
-            "tool": "censys_web_lookup",
-            "status": "error",
-            "domain": domain,
-            "error": f"Erro ao realizar busca no Censys: {e!s}",
-        }
+        return format_tool_output(
+            "censys_web_lookup",
+            domain,
+            "error",
+            error=f"Erro ao realizar busca no Censys: {e!s}",
+        )
