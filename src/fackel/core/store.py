@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .models import CVE, DomainReport, Evidence, Host, Person, Service
 
@@ -12,7 +12,7 @@ class StructuredStore:
     def __init__(self, domain: str):
         self.report = DomainReport(domain=domain)
 
-    def add_host(self, hostname: str, ip: Optional[str] = None) -> Host:
+    def add_host(self, hostname: str, ip: str | None = None) -> Host:
         host = self.report.hosts.get(hostname)
         if not host:
             host = Host(hostname=hostname, ip=ip)
@@ -28,11 +28,11 @@ class StructuredStore:
         port: int,
         protocol: str,
         state: str,
-        name: Optional[str] = None,
-        product: Optional[str] = None,
-        version: Optional[str] = None,
-        extra: Optional[str] = None,
-        cves: Optional[List[CVE]] = None,
+        name: str | None = None,
+        product: str | None = None,
+        version: str | None = None,
+        extra: str | None = None,
+        cves: list[CVE] | None = None,
     ) -> None:
         host = self.add_host(hostname)
         for svc in host.services:
@@ -68,9 +68,9 @@ class StructuredStore:
     def add_person(
         self,
         name: str,
-        role: Optional[str] = None,
-        profile_url: Optional[str] = None,
-        technologies: Optional[List[str]] = None,
+        role: str | None = None,
+        profile_url: str | None = None,
+        technologies: list[str] | None = None,
     ) -> None:
         for p in self.report.people:
             if p.name == name and (not profile_url or p.profile_url == profile_url):
@@ -91,7 +91,7 @@ class StructuredStore:
             )
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return self.report.to_dict()
 
     def save_json(self, path: str) -> None:

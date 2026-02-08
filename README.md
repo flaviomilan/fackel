@@ -153,6 +153,12 @@ src/
 sudo apt-get update && sudo apt-get install nmap
 ```
 
+### Extensibilidade / edição pro
+
+- Registro de ferramentas extensível via `register_tool(name, fn, category="passive"|"active")` (pode ser chamado por plugins ou edição pro antes de instanciar o agente).
+- Para novas dependências de API, use `register_tool_requirements(tool_name, ["ENV1", "ENV2"])`; para ferramentas offline/local, `register_always_on(tool_name)`.
+- O `ToolRegistry` compartilhado é obtido com `get_tool_registry()` e fornece `plan()` para sugerir a ordem de execução considerando `active_scan` e capabilities.
+
 ---
 
 ## ⚙️ Configuration

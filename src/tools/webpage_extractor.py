@@ -1,4 +1,3 @@
-import re
 from urllib.parse import urlparse
 
 import requests
@@ -53,7 +52,7 @@ class WebpageExtractor:
 
             return self.extract_text_from_html(response.text)
         except requests.exceptions.RequestException as e:
-            return f"Erro ao acessar {url}: {str(e)}"
+            return f"Erro ao acessar {url}: {e!s}"
 
 
 extractor = WebpageExtractor()

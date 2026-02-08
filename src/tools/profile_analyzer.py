@@ -1,8 +1,6 @@
 import re
-from typing import Dict, List
 
 import requests
-from bs4 import BeautifulSoup
 from langchain.tools import tool
 
 try:
@@ -23,7 +21,7 @@ class ProfileAnalyzer:
             }
         )
 
-    def extract_skills_from_text(self, text: str) -> List[str]:
+    def extract_skills_from_text(self, text: str) -> list[str]:
         """Extrai possíveis habilidades técnicas do texto."""
 
         tech_keywords = [
@@ -44,7 +42,7 @@ class ProfileAnalyzer:
 
         return sorted(list(skills))
 
-    def search_professional_info(self, name: str, company: str) -> Dict:
+    def search_professional_info(self, name: str, company: str) -> dict:
         """Busca informações profissionais detalhadas."""
         results = {
             "profile_summary": [],

@@ -1,4 +1,3 @@
-import re
 
 from langchain.tools import tool
 

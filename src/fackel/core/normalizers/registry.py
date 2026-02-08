@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 from ..store import StructuredStore
 
@@ -9,7 +10,7 @@ NormalizerFn = Callable[[str, Any, StructuredStore], None]
 
 class NormalizerRegistry:
     def __init__(self):
-        self._registry: Dict[str, NormalizerFn] = {}
+        self._registry: dict[str, NormalizerFn] = {}
 
     def register(self, tool_name: str, fn: NormalizerFn) -> None:
         self._registry[tool_name] = fn

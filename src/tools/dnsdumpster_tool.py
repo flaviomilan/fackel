@@ -50,7 +50,7 @@ def dnsdumpster_lookup(domain: str) -> str:
                 if csrf_match:
                     csrf_token = csrf_match.group(1)
                 else:
-                    return f"Could not obtain CSRF token from DNSDumpster. The site structure might have changed."
+                    return "Could not obtain CSRF token from DNSDumpster. The site structure might have changed."
 
         time.sleep(2)
 
@@ -116,7 +116,7 @@ def dnsdumpster_lookup(domain: str) -> str:
             header = table.find("th")
             if header:
                 header_text = header.get_text(strip=True)
-                for key in records.keys():
+                for key in records:
                     if key in header_text:
                         records[key] = parse_table(table)
                         break

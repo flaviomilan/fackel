@@ -1,5 +1,4 @@
 import os
-from typing import Dict, List
 
 from censys.search import CensysHosts
 from langchain.tools import tool
@@ -24,7 +23,7 @@ def censys_lookup(domain: str):
         query = f"services.tls.certificates.leaf_data.subject.common_name: {domain} OR services.tls.certificates.leaf_data.subject.organization: {domain}"
         results = h.search(query, per_page=5)
 
-        hosts: List[Dict] = []
+        hosts: list[dict] = []
         for host in results:
             services = []
             for service in host.get("services", []):

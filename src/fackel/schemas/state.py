@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from fackel.core.store import StructuredStore
@@ -12,9 +10,9 @@ class AgentState(BaseModel):
 
     domain: str
     active_scan: bool = False
-    plan: List[str] = Field(default_factory=list)
-    completed: List[str] = Field(default_factory=list)
-    errors: List[str] = Field(default_factory=list)
+    plan: list[str] = Field(default_factory=list)
+    completed: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
     confidence: float = 0.5
-    last_result: Optional[str] = None
+    last_result: str | None = None
     store: StructuredStore

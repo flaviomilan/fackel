@@ -3,16 +3,16 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from langgraph.graph import END, StateGraph
 
-from collectors.collectors import ACTIVE_TOOL_NAMES, PASSIVE_TOOL_NAMES, TOOL_REGISTRY
+from capabilities import detect_capabilities
+from collectors.collectors import get_tool_registry
 from fackel.core.normalizers import BUILTIN_NORMALIZERS, NormalizerRegistry
 from fackel.core.store import StructuredStore
 from fackel.reporting import render_structured_summary
 from fackel.schemas.state import AgentState
-from capabilities import detect_capabilities
 
 try:
     from langfuse import Langfuse
@@ -24,9 +24,10 @@ class LangGraphAgent:
     def __init__(self, active_scan: bool = False):
         self.active_scan = active_scan
         self.capabilities = detect_capabilities()
+        self.tool_registry = get_tool_registry()
         self.normalizers = NormalizerRegistry()
         # Register builtin normalizers
-        for name in TOOL_REGISTRY.keys():
+        for name in self.tool_registry.names():
             self.normalizers.register(name, BUILTIN_NORMALIZERS)
 
         self._langfuse_client = self._init_langfuse()
@@ -140,12 +141,9 @@ class LangGraphAgent:
         except Exception:
             return
 
-    def _initial_plan(self) -> List[str]:
+    def _initial_plan(self) -> list[str]:
         available = self.capabilities.available
-        plan = [name for name in PASSIVE_TOOL_NAMES if name in available]
-        if self.active_scan:
-            plan.extend([name for name in ACTIVE_TOOL_NAMES if name in available])
-        return plan
+        return self.tool_registry.plan(available, self.active_scan)
 
     def _build_graph(self):
         sg = StateGraph(AgentState)
@@ -170,7 +168,7 @@ class LangGraphAgent:
         if not state.plan:
             return state
         tool_name = state.plan.pop(0)
-        tool_fn = TOOL_REGISTRY.get(tool_name)
+        tool_fn = self.tool_registry.get(tool_name)
         self.logger.info(f"Executando tool: {tool_name} (restantes: {len(state.plan)})")
         if not tool_fn:
             state.errors.append(f"tool {tool_name} not found")
@@ -207,7 +205,7 @@ class LangGraphAgent:
             return "stop"
         return "continue"
 
-    def run(self, domain: str) -> Dict[str, Any]:
+    def run(self, domain: str) -> dict[str, Any]:
         state = AgentState(domain=domain, active_scan=self.active_scan, store=StructuredStore(domain=domain))
         self._session_id = os.getenv("LANGFUSE_SESSION_ID") or domain
         self.logger.info(f"Iniciando execução para {domain} | active_scan={self.active_scan}")

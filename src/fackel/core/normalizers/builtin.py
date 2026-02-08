@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..models import CVE
 from ..store import StructuredStore
 
 
-def _as_dict(output: Any) -> Optional[Dict[str, Any]]:
+def _as_dict(output: Any) -> dict[str, Any] | None:
     if isinstance(output, dict):
         return output
     if isinstance(output, str):
@@ -42,13 +42,9 @@ def normalize_output(tool: str, output: Any, store: StructuredStore) -> None:
             _ingest_shodan(data, store)
         elif tool == "analyze_email":
             _ingest_email(data, store)
-        elif tool == "censys_lookup":
+        elif tool == "censys_lookup" or tool == "censys_web_lookup":
             _ingest_censys(data, store)
-        elif tool == "censys_web_lookup":
-            _ingest_censys(data, store)
-        elif tool == "serp_search":
-            _ingest_search(data, store)
-        elif tool == "duckduckgo_lookup":
+        elif tool == "serp_search" or tool == "duckduckgo_lookup":
             _ingest_search(data, store)
         return
 
@@ -63,7 +59,7 @@ def normalize_output(tool: str, output: Any, store: StructuredStore) -> None:
             _ingest_shodan_text(output, store)
 
 
-def _ingest_virustotal(data: Dict[str, Any], store: StructuredStore) -> None:
+def _ingest_virustotal(data: dict[str, Any], store: StructuredStore) -> None:
     domain = data.get("domain")
     subdomains = data.get("subdomains") or []
     for sub in subdomains:
@@ -72,7 +68,7 @@ def _ingest_virustotal(data: Dict[str, Any], store: StructuredStore) -> None:
         store.add_host(domain)
 
 
-def _ingest_probe(data: Dict[str, Any], store: StructuredStore) -> None:
+def _ingest_probe(data: dict[str, Any], store: StructuredStore) -> None:
     host = data.get("host") or data.get("domain")
     ip = data.get("ip")
     if not host:
@@ -90,7 +86,7 @@ def _ingest_probe(data: Dict[str, Any], store: StructuredStore) -> None:
     store.add_host(hostname=host, ip=ip)
 
 
-def _ingest_nmap(data: Dict[str, Any], store: StructuredStore) -> None:
+def _ingest_nmap(data: dict[str, Any], store: StructuredStore) -> None:
     host = data.get("host")
     if not host:
         return
@@ -109,7 +105,7 @@ def _ingest_nmap(data: Dict[str, Any], store: StructuredStore) -> None:
         )
 
 
-def _ingest_shodan(data: Dict[str, Any], store: StructuredStore) -> None:
+def _ingest_shodan(data: dict[str, Any], store: StructuredStore) -> None:
     for match in data.get("matches", []):
         host = match.get("ip") or match.get("ip_str") or match.get("host")
         if not host:
@@ -133,7 +129,7 @@ def _ingest_nmap_text(text: str, store: StructuredStore) -> None:
     if not host:
         return
     current_port = None
-    services: List[Dict[str, Any]] = []
+    services: list[dict[str, Any]] = []
     for line in text.splitlines():
         port_match = re.search(r"Port: (\d+)", line)
         if port_match:
@@ -196,7 +192,7 @@ def _ingest_shodan_text(text: str, store: StructuredStore) -> None:
         store.add_service(hostname=host, port=port, protocol="tcp", state="open")
 
 
-def _ingest_email(data: Dict[str, Any], store: StructuredStore) -> None:
+def _ingest_email(data: dict[str, Any], store: StructuredStore) -> None:
     email = data.get("email")
     if not email:
         return
@@ -232,7 +228,7 @@ def _ingest_email(data: Dict[str, Any], store: StructuredStore) -> None:
         )
 
 
-def _ingest_censys(data: Dict[str, Any], store: StructuredStore) -> None:
+def _ingest_censys(data: dict[str, Any], store: StructuredStore) -> None:
     results = data.get("results") or []
     for item in results:
         host = item.get("ip") or item.get("ip_address") or item.get("host")
@@ -255,7 +251,7 @@ def _ingest_censys(data: Dict[str, Any], store: StructuredStore) -> None:
         store.add_host(str(host))
 
 
-def _ingest_search(data: Dict[str, Any], store: StructuredStore) -> None:
+def _ingest_search(data: dict[str, Any], store: StructuredStore) -> None:
     # For search results, only evidence is stored; normalization is minimal
     summary = json.dumps(data, ensure_ascii=False)
     store.add_evidence("search", summary)

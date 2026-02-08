@@ -1,8 +1,6 @@
 import asyncio
-import json
 import re
 import traceback
-from typing import Any, Dict, List
 
 from langchain.tools import tool
 from playwright.async_api import TimeoutError as PlaywrightTimeout
@@ -33,7 +31,7 @@ class CensysWebScraper:
 
         return context, playwright, browser
 
-    async def extract_host_info(self, page) -> Dict:
+    async def extract_host_info(self, page) -> dict:
         """Extrai informações do host da página."""
         info = {}
 
@@ -94,7 +92,7 @@ class CensysWebScraper:
             print(f"[Debug] Erro ao extrair informações: {e}")
             return {"error": str(e)}
 
-    async def search_domain(self, domain: str) -> List[Dict]:
+    async def search_domain(self, domain: str) -> list[dict]:
         """Realiza a busca por um domínio no Censys."""
         results = []
         context = None
@@ -122,7 +120,7 @@ class CensysWebScraper:
         except Exception as e:
             print(f"[Debug] Erro durante a busca: {e}")
             print(f"[Debug] Traceback:\n{traceback.format_exc()}")
-            return [{"error": f"Erro durante a busca: {str(e)}"}]
+            return [{"error": f"Erro durante a busca: {e!s}"}]
 
         finally:
             print("[Debug] Finalizando recursos...")
@@ -175,5 +173,5 @@ def censys_web_lookup(domain: str):
             "tool": "censys_web_lookup",
             "status": "error",
             "domain": domain,
-            "error": f"Erro ao realizar busca no Censys: {str(e)}",
+            "error": f"Erro ao realizar busca no Censys: {e!s}",
         }

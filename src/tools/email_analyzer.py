@@ -1,6 +1,5 @@
 import asyncio
 import os
-from typing import Dict, List
 
 import aiohttp
 import requests
@@ -12,7 +11,7 @@ class EmailAnalyzer:
         self.hibp_api_key = os.getenv("HIBP_API_KEY")
         self.emailrep_api_key = os.getenv("EMAILREP_API_KEY")
 
-    async def check_email_services(self, email: str) -> Dict[str, bool]:
+    async def check_email_services(self, email: str) -> dict[str, bool]:
         """Verifica em quais serviços o e-mail está registrado."""
         results = {}
 
@@ -73,7 +72,7 @@ def analyze_email(email: str):
         except Exception:
             pass
 
-    breaches: List[Dict] = []
+    breaches: list[dict] = []
     if analyzer.hibp_api_key:
         try:
             headers = {

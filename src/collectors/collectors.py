@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Callable, Literal
+
 from tools.censys_tool import censys_lookup
 from tools.censys_web_tool import censys_web_lookup
 from tools.dnsdumpster_tool import dnsdumpster_lookup
@@ -15,63 +20,83 @@ from tools.webpage_extractor import extract_webpage_content
 from tools.whois import whois_lookup
 
 
-TOOL_REGISTRY = {
-    "whois_lookup": whois_lookup,
-    "virustotal_subdomain_enum": virustotal_subdomain_enum,
-    "dnsdumpster_lookup": dnsdumpster_lookup,
-    "shodan_lookup": shodan_lookup,
-    "duckduckgo_lookup": duckduckgo_lookup,
-    "extract_webpage_content": extract_webpage_content,
-    "job_search": job_search,
-    "serp_search": serp_search,
-    "search_linkedin_for_employees": search_linkedin_for_employees,
-    "analyze_email": analyze_email,
-    "analyze_professional_profile": analyze_professional_profile,
-    "censys_lookup": censys_lookup,
-    "censys_web_lookup": censys_web_lookup,
-    "probe_host": probe_host,
-    "nmap_port_scan": nmap_port_scan,
-}
+ToolCategory = Literal["passive", "active"]
+ToolFn = Callable[[Any], Any]
 
 
-PASSIVE_TOOL_NAMES = [
-    "whois_lookup",
-    "virustotal_subdomain_enum",
-    "dnsdumpster_lookup",
-    "shodan_lookup",
-    "duckduckgo_lookup",
-    "extract_webpage_content",
-    "job_search",
-    "serp_search",
-    "search_linkedin_for_employees",
-    "analyze_email",
-    "analyze_professional_profile",
-    "censys_lookup",
-    "censys_web_lookup",
-]
+@dataclass(slots=True)
+class ToolDefinition:
+    name: str
+    fn: ToolFn
+    category: ToolCategory = "passive"
 
 
-ACTIVE_TOOL_NAMES = ["probe_host", "nmap_port_scan"]
+class ToolRegistry:
+    """Registry that allows extending tools at runtime (free/pro/plugins)."""
+
+    def __init__(self):
+        self._tools: dict[str, ToolDefinition] = {}
+        self._by_category: dict[ToolCategory, set[str]] = {"passive": set(), "active": set()}
+
+    def register(self, name: str, fn: ToolFn, category: ToolCategory = "passive") -> None:
+        self._tools[name] = ToolDefinition(name=name, fn=fn, category=category)
+        self._by_category.setdefault(category, set()).add(name)
+
+    def get(self, name: str) -> ToolFn | None:
+        definition = self._tools.get(name)
+        return definition.fn if definition else None
+
+    def names(self, category: ToolCategory | None = None) -> list[str]:
+        if category is None:
+            return list(self._tools.keys())
+        return list(self._by_category.get(category, set()))
+
+    def plan(self, available: set[str], active_scan: bool) -> list[str]:
+        """Compute the ordered plan given capabilities and mode."""
+        plan = [name for name in self.names("passive") if name in available]
+        if active_scan:
+            plan.extend([name for name in self.names("active") if name in available])
+        return plan
 
 
-def _filter_tools(tool_names, allowed_names):
-    return [TOOL_REGISTRY[name] for name in tool_names if name in allowed_names]
+def _register_builtin_tools(registry: ToolRegistry) -> None:
+    registry.register("whois_lookup", whois_lookup, category="passive")
+    registry.register("virustotal_subdomain_enum", virustotal_subdomain_enum, category="passive")
+    registry.register("dnsdumpster_lookup", dnsdumpster_lookup, category="passive")
+    registry.register("shodan_lookup", shodan_lookup, category="passive")
+    registry.register("duckduckgo_lookup", duckduckgo_lookup, category="passive")
+    registry.register("extract_webpage_content", extract_webpage_content, category="passive")
+    registry.register("job_search", job_search, category="passive")
+    registry.register("serp_search", serp_search, category="passive")
+    registry.register("search_linkedin_for_employees", search_linkedin_for_employees, category="passive")
+    registry.register("analyze_email", analyze_email, category="passive")
+    registry.register("analyze_professional_profile", analyze_professional_profile, category="passive")
+    registry.register("censys_lookup", censys_lookup, category="passive")
+    registry.register("censys_web_lookup", censys_web_lookup, category="passive")
+    registry.register("probe_host", probe_host, category="active")
+    registry.register("nmap_port_scan", nmap_port_scan, category="active")
 
 
-def get_passive_tools(available_tool_names):
-    """Returns passive tools that are available based on capabilities."""
-    return _filter_tools(PASSIVE_TOOL_NAMES, available_tool_names)
+_DEFAULT_REGISTRY = ToolRegistry()
+_register_builtin_tools(_DEFAULT_REGISTRY)
 
 
-def get_active_tools(available_tool_names):
-    """Returns active tools that are available based on capabilities."""
-    return _filter_tools(ACTIVE_TOOL_NAMES, available_tool_names)
+# Backwards-compat convenience exports (static snapshots)
+TOOL_REGISTRY = {name: td.fn for name, td in _DEFAULT_REGISTRY._tools.items()}
+PASSIVE_TOOL_NAMES = _DEFAULT_REGISTRY.names("passive")
+ACTIVE_TOOL_NAMES = _DEFAULT_REGISTRY.names("active")
 
 
-def get_all_tools(active_scan: bool, available_tool_names):
-    """Returns tools based on scanning mode and capability detection."""
-    tools = get_passive_tools(available_tool_names)
-    if active_scan:
-        print("[Collector] Active scanning enabled. Adding active tools.")
-        tools.extend(get_active_tools(available_tool_names))
-    return tools
+def get_tool_registry() -> ToolRegistry:
+    return _DEFAULT_REGISTRY
+
+
+def register_tool(name: str, fn: ToolFn, category: ToolCategory = "passive") -> None:
+    """Register extra tools (used by pro/plugins) into the shared registry."""
+    _DEFAULT_REGISTRY.register(name, fn, category=category)
+
+
+def get_all_tools(active_scan: bool, available_tool_names: set[str]):
+    registry = get_tool_registry()
+    plan = registry.plan(available_tool_names, active_scan)
+    return [registry.get(name) for name in plan if registry.get(name)]

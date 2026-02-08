@@ -1,4 +1,4 @@
-from .registry import NormalizerRegistry
 from .builtin import BUILTIN_NORMALIZERS
+from .registry import NormalizerRegistry
 
-__all__ = ["NormalizerRegistry", "BUILTIN_NORMALIZERS"]
+__all__ = ["BUILTIN_NORMALIZERS", "NormalizerRegistry"]

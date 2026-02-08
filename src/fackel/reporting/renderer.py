@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List
-
-from fackel.core.models import DomainReport, Host, Service
+from fackel.core.models import DomainReport, Service
 from fackel.core.store import StructuredStore
 
 
@@ -23,8 +21,8 @@ def _risk_label(score: float) -> str:
     return "info"
 
 
-def score_store(store: StructuredStore) -> Dict:
-    host_scores: Dict[str, float] = {}
+def score_store(store: StructuredStore) -> dict:
+    host_scores: dict[str, float] = {}
     for name, host in store.report.hosts.items():
         service_scores = [_cvss_from_service(svc) for svc in host.services]
         host_scores[name] = max(service_scores) if service_scores else 0.0
@@ -39,7 +37,7 @@ def score_store(store: StructuredStore) -> Dict:
 def render_structured_summary(store: StructuredStore) -> str:
     report: DomainReport = store.report
     scores = score_store(store)
-    lines: List[str] = []
+    lines: list[str] = []
 
     lines.append("### Score Geral")
     lines.append(f"- Domínio `{report.domain}`: score {scores['domain_score']:.1f} ({_risk_label(scores['domain_score'])})")
