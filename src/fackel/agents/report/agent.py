@@ -10,31 +10,14 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from fackel.agents.config import get_model
-
-SYSTEM_PROMPT = """\
-You are a pentest report writer for the Fackel framework.
-
-Generate a professional, concise **Markdown** report based on the findings
-provided.
-
-## Structure
-1. **Executive Summary** — high-level overview for stakeholders.
-2. **Scope** — what was tested and scan configuration.
-3. **Discovered Assets** — IPs, domains, infrastructure.
-4. **Open Ports & Services** — detailed per-host findings.
-5. **Recommendations** — actionable security improvements.
-
-## Rules
-- Be factual.  Only report what was actually discovered.
-- Do not speculate or invent findings.
-- Use tables where appropriate.
-"""
+from fackel.agents.prompts import load_prompt
 
 
 def generate_report(
     target: str,
     active_scan: bool,
     findings: list[str],
+    unassessed_areas: list[dict] | None = None,
     model_name: str | None = None,
 ) -> str:
     """Render a Markdown pentest report from accumulated agent findings."""
@@ -42,12 +25,22 @@ def generate_report(
 
     context = "\n\n---\n\n".join(findings) if findings else "No findings collected."
 
+    parts = [
+        f"Target: {target}",
+        f"Active scanning: {'enabled' if active_scan else 'disabled'}",
+        f"\nAgent findings:\n\n{context}",
+    ]
+
+    if unassessed_areas:
+        areas_text = "\n".join(
+            f"- **{a['technology']}** (detected by {a['detected_by']}): "
+            f"{a['reason']}. Recommendation: {a['recommendation']}"
+            for a in unassessed_areas
+        )
+        parts.append(f"\nUnassessed Areas:\n\n{areas_text}")
+
     response = llm.invoke([
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=(
-            f"Target: {target}\n"
-            f"Active scanning: {'enabled' if active_scan else 'disabled'}\n\n"
-            f"Agent findings:\n\n{context}"
-        )),
+        SystemMessage(content=load_prompt("report")),
+        HumanMessage(content="\n".join(parts)),
     ])
     return response.content

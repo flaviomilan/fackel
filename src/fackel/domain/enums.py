@@ -2,12 +2,13 @@ from enum import StrEnum
 
 
 class Phase(StrEnum):
-    """Pentest workflow phases, matching the keys of ALLOWED_TRANSITIONS."""
+    """Pentest workflow phases in the orchestrator graph."""
 
-    START = "start"
-    SCOPE_GUARD = "scope_guard"
     OSINT = "osint"
+    APPROVAL = "approval"
     PORT_SCAN = "port_scan"
+    VULN_SCAN = "vuln_scan"
+    TRIAGE = "triage"
     REPORT = "report"
 
 

@@ -21,5 +21,8 @@ class ScanState(TypedDict):
     findings: Annotated[list[str], add]
     """Agent summaries accumulated across phases (append-only reducer)."""
 
+    unassessed_areas: Annotated[list[dict], add]
+    """Technologies/opportunities detected but not covered by any specialist."""
+
     report: str
     """Final rendered Markdown report."""

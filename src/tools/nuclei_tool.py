@@ -1,89 +1,76 @@
+"""Nuclei vulnerability scanner tool.
+
+Runs Nuclei templates against a host/URL, returning structured findings
+with severity, template ID, and matched location.
+"""
+
+from __future__ import annotations
+
 import json
 import shutil
 from typing import Any
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 
-
-from tools.utils import ensure_target, run_command, format_tool_output
+from tools.utils import ensure_target, format_tool_output, run_command
 
 
 @tool
-def nuclei_scan(target: str) -> dict[str, Any]:
-    """Run nuclei templates against a target (JSONL output)."""
+def nuclei_scan(target: str, severity: str = "") -> dict[str, Any]:
+    """Scan a host or URL for vulnerabilities, misconfigurations, and exposed technologies using Nuclei templates.
+
+    Returns a list of findings, each with template_id, name, severity,
+    matched URL, and detected technology type.
+
+    Args:
+        target: IP address, domain, or full URL to scan.
+        severity: Comma-separated severity filter (critical,high,medium,low,info).
+                  Leave empty to scan all severities.
+    """
     if not shutil.which("nuclei"):
-        return format_tool_output(
-            "nuclei_scan",
-            target,
-            "error",
-            error="nuclei não encontrado no PATH",
-        )
+        return format_tool_output("nuclei_scan", target, "error", error="nuclei not in PATH")
 
     norm = ensure_target(target)
     if not norm:
-        return format_tool_output(
-            "nuclei_scan",
-            target,
-            "error",
-            error="alvo inválido",
-        )
+        return format_tool_output("nuclei_scan", target, "error", error="invalid target")
 
-    cmd = [
-        "nuclei",
-        "-u",
-        norm,
-        "-jsonl",
-        "-silent",
-    ]
+    cmd = ["nuclei", "-u", norm, "-jsonl", "-silent"]
+    if severity.strip():
+        cmd.extend(["-severity", severity.strip()])
+
     try:
         code, out, err = run_command(cmd, timeout=3000)
     except Exception as exc:
-        return format_tool_output(
-            "nuclei_scan",
-            target,
-            "error",
-            error=str(exc),
-        )
-
+        return format_tool_output("nuclei_scan", target, "error", error=str(exc))
 
     findings: list[dict[str, Any]] = []
     for line in out.splitlines():
         try:
-            data = json.loads(line)
-            # Create a normalized finding object but preserve all original data
-            finding = data.copy()
-            
-            # Ensure standard keys used by normalizers/reports are present
-            finding.update({
-                "template_id": data.get("template-id"),
-                "name": data.get("info", {}).get("name"),
-                "severity": data.get("info", {}).get("severity"),
-                "matched": data.get("matched-at"),
-                "type": data.get("type"),
-                "host": data.get("host"),
-                "ip": data.get("ip"),
-                "port": data.get("port"),
-                "timestamp": data.get("timestamp"),
-                "extracted_results": data.get("extracted-results"),
-                "curl_command": data.get("curl-command"),
-                "matcher_name": data.get("matcher-name"),
+            raw = json.loads(line)
+            info = raw.get("info", {})
+            findings.append({
+                "template_id": raw.get("template-id", ""),
+                "name": info.get("name", ""),
+                "severity": info.get("severity", "unknown"),
+                "matched_at": raw.get("matched-at", ""),
+                "type": raw.get("type", ""),
+                "host": raw.get("host", ""),
+                "ip": raw.get("ip", ""),
+                "tags": info.get("tags", []),
             })
-            
-            findings.append(finding)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             continue
 
     if not findings:
-        return format_tool_output(
-            "nuclei_scan",
-            target,
-            "error" if code else "ok",
-            error=err or "sem resultados",
-        )
+        msg = "no vulnerabilities found" if code == 0 else (err.strip() or "scan produced no output")
+        return format_tool_output("nuclei_scan", target, "ok", data={"findings": [], "message": msg})
 
     return format_tool_output(
         "nuclei_scan",
         target,
         "ok",
-        data={"findings": findings},
+        data={
+            "total": len(findings),
+            "findings": findings,
+        },
     )

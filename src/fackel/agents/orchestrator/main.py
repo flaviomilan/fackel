@@ -2,6 +2,9 @@
 
 Provides ``run`` (blocking) and ``run_stream`` (incremental snapshots)
 as the public interface consumed by the CLI and tests.
+
+Supports Human-in-the-Loop via ``interrupt()`` — when the graph pauses
+at the approval gate, callers must resume with ``Command(resume=value)``.
 """
 
 from __future__ import annotations
@@ -9,6 +12,8 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Iterator
+
+from langgraph.types import Command
 
 from .graph import build_graph
 from .state import ScanState
@@ -32,6 +37,7 @@ def _initial_state(target: str, active_scan: bool) -> dict:
         "active_scan": active_scan,
         "discovered_ips": [],
         "findings": [],
+        "unassessed_areas": [],
         "report": "",
     }
 
@@ -41,19 +47,93 @@ def _config() -> dict:
     return {"configurable": {"thread_id": str(uuid.uuid4())}}
 
 
-def run(target: str, *, active_scan: bool = True) -> ScanState:
-    """Execute the full scan workflow and return final state."""
+def run(
+    target: str,
+    *,
+    active_scan: bool = True,
+    approval_callback=None,
+) -> ScanState:
+    """Execute the full scan workflow and return final state.
+
+    Parameters
+    ----------
+    target:
+        Domain or IP to scan.
+    active_scan:
+        Whether to enable active scanning phases.
+    approval_callback:
+        An optional callable ``(interrupt_value: dict) -> bool`` used to
+        handle the human-in-the-loop approval gate.  If *None* and an
+        interrupt occurs, the scan is automatically approved.
+    """
     logger.info("orchestrator: run %s (active_scan=%s)", target, active_scan)
-    return _get_graph().invoke(_initial_state(target, active_scan), config=_config())
+
+    graph = _get_graph()
+    config = _config()
+
+    # First invocation — may pause at approval_gate interrupt().
+    result = graph.invoke(_initial_state(target, active_scan), config=config)
+
+    # Check if the graph is paused at an interrupt.
+    snapshot = graph.get_state(config)
+    while snapshot.next:  # There are pending nodes → interrupt occurred
+        interrupt_values = snapshot.tasks[0].interrupts
+        if interrupt_values:
+            interrupt_data = interrupt_values[0].value
+            if approval_callback is not None:
+                approved = approval_callback(interrupt_data)
+            else:
+                approved = True  # Auto-approve when no callback
+        else:
+            approved = True
+
+        # Resume with the user's decision.
+        result = graph.invoke(Command(resume=approved), config=config)
+        snapshot = graph.get_state(config)
+
+    return result
 
 
-def run_stream(target: str, *, active_scan: bool = True) -> Iterator[tuple[str, dict]]:
-    """Yield ``(node_name, partial_update)`` as each graph node completes."""
+def run_stream(
+    target: str,
+    *,
+    active_scan: bool = True,
+    approval_callback=None,
+) -> Iterator[tuple[str, dict]]:
+    """Yield ``(node_name, partial_update)`` as each graph node completes.
+
+    Handles interrupt/resume transparently via *approval_callback*.
+    """
     logger.info("orchestrator: stream %s (active_scan=%s)", target, active_scan)
-    for chunk in _get_graph().stream(
+
+    graph = _get_graph()
+    config = _config()
+
+    for chunk in graph.stream(
         _initial_state(target, active_scan),
-        config=_config(),
+        config=config,
         stream_mode="updates",
     ):
         for node_name, update in chunk.items():
             yield node_name, update
+
+    # Handle interrupt-resume loop
+    snapshot = graph.get_state(config)
+    while snapshot.next:
+        interrupt_values = snapshot.tasks[0].interrupts
+        if interrupt_values:
+            interrupt_data = interrupt_values[0].value
+            if approval_callback is not None:
+                approved = approval_callback(interrupt_data)
+            else:
+                approved = True
+        else:
+            approved = True
+
+        for chunk in graph.stream(
+            Command(resume=approved), config=config, stream_mode="updates"
+        ):
+            for node_name, update in chunk.items():
+                yield node_name, update
+
+        snapshot = graph.get_state(config)

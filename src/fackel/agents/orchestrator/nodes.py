@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.types import Command, interrupt
 
 from .state import ScanState
 
@@ -161,16 +162,101 @@ def report_node(state: ScanState) -> dict:
         target=state["target"],
         active_scan=state["active_scan"],
         findings=state.get("findings", []),
+        unassessed_areas=state.get("unassessed_areas", []),
     )
     _emit("report", "done", {})
     return {"report": report}
+
+
+def approval_gate(state: ScanState) -> Command:
+    """Pause for human approval before active scanning.
+
+    Uses LangGraph ``interrupt()`` to suspend execution.  The CLI (or API)
+    resumes the graph with ``Command(resume=True/False)`` to approve or
+    reject.
+    """
+    ips = state.get("discovered_ips", [])
+    target = state["target"]
+
+    _emit("approval", "start", {})
+
+    approved = interrupt({
+        "question": (
+            f"OSINT found {len(ips)} IP(s) for {target}: {', '.join(ips)}.\n"
+            "Proceed with active scanning (port scan + vuln scan)?"
+        ),
+        "targets": ips,
+    })
+
+    _emit("approval", "done", {"approved": approved})
+
+    if approved:
+        return Command(goto="port_scan")
+    return Command(goto="report")
+
+
+def vuln_scan_node(state: ScanState) -> dict:
+    """Run the vuln-scan ReAct agent (Nuclei) on discovered IPs."""
+    from fackel.agents.vuln_scan.agent import build
+
+    ips = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
+    if not ips:
+        return {"findings": ["## Vulnerability Scan\n\nNo IPv4 targets available."]}
+
+    ip_list = ", ".join(ips)
+    agent = build()
+    messages = _run_and_stream_agent(
+        agent, "vuln_scan",
+        f"Run vulnerability scans on these IPs: {ip_list}",
+    )
+
+    summary = _agent_summary(messages)
+    return {"findings": [f"## Vulnerability Scan Findings\n\n{summary}"]}
+
+
+def triage_node(state: ScanState) -> dict:
+    """Analyse findings and identify unassessed areas via structured LLM output."""
+    from fackel.agents.triage.agent import run_triage
+
+    _emit("triage", "start", {})
+
+    findings = state.get("findings", [])
+    result = run_triage(findings)
+
+    unassessed = [
+        {
+            "technology": area.technology,
+            "detected_by": area.detected_by,
+            "reason": area.reason,
+            "recommendation": area.recommendation,
+        }
+        for area in result.unassessed_areas
+    ]
+
+    summary_parts = [f"## Triage Summary\n\n{result.summary}"]
+    if result.technologies_detected:
+        techs = ", ".join(result.technologies_detected)
+        summary_parts.append(f"\n**Technologies detected:** {techs}")
+    if unassessed:
+        names = ", ".join(a["technology"] for a in unassessed)
+        summary_parts.append(f"\n**Unassessed areas:** {names}")
+
+    _emit("triage", "done", {
+        "technologies": result.technologies_detected,
+        "unassessed_count": len(unassessed),
+    })
+
+    return {
+        "findings": ["\n".join(summary_parts)],
+        "unassessed_areas": unassessed,
+    }
 
 
 # ── Routing ────────────────────────────────────────────────────────────────
 
 
 def route_after_osint(state: ScanState) -> str:
-    """Skip port_scan when active scanning is disabled or no IPs found."""
+    """Decide next step: approval gate (active) or straight to report (passive)."""
     if state.get("active_scan") and state.get("discovered_ips"):
-        return "port_scan"
+        return "approval_gate"
     return "report"

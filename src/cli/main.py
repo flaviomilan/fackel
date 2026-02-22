@@ -9,19 +9,36 @@ from typing import Any
 
 import typer
 from dotenv import load_dotenv
+from rich.console import Console
+from rich.panel import Panel
 
 load_dotenv()
 
 app = typer.Typer(help="Fackel CLI")
+console = Console()
 
 
 # ── Phase labels ───────────────────────────────────────────────────────────
 
 _PHASE_LABELS = {
     "osint": "OSINT",
+    "approval": "Approval",
     "port_scan": "Port Scan",
+    "vuln_scan": "Vuln Scan",
+    "triage": "Triage",
     "report": "Report",
 }
+
+
+# ── HIL approval handler ──────────────────────────────────────────────────
+
+
+def _approval_prompt(interrupt_data: dict) -> bool:
+    """Prompt the user to approve or reject active scanning."""
+    question = interrupt_data.get("question", "Proceed with active scanning?")
+    console.print()
+    console.print(Panel(question, title="⚠ Approval Required", border_style="yellow"))
+    return typer.confirm("Approve?", default=True)
 
 
 # ── Event renderer ─────────────────────────────────────────────────────────
@@ -108,7 +125,11 @@ def scan(
     started_at = time.perf_counter()
 
     try:
-        result = run(target, active_scan=active_scan)
+        result = run(
+            target,
+            active_scan=active_scan,
+            approval_callback=_approval_prompt,
+        )
     except KeyboardInterrupt:
         typer.echo("\nScan interrupted by user.", err=True)
         raise typer.Exit(code=130)
