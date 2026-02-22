@@ -1,8 +1,7 @@
 """OSINT specialist — ReAct agent for passive reconnaissance.
 
 The LLM decides which tools to invoke and interprets results.
-Current MVP tools: dns_resolve.  Adding more (whois, shodan passive,
-virustotal, etc.) only requires appending to ``TOOLS``.
+Tools available: dns_resolve, whois_lookup, shodan_lookup.
 """
 
 from __future__ import annotations
@@ -13,8 +12,10 @@ from langgraph.prebuilt import create_react_agent
 from fackel.agents.config import get_model
 from fackel.agents.prompts import load_prompt
 from tools.dns_resolver import dns_resolve
+from tools.shodan_tool import shodan_lookup
+from tools.whois import whois_lookup
 
-TOOLS = [dns_resolve]
+TOOLS = [dns_resolve, whois_lookup, shodan_lookup]
 
 
 def build(model_name: str | None = None):

@@ -2,7 +2,7 @@ import os
 
 
 from censys.search import CensysHosts
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from .utils import format_tool_output
 

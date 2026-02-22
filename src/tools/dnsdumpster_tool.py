@@ -4,7 +4,7 @@ import time
 import requests
 import urllib3
 from bs4 import BeautifulSoup
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -127,17 +127,6 @@ def dnsdumpster_lookup(domain: str) -> str:
                 output.append(f"\n--- {title} ---")
                 output.extend(data)
 
-        # result = "\n".join(output)
-        # final_result = (
-        #     result
-        #     if result.strip()
-        #     else f"No meaningful data found for {domain} on DNSDumpster."
-        # )
-
-        # final_result = "".join(
-        #     c for c in final_result if c.isprintable() or c in "\n\r\t"
-        # )
-        # return final_result
         from .utils import format_tool_output
 
         return format_tool_output(

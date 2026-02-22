@@ -1,13 +1,25 @@
 
 import whois
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from .utils import format_tool_output
 
 
 @tool
 def whois_lookup(domain: str):
-    """Perform a WHOIS lookup for the given domain and return structured data."""
+    """Query WHOIS registration data for a domain.
+
+    Returns registrar, name servers, creation/expiration dates, and the raw
+    WHOIS record. Reveals hosting provider, domain age, and registrar — useful
+    for attribution and infrastructure mapping.
+
+    Args:
+        domain: Domain name to look up (e.g. "example.com").
+
+    Returns:
+        Structured WHOIS data: registrar, name_servers, creation_date,
+        expiration_date, and raw WHOIS text.
+    """
     try:
         record = whois.whois(domain)
         return format_tool_output(

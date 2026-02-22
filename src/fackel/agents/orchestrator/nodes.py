@@ -44,14 +44,20 @@ def _emit(phase: str, event_type: str, data: dict[str, Any]) -> None:
 
 
 def _extract_ips_from_messages(messages: list) -> list[str]:
-    """Pull IP addresses out of ToolMessage payloads returned by dns_resolve."""
+    """Pull IP addresses out of ToolMessage payloads returned by dns_resolve.
+
+    Handles both the ``format_tool_output`` envelope (``data.ips``) and
+    legacy flat format (``ips``).
+    """
     ips: list[str] = []
     for msg in messages:
         if not isinstance(msg, ToolMessage):
             continue
         try:
-            data = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
-            for ip in data.get("ips", []):
+            payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            # format_tool_output envelope: {"data": {"ips": [...]}}
+            inner = payload.get("data", payload) if isinstance(payload, dict) else payload
+            for ip in (inner.get("ips", []) if isinstance(inner, dict) else []):
                 ip_str = str(ip).strip()
                 if ip_str and ip_str not in ips:
                     ips.append(ip_str)
@@ -98,7 +104,6 @@ def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
                         "content": str(msg.content)[:500],
                     })
 
-    _emit(phase, "done", {})
     return all_messages
 
 
@@ -129,6 +134,8 @@ def osint_node(state: ScanState) -> dict:
         ips = [target]
 
     summary = _agent_summary(messages)
+    _emit("osint", "summary", {"content": summary})
+    _emit("osint", "done", {})
     return {
         "discovered_ips": ips,
         "findings": [f"## OSINT Findings\n\n{summary}"],
@@ -150,6 +157,8 @@ def port_scan_node(state: ScanState) -> dict:
     )
 
     summary = _agent_summary(messages)
+    _emit("port_scan", "summary", {"content": summary})
+    _emit("port_scan", "done", {})
     return {"findings": [f"## Port Scan Findings\n\n{summary}"]}
 
 
@@ -196,21 +205,29 @@ def approval_gate(state: ScanState) -> Command:
 
 
 def vuln_scan_node(state: ScanState) -> dict:
-    """Run the vuln-scan ReAct agent (Nuclei) on discovered IPs."""
+    """Run the vuln-scan ReAct agent on the target domain and discovered IPs."""
     from fackel.agents.vuln_scan.agent import build
 
+    target = state["target"]
     ips = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
-    if not ips:
-        return {"findings": ["## Vulnerability Scan\n\nNo IPv4 targets available."]}
 
-    ip_list = ", ".join(ips)
-    agent = build()
-    messages = _run_and_stream_agent(
-        agent, "vuln_scan",
-        f"Run vulnerability scans on these IPs: {ip_list}",
+    parts = ["Run vulnerability scans on the target."]
+    parts.append(f"\nOriginal target domain: {target}")
+    if ips:
+        parts.append(f"Discovered IPv4 addresses: {', '.join(ips)}")
+    else:
+        parts.append("No IPv4 addresses were discovered.")
+    parts.append(
+        "\nScan the DOMAIN first (DNS/SSL/HTTP templates need the hostname), "
+        "then scan individual IPs for port-specific checks."
     )
 
+    agent = build()
+    messages = _run_and_stream_agent(agent, "vuln_scan", "\n".join(parts))
+
     summary = _agent_summary(messages)
+    _emit("vuln_scan", "summary", {"content": summary})
+    _emit("vuln_scan", "done", {})
     return {"findings": [f"## Vulnerability Scan Findings\n\n{summary}"]}
 
 
@@ -241,6 +258,7 @@ def triage_node(state: ScanState) -> dict:
         names = ", ".join(a["technology"] for a in unassessed)
         summary_parts.append(f"\n**Unassessed areas:** {names}")
 
+    _emit("triage", "summary", {"content": "\n".join(summary_parts)})
     _emit("triage", "done", {
         "technologies": result.technologies_detected,
         "unassessed_count": len(unassessed),

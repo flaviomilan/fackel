@@ -1,7 +1,7 @@
 import os
 
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 from serpapi import GoogleSearch
 
 from .utils import format_tool_output

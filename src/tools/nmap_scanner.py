@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 
 import nmap
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from .utils import format_tool_output
 
@@ -104,20 +104,33 @@ def _extract_vulnerabilities(service: dict) -> list:
 
 
 @tool
-def nmap_port_scan(host: str):
-    """
-    Performs an advanced Nmap port/service scan with version detection,
-    OS fingerprinting, and vulnerability assessment.
-    
-    Features:
-    - Service version detection with high intensity
-    - OS detection (when privileges allow)
-    - NSE vulnerability scripts (vulners, vuln category)
-    - Default safe scripts for information gathering
-    - CPE (Common Platform Enumeration) detection
-    - Aggressive timing for faster scans
-    
-    Returns structured data with services, versions, OS info, and CVEs.
+def nmap_port_scan(
+    host: str,
+    ports: str = "",
+    scan_type: str = "default",
+    skip_host_discovery: bool = False,
+):
+    """Advanced Nmap port/service scan with version detection, OS fingerprinting,
+    and vulnerability assessment via NSE scripts.
+
+    Use for **depth analysis** after naabu has identified open ports. Combines
+    service version detection, default scripts, and vulnerability scanning.
+
+    Args:
+        host: IP address or domain to scan.
+        ports: Comma-separated ports or ranges (e.g. "22,80,443,8000-9000").
+               Use ports discovered by naabu for targeted scans. Leave empty
+               for nmap's default top-1000 ports.
+        scan_type: Scan intensity preset:
+            - "default" — version detection + vuln scripts + T4 timing
+            - "quick" — version detection only, T4, no vuln scripts (faster)
+            - "deep" — all ports (-p-), version intensity 9, all vuln scripts
+        skip_host_discovery: Skip host discovery (-Pn). Use when the host drops
+                             ICMP or is behind a firewall that blocks ping.
+
+    Returns:
+        Structured data: open ports, services, versions, OS info, CPEs, CVEs,
+        and NSE script output per port.
     """
     parsed = urlparse(host)
     target = parsed.netloc or parsed.path or host
@@ -128,33 +141,59 @@ def nmap_port_scan(host: str):
             "error",
             error="Invalid target",
         )
-    
+
     # Remove port from target if present
     target = target.split(':')[0]
-    
+
     try:
         nm = nmap.PortScanner()
-        
-        # Build advanced Nmap arguments
-        args = [
-            "-sV",  # Service version detection
-            "--version-intensity", "7",  # Aggressive version detection (0-9, default 7)
-            "-sC",  # Default NSE scripts (safe and useful)
-            "--script", "vulners,vuln",  # Vulnerability detection scripts
-            "-T4",  # Aggressive timing template
-            "--max-retries", "2",  # Limit retries for faster scans
-            "--host-timeout", "10m",  # 10 minute timeout per host
-        ]
-        
+
+        # Build arguments based on scan_type
+        if scan_type == "quick":
+            args = [
+                "-sV",
+                "--version-intensity", "5",
+                "-T4",
+                "--max-retries", "2",
+                "--host-timeout", "5m",
+            ]
+        elif scan_type == "deep":
+            args = [
+                "-sV",
+                "--version-intensity", "9",
+                "-sC",
+                "--script", "vulners,vuln",
+                "-T3",
+                "--max-retries", "3",
+                "--host-timeout", "20m",
+            ]
+            if not ports.strip():
+                args.extend(["-p-"])  # all 65535 ports
+        else:  # default
+            args = [
+                "-sV",
+                "--version-intensity", "7",
+                "-sC",
+                "--script", "vulners,vuln",
+                "-T4",
+                "--max-retries", "2",
+                "--host-timeout", "10m",
+            ]
+
+        # Add custom port range if specified (overrides deep -p-)
+        if ports.strip():
+            args.extend(["-p", ports.strip()])
+
+        # Skip host discovery if requested
+        if skip_host_discovery:
+            args.append("-Pn")
+
         # Add OS detection if running with privileges
         if _is_root():
-            args.extend(["-O", "--osscan-guess"])  # OS detection with guessing
-        
-        # Port range: scan top 1000 ports (default) for speed
-        # For full scan, could use -p- but very slow
-        
+            args.extend(["-O", "--osscan-guess"])
+
         arguments = " ".join(args)
-        
+
         nm.scan(hosts=target, arguments=arguments)
 
         if not nm.all_hosts():

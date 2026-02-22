@@ -1,8 +1,7 @@
 """Vulnerability scan specialist — ReAct agent for infrastructure vuln scanning.
 
-The LLM uses Nuclei to detect CVEs, misconfigurations, exposed panels,
-and technologies on discovered hosts.  It chooses severity filters and
-interprets results autonomously.
+The LLM uses Nuclei, httpx, and wafw00f to detect vulnerabilities,
+map web surfaces, and identify WAF protections.
 """
 
 from __future__ import annotations
@@ -12,9 +11,12 @@ from langgraph.prebuilt import create_react_agent
 
 from fackel.agents.config import get_model
 from fackel.agents.prompts import load_prompt
+from tools.graphql_scanner import graphql_scan
+from tools.httpx_tool import httpx_scan
 from tools.nuclei_tool import nuclei_scan
+from tools.wafw00f_tool import wafw00f_detect
 
-TOOLS = [nuclei_scan]
+TOOLS = [nuclei_scan, httpx_scan, wafw00f_detect, graphql_scan]
 
 
 def build(model_name: str | None = None):

@@ -5,21 +5,33 @@ from __future__ import annotations
 import ipaddress
 import socket
 
-from langchain.tools import tool
+from langchain_core.tools import tool
+
+from .utils import format_tool_output
 
 
 @tool
 def dns_resolve(target: str) -> dict:
-    """Resolve a domain name to its IP addresses, or validate an IP.
+    """Resolve a domain to its IP addresses (A + AAAA records), or validate an IP.
 
-    For domains: performs a DNS lookup and returns all resolved IPs.
-    For IPs: returns the IP itself unchanged.
+    Use as the **first tool** in OSINT to discover the target's IP infrastructure.
+    Returns both IPv4 and IPv6 addresses. Feed discovered IPs into whois_lookup
+    and shodan_lookup for deeper passive intelligence.
+
+    Args:
+        target: Domain name (e.g. "example.com") or IP address to validate.
+
+    Returns:
+        target, list of resolved IPs (IPv4 + IPv6), and type ("domain" or "ip").
     """
     target = target.strip()
 
     try:
         ipaddress.ip_address(target)
-        return {"target": target, "ips": [target], "type": "ip"}
+        return format_tool_output(
+            "dns_resolve", target, "ok",
+            data={"target": target, "ips": [target], "type": "ip"},
+        )
     except ValueError:
         pass
 
@@ -27,6 +39,12 @@ def dns_resolve(target: str) -> dict:
         resolved: set[str] = set()
         for result in socket.getaddrinfo(target, None):
             resolved.add(result[4][0])
-        return {"target": target, "ips": sorted(resolved), "type": "domain"}
+        return format_tool_output(
+            "dns_resolve", target, "ok",
+            data={"target": target, "ips": sorted(resolved), "type": "domain"},
+        )
     except Exception as exc:
-        return {"target": target, "ips": [], "type": "domain", "error": str(exc)}
+        return format_tool_output(
+            "dns_resolve", target, "error",
+            error=str(exc),
+        )

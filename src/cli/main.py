@@ -10,7 +10,9 @@ from typing import Any
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.rule import Rule
 
 load_dotenv()
 
@@ -51,30 +53,41 @@ def _make_event_callback(verbose: bool):
         label = _PHASE_LABELS.get(phase, phase)
 
         if event_type == "start":
-            typer.echo(f"\n{'─' * 60}")
-            typer.echo(f"▶ {label}")
-            typer.echo(f"{'─' * 60}")
+            console.print()
+            console.print(Rule(f"▶ {label}", style="bold blue"))
 
         elif event_type == "tool_call":
             tool = data.get("tool", "?")
             args = data.get("args", {})
             args_str = ", ".join(f"{k}={v}" for k, v in args.items())
-            typer.echo(f"  🔧 Calling: {tool}({args_str})")
+            console.print(f"  🔧 {tool}({args_str})", style="dim")
 
         elif event_type == "tool_result":
-            tool = data.get("tool", "?")
-            content = data.get("content", "")
-            preview = content[:200] + "…" if len(content) > 200 else content
-            typer.echo(f"  ← {tool}: {preview}")
+            if verbose:
+                tool = data.get("tool", "?")
+                content = data.get("content", "")
+                preview = content[:200] + "…" if len(content) > 200 else content
+                console.print(f"  ← {tool}: {preview}", style="dim")
 
         elif event_type == "reasoning":
             if verbose:
                 content = data.get("content", "")
                 for line in content.splitlines():
-                    typer.echo(f"  💭 {line}")
+                    console.print(f"  💭 {line}", style="dim italic")
+
+        elif event_type == "summary":
+            content = data.get("content", "")
+            if content:
+                console.print()
+                console.print(Panel(
+                    Markdown(content),
+                    title=f"📋 {label} Summary",
+                    border_style="cyan",
+                    padding=(1, 2),
+                ))
 
         elif event_type == "done":
-            typer.echo(f"  ✓ {label} complete")
+            console.print(f"  [green]✓ {label} complete[/green]")
 
     return _callback
 
@@ -146,13 +159,15 @@ def scan(
         typer.echo("\nError: no report generated.", err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(f"\n{'═' * 60}")
+    console.print()
+    console.print(Rule("Final Report", style="bold green"))
     if output:
         output.write_text(report, encoding="utf-8")
-        typer.echo(f"Report saved to {output} ({duration:.1f}s)")
+        console.print(Markdown(report))
+        console.print(f"\n[dim]Report saved to {output} ({duration:.1f}s)[/dim]")
     else:
-        typer.echo(report)
-        typer.echo(f"\nCompleted in {duration:.1f}s")
+        console.print(Markdown(report))
+        console.print(f"\n[dim]Completed in {duration:.1f}s[/dim]")
 
 
 if __name__ == "__main__":

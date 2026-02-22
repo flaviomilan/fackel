@@ -2,10 +2,10 @@ import json
 import shutil
 from typing import Any
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 
-from tools.utils import ensure_target, run_command, format_tool_output
+from .utils import ensure_target, run_command, format_tool_output
 
 
 @tool
