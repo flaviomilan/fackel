@@ -1,139 +1,138 @@
+"""Fackel CLI — pentest scan runner."""
+
 from __future__ import annotations
 
-import re
+import logging
+import time
 from pathlib import Path
-from urllib.parse import urlparse
-
+from typing import Any
 
 import typer
 from dotenv import load_dotenv
 
-from fackel.agents.graph_agent import LangGraphAgent
-from fackel.agents.reporter import LLMReporter
-from fackel.core.store import StructuredStore
-from fackel.reporting.renderer import render_structured_summary
-from fackel.schemas.state import AgentState
-
-# Load environment variables once at startup so all commands share them
 load_dotenv()
 
-
-def _safe_stem(target: str) -> str:
-    """Generate a filesystem-safe stem from a domain or URL."""
-    parsed = urlparse(target)
-    base = parsed.netloc or parsed.path or target
-    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
-    return safe or "report"
+app = typer.Typer(help="Fackel CLI")
 
 
-app = typer.Typer(help="Fackel – Agente Autônomo de OSINT")
+# ── Phase labels ───────────────────────────────────────────────────────────
+
+_PHASE_LABELS = {
+    "osint": "OSINT",
+    "port_scan": "Port Scan",
+    "report": "Report",
+}
+
+
+# ── Event renderer ─────────────────────────────────────────────────────────
+
+
+def _make_event_callback(verbose: bool):
+    """Return a callback that prints agent ReAct events to the terminal."""
+
+    def _callback(phase: str, event_type: str, data: dict[str, Any]) -> None:
+        label = _PHASE_LABELS.get(phase, phase)
+
+        if event_type == "start":
+            typer.echo(f"\n{'─' * 60}")
+            typer.echo(f"▶ {label}")
+            typer.echo(f"{'─' * 60}")
+
+        elif event_type == "tool_call":
+            tool = data.get("tool", "?")
+            args = data.get("args", {})
+            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+            typer.echo(f"  🔧 Calling: {tool}({args_str})")
+
+        elif event_type == "tool_result":
+            tool = data.get("tool", "?")
+            content = data.get("content", "")
+            preview = content[:200] + "…" if len(content) > 200 else content
+            typer.echo(f"  ← {tool}: {preview}")
+
+        elif event_type == "reasoning":
+            if verbose:
+                content = data.get("content", "")
+                for line in content.splitlines():
+                    typer.echo(f"  💭 {line}")
+
+        elif event_type == "done":
+            typer.echo(f"  ✓ {label} complete")
+
+    return _callback
 
 
 @app.command()
-def run(
-    domain: str = typer.Argument(..., help="Domínio ou host alvo"),
+def scan(
+    target: str = typer.Argument(..., help="Target domain or IP"),
     active_scan: bool = typer.Option(
-        False, help="Habilita ferramentas ativas (ex: Nmap)"
+        True,
+        "--active-scan/--no-active-scan",
+        help="Enable active scanning phases",
     ),
-    use_llm_planner: bool = typer.Option(
-        False, help="Habilita planner LLM (requer OPENAI_API_KEY e langchain-openai)"
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write report to file"
     ),
-    planner_model: str = typer.Option(
-        "gpt-4o-mini", help="Modelo LLM usado no planner"
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show LLM reasoning and detailed logs"
     ),
+    check_providers: bool = typer.Option(
+        False, "--check-providers", help="Print provider key status before scan"
+    ),
+) -> None:
+    """Run a full scan workflow and emit the final report."""
+    from fackel.agents.orchestrator import run
+    from fackel.agents.orchestrator.nodes import set_event_callback
+    from fackel.provider_keys import get_provider_key_status
 
-    planner_temperature: float = typer.Option(0.1, help="Temperatura do planner LLM"),
-    output: Path | None = typer.Option(None, help="Salvar relatório HTML/Markdown"),
-    save_json: bool = typer.Option(True, help="Salvar saída estruturada (JSON)"),
-    resume: bool = typer.Option(
-        False, help="Carregar relatório existente (JSON) se houver, evitando novo scan"
-    ),
-):
-    if resume:
-        safe_stem = _safe_stem(domain)
-        json_path = Path(f"{safe_stem}_report.json")
-        if json_path.exists():
-            typer.echo(f"📁 Carregando dados existentes de: {json_path}")
-            try:
-                store = StructuredStore.load_json(str(json_path))
-                
-                # Generate LLM Report
-                reporter = LLMReporter(model=planner_model, temperature=planner_temperature)
-                dummy_state = AgentState(domain=domain, active_scan=active_scan, store=store)
-                llm_report = reporter.generate(dummy_state)
-                
-                summary = render_structured_summary(store)
-                if llm_report:
-                    summary += "\n\n" + "-" * 40 + "\n\n"
-                    summary += "### LLM Analyst Report\n\n"
-                    summary += llm_report
-                
-                typer.echo(summary)
-                _write_outputs(domain, summary, store, output, save_json)
-                return
-            except Exception as e:
-                typer.echo(f"⚠️ Erro ao carregar JSON: {e}. Iniciando novo scan.")
-        else:
-            typer.echo(f"ℹ️ Arquivo {json_path} não encontrado. Iniciando novo scan.")
-
-    agent = LangGraphAgent(
-        active_scan=active_scan,
-        use_llm_planner=use_llm_planner,
-        planner_model=planner_model,
-        planner_temperature=planner_temperature,
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
     )
-    result = agent.run(domain)
-    summary = result["summary"]
-    store = result["store"]
+    if verbose:
+        logging.getLogger("fackel").setLevel(logging.DEBUG)
 
-    typer.echo(summary)
-    _write_outputs(domain, summary, store, output, save_json)
+    if check_providers:
+        typer.echo("Provider key status:")
+        for spec, configured in get_provider_key_status():
+            status = "configured" if configured else "missing"
+            typer.echo(f"  {spec.provider} ({spec.env_var}): {status}")
+        typer.echo("")
 
+    typer.echo(f"Target: {target}")
+    typer.echo(f"Active scan: {'yes' if active_scan else 'no'}")
 
-@app.command()
-def doctor():
-    """Mostra informações básicas do ambiente."""
-    import platform
-    import sys
+    # Register real-time event callback
+    set_event_callback(_make_event_callback(verbose))
+    started_at = time.perf_counter()
 
-    typer.echo(f"Python: {sys.version.split()[0]}")
-    typer.echo(f"Plataforma: {platform.platform()}")
-    typer.echo("Ferramentas disponíveis serão calculadas em runtime pelo agente.")
+    try:
+        result = run(target, active_scan=active_scan)
+    except KeyboardInterrupt:
+        typer.echo("\nScan interrupted by user.", err=True)
+        raise typer.Exit(code=130)
+    except Exception as exc:
+        typer.echo(f"\nScan failed: {exc}", err=True)
+        raise typer.Exit(code=1)
+    finally:
+        set_event_callback(None)
 
+    report = result.get("report", "")
+    duration = time.perf_counter() - started_at
 
+    if not report.strip():
+        typer.echo("\nError: no report generated.", err=True)
+        raise typer.Exit(code=1)
 
-from cli.web import serve_api
-
-@app.command(name="serve")
-def serve(
-    host: str = typer.Option("0.0.0.0", help="Host interface to bind"),
-    port: int = typer.Option(8000, help="Port to listen on"),
-    reload: bool = typer.Option(False, help="Enable auto-reload for dev"),
-):
-    """Start the API server (requires fastapi and uvicorn)."""
-    serve_api(host, port, reload)
+    typer.echo(f"\n{'═' * 60}")
+    if output:
+        output.write_text(report, encoding="utf-8")
+        typer.echo(f"Report saved to {output} ({duration:.1f}s)")
+    else:
+        typer.echo(report)
+        typer.echo(f"\nCompleted in {duration:.1f}s")
 
 
 if __name__ == "__main__":
     app()
-
-
-def _write_outputs(
-    domain: str, summary: str, store, output: Path | None, save_json: bool
-) -> None:
-    """Persist outputs; keeps console echo logic together."""
-    if output:
-        output_path = Path(output)
-        output_path.write_text(summary, encoding="utf-8")
-        typer.echo(f"[Exporter] Markdown salvo em {output_path}")
-        if save_json:
-            json_path = output_path.with_suffix(".json")
-            store.save_json(str(json_path))
-            typer.echo(f"[Exporter] JSON estruturado salvo em {json_path}")
-        return
-
-    if save_json:
-        safe_stem = _safe_stem(domain)
-        json_path = Path(f"{safe_stem}_report.json")
-        store.save_json(str(json_path))
-        typer.echo(f"[Exporter] JSON estruturado salvo em {json_path}")
