@@ -1,12 +1,15 @@
+"""WAF detection via wafw00f."""
+
+from __future__ import annotations
+
 import json
-import shutil
 from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-
-from .utils import ensure_target, run_command, format_tool_output
+from .utils import format_tool_output, require_binary, run_command
+from .validators import TargetType, guard_target
 
 
 class Wafw00fInput(BaseModel):
@@ -39,53 +42,40 @@ def wafw00f_detect(
     Run before Nuclei to understand whether scan probes may be blocked or
     rate-limited by a WAF.  Uses the domain name for correct SSL/SNI.
     """
-    if not shutil.which("wafw00f"):
-        return format_tool_output(
-            "wafw00f_detect",
-            target,
-            "error",
-            error="wafw00f not found in PATH",
-        )
+    if err := require_binary("wafw00f", "wafw00f_detect", target):
+        return err
 
-    norm = ensure_target(target)
-    if not norm:
-        return format_tool_output(
-            "wafw00f_detect",
-            target,
-            "error",
-            error="alvo inválido",
-        )
+    target, verr = guard_target(target, "wafw00f_detect", TargetType.HOST_OR_URL)
+    if verr:
+        return verr
 
-    cmd = ["wafw00f", norm, "-f", "json"]
+    # wafw00f needs a URL; add scheme if bare host
+    if not target.startswith(("http://", "https://")):
+        target = f"https://{target}"
+
+    cmd = ["wafw00f", target, "-f", "json"]
     if check_all:
         cmd.append("-a")
+
     try:
         code, out, err = run_command(cmd, timeout=120)
     except Exception as exc:
-        return format_tool_output(
-            "wafw00f_detect",
-            target,
-            "error",
-            error=str(exc),
-        )
+        return format_tool_output("wafw00f_detect", target, "error", error=str(exc))
 
     try:
         data = json.loads(out)
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         data = None
 
     if not data:
         return format_tool_output(
-            "wafw00f_detect",
-            target,
+            "wafw00f_detect", target,
             "error" if code else "ok",
             error=err or "no results",
         )
 
     return format_tool_output(
-        "wafw00f_detect",
-        target,
-        "ok",
+        "wafw00f_detect", target, "ok",
         data={
             "identified": data.get("identified", []),
             "waf_name": data.get("waf_name"),

@@ -1,12 +1,14 @@
-import json
-import shutil
+"""Recursive directory discovery via feroxbuster."""
+
+from __future__ import annotations
+
 from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-
-from .utils import ensure_target, run_command, format_tool_output
+from .utils import format_tool_output, parse_jsonl, require_binary, run_command
+from .validators import TargetType, guard_target
 
 
 class FeroxbusterInput(BaseModel):
@@ -28,62 +30,40 @@ def feroxbuster_scan(target: str) -> dict[str, Any]:
     Brute-forces web paths using a wordlist to find hidden content that
     crawling cannot reach: admin panels, backup files, config endpoints.
     """
-    if not shutil.which("feroxbuster"):
-        return format_tool_output(
-            "feroxbuster_scan",
-            target,
-            "error",
-            error="feroxbuster não encontrado no PATH",
-        )
+    if err := require_binary("feroxbuster", "feroxbuster_scan", target):
+        return err
 
-    norm = ensure_target(target)
-    if not norm:
-        return format_tool_output(
-            "feroxbuster_scan",
-            target,
-            "error",
-            error="alvo inválido",
-        )
+    target, verr = guard_target(target, "feroxbuster_scan", TargetType.HOST_OR_URL)
+    if verr:
+        return verr
 
-    cmd = ["feroxbuster", "-u", norm, "--json", "-q", "--no-state"]
+    # feroxbuster needs a URL; if guard_target returned a bare host, add scheme
+    if not target.startswith(("http://", "https://")):
+        target = f"https://{target}"
+
+    cmd = ["feroxbuster", "-u", target, "--json", "-q", "--no-state"]
     try:
         code, out, err = run_command(cmd, timeout=300)
     except Exception as exc:
-        return format_tool_output(
-            "feroxbuster_scan",
-            target,
-            "error",
-            error=str(exc),
-        )
+        return format_tool_output("feroxbuster_scan", target, "error", error=str(exc))
 
-    results: list[dict[str, Any]] = []
-    for line in out.splitlines():
-        try:
-            data = json.loads(line)
-            results.append(
-                {
-                    "url": data.get("url"),
-                    "status": data.get("status"),
-                    "length": data.get("content_length"),
-                    "mime": data.get("content_type"),
-                    "words": data.get("words"),
-                    "lines": data.get("lines"),
-                }
-            )
-        except Exception:
-            continue
+    results = [
+        {
+            "url": d.get("url"),
+            "status": d.get("status"),
+            "length": d.get("content_length"),
+            "mime": d.get("content_type"),
+            "words": d.get("words"),
+            "lines": d.get("lines"),
+        }
+        for d in parse_jsonl(out)
+    ]
 
     if not results:
         return format_tool_output(
-            "feroxbuster_scan",
-            target,
+            "feroxbuster_scan", target,
             "error" if code else "ok",
-            error=err or "sem resultados",
+            error=err or "no results",
         )
 
-    return format_tool_output(
-        "feroxbuster_scan",
-        target,
-        "ok",
-        data={"results": results},
-    )
+    return format_tool_output("feroxbuster_scan", target, "ok", data={"results": results})

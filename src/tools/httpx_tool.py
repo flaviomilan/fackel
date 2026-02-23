@@ -1,22 +1,19 @@
-import json
-import shutil
-from typing import Any
-from urllib.parse import urlparse
+"""HTTP probing and web surface mapping via httpx."""
 
+from __future__ import annotations
+
+from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from .utils import run_command, extract_host, format_tool_output
-
-
-def _normalize_target(domain: str) -> tuple[str | None, str | None]:
-    parsed = urlparse(domain)
-    # Use shared logic for host extraction
-    host = extract_host(domain)
-    # Preserve scheme if present for HTTP tools
-    url = domain if parsed.scheme else None
-    return host, url
+from .utils import (
+    format_tool_output,
+    parse_jsonl,
+    require_binary,
+    run_command,
+)
+from .validators import TargetType, guard_target
 
 
 class HttpxInput(BaseModel):
@@ -66,23 +63,12 @@ def httpx_scan(
     CDN presence, TLS version, and redirect behavior.  Use before WAF detection
     and Nuclei targeting.
     """
-    if not shutil.which("httpx"):
-        return format_tool_output(
-            "httpx_scan",
-            domain,
-            "error",
-            error="httpx not found in PATH",
-        )
+    if err := require_binary("httpx", "httpx_scan", domain):
+        return err
 
-    host, url = _normalize_target(domain)
-    target = url or host
-    if not target:
-        return format_tool_output(
-            "httpx_scan",
-            domain,
-            "error",
-            error="invalid target",
-        )
+    target, verr = guard_target(domain, "httpx_scan", TargetType.HOST_OR_URL)
+    if verr:
+        return verr
 
     cmd = ["httpx", target, "-json", "-silent"]
 
@@ -100,49 +86,15 @@ def httpx_scan(
     try:
         code, out, err = run_command(cmd)
     except Exception as exc:
-        return format_tool_output(
-            "httpx_scan",
-            domain,
-            "error",
-            error=str(exc),
-        )
+        return format_tool_output("httpx_scan", domain, "error", error=str(exc))
 
-
-    results: list[dict[str, Any]] = []
-    for line in out.splitlines():
-        try:
-            data = json.loads(line)
-            # Create a normalized result object but preserve all original data
-            result = data.copy()
-            
-            # Ensure standard keys used by normalizers/reports are present
-            result.update({
-                "url": data.get("url"),
-                "status": data.get("status_code"),
-                "title": data.get("title"),
-                "ip": data.get("ip"),
-                "port": data.get("port"),
-                "tech": data.get("tech"),
-                "tls_version": data.get("tls_version"),
-                "webserver": data.get("webserver"),
-                "cdn": data.get("cdn"),
-                "response_time": data.get("time"),
-            })
-            results.append(result)
-        except Exception:
-            continue
+    results = parse_jsonl(out)
 
     if not results:
         return format_tool_output(
-            "httpx_scan",
-            domain,
+            "httpx_scan", domain,
             "error" if code else "ok",
             error=err or "no HTTP services found",
         )
 
-    return format_tool_output(
-        "httpx_scan",
-        domain,
-        "ok",
-        data={"results": results},
-    )
+    return format_tool_output("httpx_scan", domain, "ok", data={"results": results})

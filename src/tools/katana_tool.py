@@ -1,12 +1,14 @@
-import json
-import shutil
+"""Web crawling and endpoint discovery via katana."""
+
+from __future__ import annotations
+
 from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-
-from .utils import ensure_target, run_command, format_tool_output
+from .utils import format_tool_output, parse_jsonl, require_binary, run_command
+from .validators import TargetType, guard_target
 
 
 class KatanaInput(BaseModel):
@@ -28,65 +30,47 @@ def katana_crawl(target: str) -> dict[str, Any]:
     Uses ProjectDiscovery's katana to spider HTML, JavaScript, and API
     responses.  Complements feroxbuster with link-based discovery.
     """
-    if not shutil.which("katana"):
-        return format_tool_output(
-            "katana_crawl",
-            target,
-            "error",
-            error="katana não encontrado no PATH",
-        )
+    if err := require_binary("katana", "katana_crawl", target):
+        return err
 
-    norm = ensure_target(target)
-    if not norm:
-        return format_tool_output(
-            "katana_crawl",
-            target,
-            "error",
-            error="alvo inválido",
-        )
+    target, verr = guard_target(target, "katana_crawl", TargetType.HOST_OR_URL)
+    if verr:
+        return verr
+
+    # katana needs a URL; if guard_target returned a bare host, add scheme
+    if not target.startswith(("http://", "https://")):
+        target = f"https://{target}"
 
     cmd = [
-        "katana", "-u", norm,
+        "katana", "-u", target,
         "-jsonl", "-silent",
         "-d", "3",
-        "-ct", "120s",          # hard crawl-duration cap
+        "-ct", "120s",
     ]
     try:
         code, out, err = run_command(cmd, timeout=240)
     except Exception as exc:
-        return format_tool_output(
-            "katana_crawl",
-            target,
-            "error",
-            error=str(exc),
-        )
+        return format_tool_output("katana_crawl", target, "error", error=str(exc))
 
     urls: list[str] = []
-    for line in out.splitlines():
-        try:
-            data = json.loads(line)
-            # Newer katana uses request.endpoint; older used top-level url
-            req = data.get("request")
-            if isinstance(req, dict):
-                url = req.get("endpoint") or req.get("url")
-            else:
-                url = data.get("url") or req
-            if url:
-                urls.append(url)
-        except Exception:
-            continue
+    for data in parse_jsonl(out):
+        # Newer katana uses request.endpoint; older used top-level url
+        req = data.get("request")
+        if isinstance(req, dict):
+            url = req.get("endpoint") or req.get("url")
+        else:
+            url = data.get("url") or req
+        if url:
+            urls.append(url)
 
     if not urls:
         return format_tool_output(
-            "katana_crawl",
-            target,
+            "katana_crawl", target,
             "error" if code else "ok",
-            error=err or "sem resultados",
+            error=err or "no results",
         )
 
     return format_tool_output(
-        "katana_crawl",
-        target,
-        "ok",
-        data={"urls": list(sorted(set(urls)))},
+        "katana_crawl", target, "ok",
+        data={"urls": sorted(set(urls))},
     )

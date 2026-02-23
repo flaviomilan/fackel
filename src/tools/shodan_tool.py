@@ -1,3 +1,6 @@
+"""Shodan passive intelligence lookup."""
+
+from __future__ import annotations
 
 import os
 
@@ -5,9 +8,7 @@ import shodan
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from fackel.utils import is_valid_ip
-
-from .utils import format_tool_output
+from .utils import format_tool_output, is_valid_ip
 
 
 class ShodanInput(BaseModel):

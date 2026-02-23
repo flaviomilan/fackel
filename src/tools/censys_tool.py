@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 
 class CensysInput(BaseModel):
@@ -24,7 +25,11 @@ class CensysInput(BaseModel):
 
 @tool(args_schema=CensysInput)
 def censys_lookup(domain: str) -> dict:
-    """Busca na API do Censys e retorna hosts/serviços de forma estruturada."""
+    """Search host and service data via the Censys REST API."""
+    domain, err = guard_target(domain, "censys_lookup", TargetType.HOST)
+    if err:
+        return err
+
     api_id = os.getenv("CENSYS_API_ID")
     api_secret = os.getenv("CENSYS_API_SECRET")
 
@@ -33,13 +38,13 @@ def censys_lookup(domain: str) -> dict:
             "censys_lookup",
             domain,
             "error",
-            error="CENSYS_API_ID e CENSYS_API_SECRET não configurados.",
+            error="CENSYS_API_ID and CENSYS_API_SECRET not configured.",
         )
 
     try:
-        h = CensysHosts(api_id=api_id, api_secret=api_secret)
+        client = CensysHosts(api_id=api_id, api_secret=api_secret)
         query = f"services.tls.certificates.leaf_data.subject.common_name: {domain} OR services.tls.certificates.leaf_data.subject.organization: {domain}"
-        results = h.search(query, per_page=5)
+        results = client.search(query, per_page=5)
 
         hosts: list[dict] = []
         for host in results:
@@ -71,5 +76,5 @@ def censys_lookup(domain: str) -> dict:
             "censys_lookup",
             domain,
             "error",
-            error=f"Erro ao consultar Censys: {e}",
+            error=f"Censys query failed: {e}",
         )

@@ -1,49 +1,44 @@
+"""DuckDuckGo OSINT search."""
+
+from __future__ import annotations
+
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
-try:
-    from ddgs import DDGS
-except ImportError:
-    try:
-        from duckduckgo_search import DDGS
-
-    except ImportError:
-        DDGS = None
-
-from .utils import format_tool_output
+from .utils import DDGS, format_tool_output
 
 
-@tool
-def duckduckgo_lookup(domain: str):
-    """Busca OSINT no DuckDuckGo e retorna resultados estruturados."""
+class DuckDuckGoInput(BaseModel):
+    """Input schema for DuckDuckGo search."""
+
+    domain: str = Field(description="Domain or query to search for OSINT information.")
+
+
+@tool(args_schema=DuckDuckGoInput)
+def duckduckgo_lookup(domain: str) -> dict:
+    """Search DuckDuckGo for OSINT information about a domain or query."""
     if DDGS is None:
         return format_tool_output(
-            "duckduckgo_lookup",
-            domain,
-            "error",
-            error="ddgs não está instalado. pip install ddgs",
+            "duckduckgo_lookup", domain, "error",
+            error="ddgs not installed. pip install ddgs",
         )
     try:
         with DDGS() as ddgs:
             results = ddgs.text(domain, max_results=5)
-            normalized = []
-            for r in results:
-                normalized.append(
-                    {
-                        "title": r.get("title", ""),
-                        "snippet": r.get("body", ""),
-                        "link": r.get("href", ""),
-                    }
-                )
+            normalised = [
+                {
+                    "title": r.get("title", ""),
+                    "snippet": r.get("body", ""),
+                    "link": r.get("href", ""),
+                }
+                for r in results
+            ]
             return format_tool_output(
-                "duckduckgo_lookup",
-                domain,
-                "ok",
-                data={"results": normalized},
+                "duckduckgo_lookup", domain, "ok",
+                data={"results": normalised},
             )
     except Exception as e:
         return format_tool_output(
-            "duckduckgo_lookup",
-            domain,
-            "error",
-            error=f"Erro ao buscar no DuckDuckGo: {e}",
+            "duckduckgo_lookup", domain, "error",
+            error=f"DuckDuckGo search failed: {e}",
         )

@@ -1,63 +1,17 @@
-import asyncio
+"""Email analysis — breach exposure, reputation, and service registration checks."""
+
+from __future__ import annotations
+
+import logging
 import os
 
-import aiohttp
 import requests
 from langchain_core.tools import tool
-
-
-class EmailAnalyzer:
-    def __init__(self):
-        self.hibp_api_key = os.getenv("HIBP_API_KEY")
-        self.emailrep_api_key = os.getenv("EMAILREP_API_KEY")
-
-    async def check_email_services(self, email: str) -> dict[str, bool]:
-        """Verifica em quais serviços o e-mail está registrado."""
-        results = {}
-
-        async with aiohttp.ClientSession() as session:
-
-            services = [
-                (
-                    "Twitter",
-                    "https://api.twitter.com/i/users/email_available.json",
-                    {"email": email},
-                ),
-                (
-                    "Instagram",
-                    "https://www.instagram.com/accounts/check_email/",
-                    {"email": email},
-                ),
-                ("LinkedIn", "https://www.linkedin.com/login-submit", {"email": email}),
-                (
-                    "Spotify",
-                    "https://spclient.wg.spotify.com/signup/public/v1/account",
-                    {"email": email},
-                ),
-                (
-                    "Discord",
-                    "https://discord.com/api/v9/auth/register",
-                    {"email": email},
-                ),
-            ]
-
-            for service_name, url, data in services:
-                try:
-                    async with session.post(url, json=data, timeout=10) as response:
-
-                        exists = response.status in [400, 409]
-                        results[service_name] = exists
-                except Exception as e:
-                    print(f"[Debug] Erro ao verificar {service_name}: {e}")
-                    results[service_name] = False
-
-        return results
-
-
-
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+
+logger = logging.getLogger(__name__)
 
 
 class EmailAnalyzerInput(BaseModel):
@@ -68,63 +22,55 @@ class EmailAnalyzerInput(BaseModel):
     )
 
 
+def _check_breaches(email: str) -> list[dict]:
+    """Query HIBP for data breaches. Degrades gracefully without API key."""
+    api_key = os.getenv("HIBP_API_KEY", "").strip()
+    if not api_key:
+        return []
+    try:
+        resp = requests.get(
+            f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
+            headers={"hibp-api-key": api_key, "user-agent": "OSINT-Tool"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        logger.debug("HIBP lookup failed for %s", email, exc_info=True)
+    return []
+
+
+def _check_reputation(email: str) -> dict | None:
+    """Query EmailRep for reputation scoring. Degrades gracefully without API key."""
+    api_key = os.getenv("EMAILREP_API_KEY", "").strip()
+    if not api_key:
+        return None
+    try:
+        resp = requests.get(
+            f"https://emailrep.io/{email}",
+            headers={"Key": api_key},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        logger.debug("EmailRep lookup failed for %s", email, exc_info=True)
+    return None
+
+
 @tool(args_schema=EmailAnalyzerInput)
 def analyze_email(email: str) -> dict:
-    """Analyse an email address across multiple sources: service registrations,
-    data breach exposure (HIBP), and reputation scoring (EmailRep).
+    """Analyse an email address across multiple sources: data breach exposure
+    (HIBP) and reputation scoring (EmailRep).
 
     HIBP and EmailRep checks degrade gracefully when API keys are missing.
     """
-    analyzer = EmailAnalyzer()
-
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        services = loop.run_until_complete(analyzer.check_email_services(email))
-    except Exception as e:
-        print(f"[Debug] Erro ao executar verificações assíncronas: {e}")
-        services = {}
-    finally:
-        try:
-            loop.close()
-        except Exception:
-            pass
-
-    breaches: list[dict] = []
-    if analyzer.hibp_api_key:
-        try:
-            headers = {
-                "hibp-api-key": analyzer.hibp_api_key,
-                "user-agent": "OSINT-Tool",
-            }
-            response = requests.get(
-                f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
-                headers=headers,
-                timeout=10,
-            )
-            if response.status_code == 200:
-                breaches = response.json()
-        except Exception as e:
-            print(f"[Debug] Erro ao verificar vazamentos: {e}")
-
-    reputation = None
-    if analyzer.emailrep_api_key:
-        try:
-            headers = {"Key": analyzer.emailrep_api_key}
-            response = requests.get(
-                f"https://emailrep.io/{email}", headers=headers, timeout=10
-            )
-            if response.status_code == 200:
-                reputation = response.json()
-        except Exception as e:
-            print(f"[Debug] Erro ao verificar reputação: {e}")
+    breaches = _check_breaches(email)
+    reputation = _check_reputation(email)
 
     return format_tool_output(
-        "analyze_email",
-        email,
-        "ok",
+        "analyze_email", email, "ok",
         data={
-            "services": services,
             "breaches": breaches,
             "reputation": reputation,
         },

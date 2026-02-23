@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Autonomous pentest framework powered by ReAct agents.</strong><br>
-  LLM-driven reconnaissance, port scanning, and report generation.
+  LLM-driven reconnaissance, scanning, triage, and report generation.
 </p>
 
 <p align="center">
@@ -25,23 +25,26 @@ hardcoded pipelines**. Each specialist agent uses the
 choose which tools to call, interpret results, and decide next steps.
 
 ```
-Target → OSINT Agent → [Port Scan Agent] → Report Agent → Markdown Report
-              ↕                 ↕                ↕
-          dns_resolve      naabu_scan         LLM synthesis
-                           nmap_port_scan
+Target → OSINT → Approval Gate → Port Scan → Vuln Scan → Triage → Report
+           ↕          ↕              ↕            ↕          ↕        ↕
+       11 tools   Human-in-     2 tools      8 tools    LLM-as-   LLM
+       (passive)  the-Loop      (active)     (active)   a-judge  synthesis
 ```
 
 ### Key features
 
-- **Real ReAct agents** — each specialist is a `create_react_agent` with its own
-  system prompt, tools, and LLM. The model decides strategy, not code.
-- **Real-time observability** — watch tool calls, results, and LLM reasoning
-  stream to the terminal as they happen.
-- **Conditional routing** — the orchestrator graph skips port scanning when
-  `--no-active-scan` or no IPs are discovered.
-- **Per-agent model config** — assign different models to different agents via
-  environment variables.
-- **Checkpointed state** — LangGraph `MemorySaver` tracks state across nodes.
+| Feature | Description |
+|---------|-------------|
+| **Real ReAct agents** | Each specialist is a `create_react_agent` with its own system prompt, tools, and LLM. The model decides strategy, not code. |
+| **5-phase pipeline** | OSINT → Port Scan → Vulnerability Scan → Triage → Report. Each phase builds on the previous. |
+| **Human-in-the-loop** | An approval gate pauses before active scanning, showing discovered targets for operator review. |
+| **LLM-as-a-judge** | A quality evaluator scores each phase and drives adaptive routing — skip empty phases, adjust strategy for partial results. |
+| **Real-time observability** | Watch tool calls, results, errors, and LLM reasoning stream to the terminal as they happen. |
+| **Input validation rails** | Every tool validates its inputs (target type, shell metacharacters) before executing — code-level enforcement, not just prompt instructions. |
+| **Per-agent model config** | Assign different models to different agents via environment variables. |
+| **Automatic provider gating** | Tools requiring API keys are auto-removed when keys are missing, preventing wasted LLM calls. |
+| **Two-tier prompting** | Shared soul prompt (identity + anti-hallucination rules) + task-specific skill prompts per phase. |
+| **Dual reports** | Concise LLM report on console + comprehensive archival report saved to disk. |
 
 ---
 
@@ -49,10 +52,15 @@ Target → OSINT Agent → [Port Scan Agent] → Report Agent → Markdown Repor
 
 ### Requirements
 
-- Python 3.12+
-- [`uv`](https://docs.astral.sh/uv/) (recommended) or `pip`
-- An OpenAI API key (or compatible provider)
-- For active scanning: `naabu` and `nmap` binaries
+| Requirement | Notes |
+|-------------|-------|
+| Python 3.12+ | Required |
+| [`uv`](https://docs.astral.sh/uv/) or `pip` | Package manager |
+| OpenAI API key | Or any compatible provider (Azure, Anthropic via LangChain) |
+| `naabu`, `nmap` | For port scanning (active scan) |
+| `nuclei`, `httpx`, `katana`, `subfinder` | For vulnerability scanning (optional) |
+
+See [docs/tools.md](docs/tools.md) for the full list of required binaries per tool.
 
 ### Install
 
@@ -74,7 +82,7 @@ pip install -e .
 
 ```bash
 cp .env.example .env
-# Edit .env and set OPENAI_API_KEY at minimum
+# Edit .env — OPENAI_API_KEY is the only required key
 ```
 
 ### Run
@@ -83,15 +91,78 @@ cp .env.example .env
 # Passive scan (OSINT only → report)
 fackel example.com --no-active-scan
 
-# Full scan (OSINT → port scan → report)
+# Full scan (OSINT → port scan → vuln scan → triage → report)
 fackel example.com
 
 # Verbose mode — see LLM reasoning in real time
 fackel example.com -v
 
-# Save report to file
+# Save report to a specific file
 fackel example.com -o report.md
+
+# Check which provider API keys are configured
+fackel example.com --check-providers --no-active-scan
 ```
+
+---
+
+## Pipeline overview
+
+```
+                     ┌─────────────────┐
+                     │   osint_node    │ ← 11 passive tools
+                     │  (ReAct agent)  │   dns, whois, subdomains, etc.
+                     └────────┬────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │  route_after_osint │
+                    │  (conditional)     │
+                    └──┬─────────────┬──┘
+                       │             │
+          active_scan  │             │  no active scan
+          + IPs found  │             │  or no IPs
+                       ▼             │
+              ┌────────────────┐     │
+              │ approval_gate  │     │
+              │ (HitL interrupt)│    │
+              └───┬────────┬───┘     │
+          approve │        │ reject  │
+                  ▼        └────┐    │
+           ┌────────────┐      │    │
+           │ port_scan   │      │    │
+           │ (ReAct)     │      │    │
+           └─────┬───────┘      │    │
+                 │              │    │
+       ┌─────────▼──────────┐   │    │
+       │route_after_port_scan│  │    │
+       │(LLM-as-a-judge)    │  │    │
+       └──┬──────────────┬──┘  │    │
+          │              │     │    │
+          ▼              ▼     │    │
+   ┌────────────┐  ┌─────────┐│    │
+   │ vuln_scan  │  │ triage  ││    │
+   │ (ReAct)    │  │(struct) │◄    │
+   └─────┬──────┘  └────┬────┘     │
+         │              │          │
+         ▼              │          │
+   ┌──────────┐         │          │
+   │  triage  │         │          │
+   │ (struct) │         │          │
+   └─────┬────┘         │          │
+         │              │          │
+         ▼              ▼          ▼
+   ┌──────────────────────────────────┐
+   │           report_node            │
+   │         (LLM synthesis)          │
+   └──────────────┬───────────────────┘
+                  │
+                 END
+```
+
+Each phase is a LangGraph node. The orchestrator manages state flow, conditional
+routing, and accumulates findings across phases.
+
+See [docs/architecture.md](docs/architecture.md) for full architectural details.
 
 ---
 
@@ -106,29 +177,38 @@ Active scan: yes
 ────────────────────────────────────────────────────────────
 ▶ OSINT
 ────────────────────────────────────────────────────────────
-  🔧 Calling: dns_resolve(target=eversafe.info)
-  ← dns_resolve: {"ips": ["104.21.36.250", "172.67.201.157", ...]}
+  🔧 dns_resolve(target=eversafe.info)
+  🔧 whois_lookup(domain=eversafe.info)
+  🔧 subfinder_enum(domain=eversafe.info, all_sources=True)
+  🔧 crtsh_subdomain_enum(domain=eversafe.info)
   ✓ OSINT complete
+
+──────────────────────────── ▶ Approval ────────────────────
+╭──────────────── ⚠ Approval Required ─────────────────────╮
+│ OSINT found 4 IP(s) and 5 subdomain(s).                  │
+│ Proceed with active scanning?                             │
+╰──────────────────────────────────────────────────────────╯
+Approve? [Y/n]: y
 
 ────────────────────────────────────────────────────────────
 ▶ Port Scan
 ────────────────────────────────────────────────────────────
-  🔧 Calling: naabu_scan(host=104.21.36.250)
-  🔧 Calling: naabu_scan(host=172.67.201.157)
-  ← naabu_scan: {"port": 8080, "protocol": "tcp", ...}
-  ← naabu_scan: {"port": 8443, "protocol": "tcp", ...}
-  🔧 Calling: nmap_port_scan(host=104.21.36.250)
-  🔧 Calling: nmap_port_scan(host=172.67.201.157)
-  ← nmap_port_scan: {"port": 80, "service": "http", "product": "Cloudflare", ...}
-  ← nmap_port_scan: {"port": 443, "service": "https", ...}
+  🔧 naabu_scan(host=104.21.36.250, top_ports=1000)
+  🔧 nmap_port_scan(host=104.21.36.250, ports=80,443)
+  📊 Quality: complete (score: 0.9) → proceed
   ✓ Port Scan complete
 
 ────────────────────────────────────────────────────────────
-▶ Report
+▶ Vuln Scan
 ────────────────────────────────────────────────────────────
-  ✓ Report complete
+  🔧 nuclei_scan(target=eversafe.info)
+  🔧 httpx_scan(domain=eversafe.info, tech_detect=True)
+  🔧 wafw00f_detect(target=eversafe.info)
+  📊 Quality: complete (score: 0.85) → proceed
+  ✓ Vuln Scan complete
+
 ════════════════════════════════════════════════════════════
-# Pentest Report for eversafe.info
+# Penetration Test Report for eversafe.info
 ...
 Completed in 220.9s
 ```
@@ -145,95 +225,48 @@ With `-v` (verbose), LLM reasoning is also shown:
 
 ---
 
-## Architecture
-
-### Orchestrator graph (LangGraph)
-
-```
-                     ┌─────────────────┐
-                     │   osint_node    │
-                     │  (ReAct agent)  │
-                     └────────┬────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │  route_after_osint │
-                    │  (conditional)     │
-                    └──┬─────────────┬──┘
-                       │             │
-          active_scan  │             │  no active scan
-          + IPs found  │             │  or no IPs
-                       ▼             ▼
-              ┌────────────┐  ┌────────────┐
-              │ port_scan  │  │   report   │
-              │ (ReAct)    │  │   (LLM)    │
-              └─────┬──────┘  └─────┬──────┘
-                    │               │
-                    ▼               │
-              ┌────────────┐       │
-              │   report   │       │
-              │   (LLM)    │       │
-              └─────┬──────┘       │
-                    │               │
-                    ▼               ▼
-                   END             END
-```
-
-### Specialist agents
+## Specialist agents
 
 | Agent | Type | Tools | Purpose |
 |-------|------|-------|---------|
-| **OSINT** | ReAct | `dns_resolve` | Passive reconnaissance — resolve domains, discover IPs |
-| **Port Scan** | ReAct | `naabu_scan`, `nmap_port_scan` | Active scanning — discover open ports and services |
-| **Report** | LLM chain | *(none)* | Synthesize findings into a Markdown pentest report |
+| **OSINT** | ReAct | 11 tools | Passive reconnaissance — DNS, WHOIS, subdomains, reverse DNS, Shodan/Censys, job search, email analysis |
+| **Port Scan** | ReAct | 2 tools | Active scanning — discover open ports (`naabu`) and fingerprint services (`nmap`) |
+| **Vuln Scan** | ReAct | 8 tools | Vulnerability scanning — Nuclei templates, HTTP tech detection, WAF detection, web crawling, TLS analysis |
+| **Triage** | Structured LLM | *(none)* | Gap analysis — identify technologies found but not assessed, flag coverage gaps |
+| **Report** | LLM chain | *(none)* | Synthesize all findings, evaluations, and gaps into a Markdown pentest report |
+| **Judge** | Structured LLM | *(none)* | Quality evaluator — scores each phase (0.0–1.0) and recommends routing |
 
-Each ReAct agent uses `create_react_agent(llm, tools, prompt=SYSTEM_PROMPT)` from
-LangGraph. The LLM autonomously decides which tools to invoke, in what order, and
-when to stop.
+See [docs/agents.md](docs/agents.md) for detailed agent documentation.
 
-### Project structure
+---
 
-```
-src/
-├── cli/
-│   └── main.py                  # Typer CLI with real-time event rendering
-├── fackel/
-│   ├── agents/
-│   │   ├── config.py            # Centralized model configuration
-│   │   ├── orchestrator/
-│   │   │   ├── state.py         # ScanState (5 fields)
-│   │   │   ├── nodes.py         # Graph nodes + event streaming
-│   │   │   ├── graph.py         # StateGraph definition + checkpointer
-│   │   │   └── main.py          # Public API: run(), run_stream()
-│   │   ├── osint/
-│   │   │   └── agent.py         # OSINT ReAct agent
-│   │   ├── port_scan/
-│   │   │   └── agent.py         # Port scan ReAct agent
-│   │   └── report/
-│   │       └── agent.py         # Report generation (LLM chain)
-│   └── domain/
-│       ├── enums.py
-│       └── models.py
-└── tools/
-    ├── dns_resolver.py          # DNS lookup tool
-    ├── naabu_tool.py            # Fast TCP port scanner
-    ├── nmap_scanner.py          # Detailed port/service scanner
-    ├── shodan_tool.py           # Shodan passive lookup
-    ├── virustotal_tool.py       # VirusTotal API
-    └── ...                      # 20+ additional tools
-```
+## Tool inventory
 
-### ScanState
+| Tool | Target Type | Requires | Agent |
+|------|------------|----------|-------|
+| `dns_resolve` | HOST | — | OSINT |
+| `whois_lookup` | DOMAIN | `whois` binary | OSINT |
+| `shodan_lookup` | *(custom)* | `SHODAN_API_KEY` | OSINT |
+| `censys_lookup` | HOST | `CENSYS_API_ID` + `CENSYS_API_SECRET` | OSINT |
+| `dnsdumpster_lookup` | DOMAIN | — | OSINT |
+| `virustotal_subdomain_enum` | DOMAIN | `VIRUSTOTAL_API_KEY` | OSINT |
+| `crtsh_subdomain_enum` | DOMAIN | — | OSINT |
+| `subfinder_enum` | DOMAIN | `subfinder` binary | OSINT |
+| `reverse_dns_lookup` | IP | — | OSINT |
+| `job_search` | *(free text)* | — | OSINT |
+| `analyze_email` | *(email)* | `HIBP_API_KEY` / `EMAILREP_API_KEY` | OSINT |
+| `naabu_scan` | HOST | `naabu` binary | Port Scan |
+| `nmap_port_scan` | HOST | `nmap` binary | Port Scan |
+| `nuclei_scan` | DOMAIN | `nuclei` binary | Vuln Scan |
+| `httpx_scan` | HOST_OR_URL | `httpx` binary | Vuln Scan |
+| `wafw00f_detect` | HOST_OR_URL | `wafw00f` binary | Vuln Scan |
+| `graphql_scan` | URL | — | Vuln Scan |
+| `feroxbuster_scan` | HOST_OR_URL | `feroxbuster` binary | Vuln Scan |
+| `katana_crawl` | HOST_OR_URL | `katana` binary | Vuln Scan |
+| `testssl_scan` | HOST | `testssl.sh` binary | Vuln Scan |
+| `extract_webpage_content` | URL | — | Vuln Scan |
 
-Minimal shared state passed through the graph:
-
-```python
-class ScanState(TypedDict):
-    target: str               # Domain or IP provided by the user
-    active_scan: bool         # Whether active scanning is permitted
-    discovered_ips: list[str] # IPs found during OSINT
-    findings: list[str]       # Agent summaries (append-only reducer)
-    report: str               # Final Markdown report
-```
+See [docs/tools.md](docs/tools.md) for complete tool reference with input schemas and validation rules.
 
 ---
 
@@ -242,13 +275,16 @@ class ScanState(TypedDict):
 ### Model per agent
 
 Each agent reads its model from an environment variable, falling back to
-`gpt-4o-mini`:
+`gpt-5-mini`:
 
 | Variable | Agent | Default |
 |----------|-------|---------|
-| `FACKEL_MODEL_OSINT` | OSINT agent | `gpt-4o-mini` |
-| `FACKEL_MODEL_PORT_SCAN` | Port scan agent | `gpt-4o-mini` |
-| `FACKEL_MODEL_REPORT` | Report generator | `gpt-4o-mini` |
+| `FACKEL_MODEL_OSINT` | OSINT agent | `gpt-5-mini` |
+| `FACKEL_MODEL_PORT_SCAN` | Port scan agent | `gpt-5-mini` |
+| `FACKEL_MODEL_VULN_SCAN` | Vuln scan agent | `gpt-5-mini` |
+| `FACKEL_MODEL_TRIAGE` | Triage agent | `gpt-5-mini` |
+| `FACKEL_MODEL_REPORT` | Report generator | `gpt-5-mini` |
+| `FACKEL_MODEL_JUDGE` | Phase quality evaluator | `gpt-5-mini` |
 
 ```bash
 # Use a more capable model for report generation
@@ -260,16 +296,15 @@ export FACKEL_MODEL_REPORT=gpt-4o
 | Variable | Required | Used by |
 |----------|----------|---------|
 | `OPENAI_API_KEY` | **Yes** | All agents (LLM) |
-| `SHODAN_API_KEY` | No | Shodan tool |
-| `VIRUSTOTAL_API_KEY` | No | VirusTotal tool |
-| `CENSYS_API_ID` / `CENSYS_API_SECRET` | No | Censys tool |
-| `SERPAPI_API_KEY` | No | SerpAPI / LinkedIn tool |
+| `SHODAN_API_KEY` | No | `shodan_lookup` |
+| `VIRUSTOTAL_API_KEY` | No | `virustotal_subdomain_enum` |
+| `CENSYS_API_ID` / `CENSYS_API_SECRET` | No | `censys_lookup` |
+| `SERPAPI_API_KEY` | No | `serp_search`, `search_linkedin_for_employees` |
+| `HIBP_API_KEY` | No | `analyze_email` (graceful degradation) |
+| `EMAILREP_API_KEY` | No | `analyze_email` (graceful degradation) |
 
-Verify key status:
-
-```bash
-fackel --check-providers example.com --no-active-scan
-```
+Tools with missing API keys (and `hard_fail=True`) are **automatically removed**
+from agents, preventing the LLM from attempting calls that would fail.
 
 ### Infrastructure (optional)
 
@@ -277,6 +312,16 @@ fackel --check-providers example.com --no-active-scan
 # Start MongoDB + Langfuse observability stack
 docker compose up -d
 ```
+
+The `docker-compose.yml` provides:
+- **MongoDB 7** — scan persistence and query system
+- **Langfuse 3** — LLM observability, cost tracking, prompt management
+- **ClickHouse** — Langfuse analytics backend
+- **PostgreSQL 17** — Langfuse metadata
+- **Redis 7** — Langfuse queue
+- **MinIO** — Langfuse blob storage
+
+See [docs/configuration.md](docs/configuration.md) for full configuration reference.
 
 ---
 
@@ -298,30 +343,97 @@ for node, update in run_stream("example.com", active_scan=False):
 
 ## Adding new tools
 
-1. Create a new file in `src/tools/` with a `@tool`-decorated function:
+1. Create a new file in `src/tools/` with a `@tool`-decorated function and
+   Pydantic input schema:
 
 ```python
 # src/tools/my_tool.py
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
-@tool
+from .utils import format_tool_output
+from .validators import TargetType, guard_target
+
+
+class MyToolInput(BaseModel):
+    target: str = Field(description="Domain or IP to scan.")
+
+@tool(args_schema=MyToolInput)
 def my_recon_tool(target: str) -> dict:
     """Describe what this tool does — the LLM reads this docstring."""
+    target, err = guard_target(target, "my_recon_tool", TargetType.HOST)
+    if err:
+        return err
+
     # ... implementation ...
-    return {"target": target, "data": result}
+    return format_tool_output("my_recon_tool", target, "success", data=result)
 ```
 
-2. Import and add it to the relevant agent's `TOOLS` list:
+2. Import and add it to the relevant agent's tools list.
 
-```python
-# src/fackel/agents/osint/agent.py
-from tools.my_tool import my_recon_tool
+3. The LLM will autonomously decide when and how to use it based on
+   its docstring and the agent's system prompt.
 
-TOOLS = [dns_resolve, my_recon_tool]  # Agent now has access to it
+See [docs/development.md](docs/development.md) for the full development guide.
+
+---
+
+## Project structure
+
+```
+src/
+├── cli/
+│   └── main.py                      # Typer CLI with real-time Rich rendering
+├── fackel/
+│   ├── agents/
+│   │   ├── config.py                # Per-agent model selection (env vars)
+│   │   ├── prompts/
+│   │   │   ├── __init__.py          # Prompt loader with caching
+│   │   │   ├── soul.md              # Shared agent identity + rules
+│   │   │   └── skills/
+│   │   │       ├── osint.md         # OSINT playbook
+│   │   │       ├── port_scan.md     # Port scan strategy
+│   │   │       ├── vuln_scan.md     # Vuln scan playbook
+│   │   │       ├── triage.md        # Coverage gap analysis
+│   │   │       ├── report.md        # Report writing rules
+│   │   │       └── judge.md         # Quality scoring guide
+│   │   ├── orchestrator/
+│   │   │   ├── state.py             # ScanState (TypedDict + reducers)
+│   │   │   ├── nodes.py             # Graph nodes + event streaming
+│   │   │   ├── graph.py             # StateGraph definition + routing
+│   │   │   ├── main.py              # Public API: run(), run_stream()
+│   │   │   └── evaluator.py         # LLM-as-a-judge quality scoring
+│   │   ├── osint/agent.py           # OSINT ReAct agent (11 tools)
+│   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
+│   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (8 tools)
+│   │   ├── triage/agent.py          # Triage structured output
+│   │   └── report/agent.py          # Report synthesis
+│   ├── domain/
+│   │   ├── enums.py                 # Phase, Severity, InformationType, etc.
+│   │   └── models.py                # ToolExecution, InformationRecord, etc.
+│   ├── provider_keys.py             # API key gating + tool filtering
+│   ├── report_writer.py             # Full archival report builder
+│   └── utils/
+│       ├── network.py               # is_valid_ip, is_valid_domain
+│       └── target.py                # extract_host, sanitize_target
+└── tools/
+    ├── validators.py                # TargetType enum + guard_target()
+    ├── utils.py                     # run_command, format_tool_output, etc.
+    └── *.py                         # 25 tool wrappers
 ```
 
-The LLM will autonomously decide when and how to use the new tool based on its
-docstring and the agent's system prompt.
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/architecture.md](docs/architecture.md) | System architecture, graph flow, state management, prompt system |
+| [docs/agents.md](docs/agents.md) | Agent specifications, prompts, LLM-as-a-judge evaluator |
+| [docs/tools.md](docs/tools.md) | Complete tool reference — schemas, validation, binaries |
+| [docs/input-validation.md](docs/input-validation.md) | Input validation system — TargetType, guard_target, security |
+| [docs/configuration.md](docs/configuration.md) | Environment variables, API keys, model selection, infrastructure |
+| [docs/development.md](docs/development.md) | Contributing guide, adding tools, coding standards, testing |
 
 ---
 
@@ -339,21 +451,13 @@ uv run mypy src/
 
 # Tests
 uv run pytest tests/
+
+# Format
+uv run ruff format src/
 ```
-
----
-
-## Roadmap
-
-- [ ] Additional OSINT tools (whois, subdomain enumeration, certificate transparency)
-- [ ] Web vulnerability scanning agent (nuclei, httpx, katana)
-- [ ] Persistent checkpointer (SQLite/PostgreSQL) for scan resume
-- [ ] REST API for programmatic access
-- [ ] Langfuse integration for LLM observability and cost tracking
-- [ ] Human-in-the-loop approval before active scanning
 
 ---
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).

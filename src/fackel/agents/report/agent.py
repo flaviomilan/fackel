@@ -38,13 +38,12 @@ def generate_report(
     sections: list[str] = []
     for f in findings:
         if isinstance(f, dict):
-            header = f.get("title", f.get("phase", "Finding"))
+            header = f.get("title", f.get("phase", ""))
             detail = f.get("detail", "")
             sev = f.get("severity", "")
             sev_tag = f" [severity: {sev}]" if sev else ""
             sections.append(f"## {header}{sev_tag}\n\n{detail}")
         else:
-            # Backward-compat: raw string
             sections.append(str(f))
     context = "\n\n---\n\n".join(sections) if sections else "No findings collected."
 

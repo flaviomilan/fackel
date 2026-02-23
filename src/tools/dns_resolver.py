@@ -9,6 +9,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 
 class DnsResolveInput(BaseModel):
@@ -30,7 +31,9 @@ def dns_resolve(target: str) -> dict:
     Returns both IPv4 and IPv6 addresses.  Feed discovered IPs into shodan_lookup
     for deeper passive intelligence.
     """
-    target = target.strip()
+    target, err = guard_target(target, "dns_resolve", TargetType.HOST)
+    if err:
+        return err
 
     try:
         ipaddress.ip_address(target)

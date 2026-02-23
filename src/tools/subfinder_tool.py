@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 
 class SubfinderInput(BaseModel):
@@ -47,6 +48,10 @@ def subfinder_enum(
     search engines, and security intelligence feeds — all without
     sending traffic to the target.
     """
+    domain, err = guard_target(domain, "subfinder_enum", TargetType.DOMAIN)
+    if err:
+        return err
+
     if not shutil.which("subfinder"):
         return format_tool_output(
             "subfinder_enum",
@@ -57,7 +62,7 @@ def subfinder_enum(
 
     cmd = [
         "subfinder",
-        "-d", domain.strip(),
+        "-d", domain,
         "-json",
         "-silent",
         "-timeout", str(timeout),

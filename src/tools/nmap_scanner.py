@@ -1,7 +1,6 @@
 import re
 import os
 from typing import Any
-from urllib.parse import urlparse
 
 
 import nmap
@@ -135,6 +134,7 @@ class NmapInput(BaseModel):
             "or is behind a firewall that blocks ping probes."
         ),
     )
+from .validators import TargetType, guard_target
 
 
 @tool(args_schema=NmapInput)
@@ -150,18 +150,9 @@ def nmap_port_scan(
     Use for depth analysis after naabu has identified open ports.  Combines
     service version detection, default scripts, and vulnerability scanning.
     """
-    parsed = urlparse(host)
-    target = parsed.netloc or parsed.path or host
-    if not target:
-        return format_tool_output(
-            "nmap_port_scan",
-            host,
-            "error",
-            error="Invalid target",
-        )
-
-    # Remove port from target if present
-    target = target.split(':')[0]
+    target, err = guard_target(host, "nmap_port_scan", TargetType.HOST)
+    if err:
+        return err
 
     try:
         nm = nmap.PortScanner()

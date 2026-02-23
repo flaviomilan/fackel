@@ -6,6 +6,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 
 class VirusTotalSubdomainInput(BaseModel):
@@ -26,6 +27,10 @@ def virustotal_subdomain_enum(domain: str) -> dict:
     Queries VirusTotal's passive DNS dataset.  Returns up to 40 subdomains.
     Requires VIRUSTOTAL_API_KEY environment variable.
     """
+    domain, err = guard_target(domain, "virustotal_subdomain_enum", TargetType.DOMAIN)
+    if err:
+        return err
+
     api_key = os.getenv("VIRUSTOTAL_API_KEY")
     if not api_key:
         return format_tool_output(

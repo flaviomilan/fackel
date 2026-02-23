@@ -1,12 +1,14 @@
-import json
-import shutil
+"""Fast TCP port discovery via naabu."""
+
+from __future__ import annotations
+
 from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-
-from .utils import run_command, extract_host, format_tool_output
+from .utils import format_tool_output, parse_jsonl, require_binary, run_command
+from .validators import TargetType, guard_target
 
 
 class NaabuInput(BaseModel):
@@ -59,22 +61,12 @@ def naabu_scan(
     Use for breadth-first port enumeration — fast sweep to find open ports
     before deeper nmap analysis.  Feed discovered ports into nmap_port_scan.
     """
-    if not shutil.which("naabu"):
-        return format_tool_output(
-            "naabu_scan",
-            host,
-            "error",
-            error="naabu not found in PATH",
-        )
+    if err := require_binary("naabu", "naabu_scan", host):
+        return err
 
-    target = extract_host(host)
-    if not target:
-        return format_tool_output(
-            "naabu_scan",
-            host,
-            "error",
-            error="invalid target",
-        )
+    target, verr = guard_target(host, "naabu_scan", TargetType.HOST)
+    if verr:
+        return verr
 
     cmd = ["naabu", "-host", target, "-json"]
 
@@ -92,39 +84,15 @@ def naabu_scan(
     try:
         code, out, err = run_command(cmd)
     except Exception as exc:
-        return format_tool_output(
-            "naabu_scan",
-            host,
-            "error",
-            error=str(exc),
-        )
+        return format_tool_output("naabu_scan", host, "error", error=str(exc))
 
-
-    results: list[dict[str, Any]] = []
-    for line in out.splitlines():
-        try:
-            data = json.loads(line)
-            result = data.copy()
-            result.update({
-                "ip": data.get("ip"),
-                "port": data.get("port"),
-                "proto": data.get("protocol", "tcp"),
-            })
-            results.append(result)
-        except Exception:
-            continue
+    results = parse_jsonl(out)
 
     if not results:
         return format_tool_output(
-            "naabu_scan",
-            host,
+            "naabu_scan", host,
             "error" if code else "ok",
             error=err or "no open ports found",
         )
 
-    return format_tool_output(
-        "naabu_scan",
-        host,
-        "ok",
-        data={"results": results},
-    )
+    return format_tool_output("naabu_scan", host, "ok", data={"results": results})

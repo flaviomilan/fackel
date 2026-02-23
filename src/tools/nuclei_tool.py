@@ -6,14 +6,13 @@ with severity, template ID, and matched location.
 
 from __future__ import annotations
 
-import json
-import shutil
 from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from .utils import ensure_target, format_tool_output, run_command
+from .utils import format_tool_output, parse_jsonl, require_binary, run_command
+from .validators import TargetType, guard_target
 
 
 class NucleiInput(BaseModel):
@@ -21,9 +20,10 @@ class NucleiInput(BaseModel):
 
     target: str = Field(
         description=(
-            "IP address, domain name, or full URL to scan. "
-            "Use the domain name first (DNS/SSL/HTTP-SNI templates need it), "
-            "then scan individual IPs."
+            "Domain name, subdomain, or full URL to scan. "
+            "NEVER pass a raw IP address — nuclei templates rely on DNS/SSL/SNI "
+            "and bare-IP scans (especially behind CDN/proxy) return nothing useful. "
+            "Always use the domain or subdomain name."
         ),
     )
     severity: str = Field(
@@ -55,14 +55,14 @@ def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, An
     Detects CVEs, default credentials, exposed panels, technology fingerprints,
     DNS records (DMARC, SPF, DKIM), SSL/TLS config, and security headers.
     """
-    if not shutil.which("nuclei"):
-        return format_tool_output("nuclei_scan", target, "error", error="nuclei not in PATH")
+    if err := require_binary("nuclei", "nuclei_scan", target):
+        return err
 
-    norm = ensure_target(target)
-    if not norm:
-        return format_tool_output("nuclei_scan", target, "error", error="invalid target")
+    target, verr = guard_target(target, "nuclei_scan", TargetType.DOMAIN)
+    if verr:
+        return verr
 
-    cmd = ["nuclei", "-u", norm, "-jsonl", "-silent"]
+    cmd = ["nuclei", "-u", target, "-jsonl", "-silent"]
     if severity.strip():
         cmd.extend(["-severity", severity.strip()])
     if tags.strip():
@@ -74,44 +74,33 @@ def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, An
         return format_tool_output("nuclei_scan", target, "error", error=str(exc))
 
     findings: list[dict[str, Any]] = []
-    for line in out.splitlines():
-        try:
-            raw = json.loads(line)
-            info = raw.get("info", {})
-            finding: dict[str, Any] = {
-                "template_id": raw.get("template-id", ""),
-                "matcher_name": raw.get("matcher-name", ""),
-                "name": info.get("name", ""),
-                "severity": info.get("severity", "unknown"),
-                "matched_at": raw.get("matched-at", ""),
-                "type": raw.get("type", ""),
-                "host": raw.get("host", ""),
-                "ip": raw.get("ip", ""),
-                "tags": info.get("tags", []),
-                "description": info.get("description", ""),
-            }
-            # extracted-results contain the actual intelligence:
-            # CSP policies, DKIM keys, SPF records, tenant IDs, TLS versions, etc.
-            extracted = raw.get("extracted-results")
-            if extracted:
-                finding["extracted_results"] = extracted
-            curl_cmd = raw.get("curl-command", "")
-            if curl_cmd:
-                finding["curl_command"] = curl_cmd
-            findings.append(finding)
-        except (json.JSONDecodeError, TypeError):
-            continue
+    for raw in parse_jsonl(out):
+        info = raw.get("info", {})
+        finding: dict[str, Any] = {
+            "template_id": raw.get("template-id", ""),
+            "matcher_name": raw.get("matcher-name", ""),
+            "name": info.get("name", ""),
+            "severity": info.get("severity", "unknown"),
+            "matched_at": raw.get("matched-at", ""),
+            "type": raw.get("type", ""),
+            "host": raw.get("host", ""),
+            "ip": raw.get("ip", ""),
+            "tags": info.get("tags", []),
+            "description": info.get("description", ""),
+        }
+        extracted = raw.get("extracted-results")
+        if extracted:
+            finding["extracted_results"] = extracted
+        curl_cmd = raw.get("curl-command", "")
+        if curl_cmd:
+            finding["curl_command"] = curl_cmd
+        findings.append(finding)
 
     if not findings:
         msg = "no vulnerabilities found" if code == 0 else (err.strip() or "scan produced no output")
         return format_tool_output("nuclei_scan", target, "ok", data={"findings": [], "message": msg})
 
     return format_tool_output(
-        "nuclei_scan",
-        target,
-        "ok",
-        data={
-            "total": len(findings),
-            "findings": findings,
-        },
+        "nuclei_scan", target, "ok",
+        data={"total": len(findings), "findings": findings},
     )

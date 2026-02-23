@@ -1,17 +1,29 @@
+"""LinkedIn employee discovery via SerpAPI."""
+
+from __future__ import annotations
+
 import os
 
-
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 from serpapi import GoogleSearch
 
 from .utils import format_tool_output
 
 
-@tool
+class LinkedInEmployeeInput(BaseModel):
+    """Input schema for LinkedIn employee search."""
+
+    company_name: str = Field(
+        description="Company name to search for employees on LinkedIn.",
+    )
+
+
+@tool(args_schema=LinkedInEmployeeInput)
 def search_linkedin_for_employees(company_name: str) -> dict:
-    """Searches for employees of a given company on LinkedIn using SerpApi.
-    This tool is highly effective for discovering key personnel, their roles, and their LinkedIn profiles.
-    The input should be the company name.
+    """Search for employees of a company on LinkedIn via SerpAPI.
+
+    Discovers key personnel, their roles, and LinkedIn profile links.
     """
     api_key = os.getenv("SERPAPI_API_KEY")
     if not api_key:

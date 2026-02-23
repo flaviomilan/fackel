@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 
 class ReverseDnsInput(BaseModel):
@@ -38,7 +39,10 @@ def reverse_dns_lookup(ip: str) -> dict:
     environments where one compromised neighbour affects all tenants.
     No API key required.
     """
-    ip = ip.strip()
+    ip, err = guard_target(ip, "reverse_dns_lookup", TargetType.IP)
+    if err:
+        return err
+
     ptr_hostname: str | None = None
     ptr_aliases: list[str] = []
     shared_domains: list[str] = []

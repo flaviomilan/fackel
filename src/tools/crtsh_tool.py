@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 
 class CrtShInput(BaseModel):
@@ -35,7 +36,10 @@ def crtsh_subdomain_enum(domain: str) -> dict:
     here — often reveals staging, internal, and forgotten subdomains.
     Free, no API key required.  Most reliable passive subdomain source.
     """
-    domain = domain.strip().lstrip("*.")
+    domain, err = guard_target(domain, "crtsh_subdomain_enum", TargetType.DOMAIN)
+    if err:
+        return err
+    domain = domain.lstrip("*.")
 
     try:
         resp = requests.get(

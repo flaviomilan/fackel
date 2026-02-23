@@ -6,6 +6,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 
 class WhoisInput(BaseModel):
@@ -57,6 +58,10 @@ def whois_lookup(domain: str) -> dict:
     WHOIS record.  Reveals hosting provider, domain age, and registrar —
     useful for attribution and infrastructure mapping.
     """
+    domain, err = guard_target(domain, "whois_lookup", TargetType.DOMAIN)
+    if err:
+        return err
+
     try:
         record = _whois_query(domain)
 

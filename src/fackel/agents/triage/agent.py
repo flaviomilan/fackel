@@ -49,6 +49,16 @@ def run_triage(findings: list[dict], model_name: str | None = None) -> TriageRes
     structured_llm = llm.with_structured_output(TriageResult)
 
     # Serialise structured findings into text for the LLM.
+    context = _serialize_findings(findings)
+
+    return structured_llm.invoke([
+        SystemMessage(content=load_prompt("triage")),
+        HumanMessage(content=f"Analyse these scan findings:\n\n{context}"),
+    ])
+
+
+def _serialize_findings(findings: list[dict]) -> str:
+    """Convert a list of Finding dicts into Markdown sections for the LLM."""
     sections: list[str] = []
     for f in findings:
         if isinstance(f, dict):
@@ -57,9 +67,4 @@ def run_triage(findings: list[dict], model_name: str | None = None) -> TriageRes
             sections.append(f"## {header}\n\n{detail}")
         else:
             sections.append(str(f))
-    context = "\n\n---\n\n".join(sections) if sections else "No findings collected."
-
-    return structured_llm.invoke([
-        SystemMessage(content=load_prompt("triage")),
-        HumanMessage(content=f"Analyse these scan findings:\n\n{context}"),
-    ])
+    return "\n\n---\n\n".join(sections) if sections else "No findings collected."

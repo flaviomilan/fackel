@@ -63,6 +63,7 @@ def _parse_severity(finding: dict[str, Any]) -> str:
         "FATAL": "critical",
     }
     return mapping.get(sev, "info")
+from .validators import TargetType, guard_target
 
 
 @tool(args_schema=TestSSLInput)
@@ -89,11 +90,9 @@ def testssl_scan(
             ),
         )
 
-    host = target.strip()
-    if not host:
-        return format_tool_output(
-            "testssl_scan", target, "error", error="empty target",
-        )
+    host, err = guard_target(target, "testssl_scan", TargetType.HOST)
+    if err:
+        return err
 
     cmd = [
         "testssl.sh",

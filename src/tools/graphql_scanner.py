@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 _INTROSPECTION_QUERY = """{
   __schema {
@@ -51,8 +52,9 @@ def graphql_scan(url: str) -> dict[str, Any]:
     Tests for introspection exposure, alias/array query batching, field
     suggestion leaks, GET-method queries (CSRF risk), and schema enumeration.
     """
-    if not url.startswith(("http://", "https://")):
-        url = f"https://{url}"
+    url, err = guard_target(url, "graphql_scan", TargetType.URL)
+    if err:
+        return err
 
     headers = {
         "Content-Type": "application/json",

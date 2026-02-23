@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
+from .validators import TargetType, guard_target
 
 _API_URL = "https://api.dnsdumpster.com/htmld/"
 _PAGE_URL = "https://dnsdumpster.com/"
@@ -87,6 +88,10 @@ def dnsdumpster_lookup(domain: str) -> dict:
     IPs and hosting providers — plus NS, MX, and TXT records.
     No API key required.
     """
+    domain, err = guard_target(domain, "dnsdumpster_lookup", TargetType.DOMAIN)
+    if err:
+        return err
+
     try:
         jwt = _fetch_jwt()
     except Exception as exc:
