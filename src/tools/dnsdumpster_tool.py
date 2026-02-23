@@ -1,152 +1,152 @@
+"""DNSDumpster subdomain enumeration tool.
+
+Queries the DNSDumpster HTMX API (JWT-authenticated) to enumerate
+subdomains, DNS/MX/NS/TXT records, and hosting providers.
+"""
+
+from __future__ import annotations
+
 import re
-import time
 
 import requests
-import urllib3
 from bs4 import BeautifulSoup
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from .utils import format_tool_output
+
+_API_URL = "https://api.dnsdumpster.com/htmld/"
+_PAGE_URL = "https://dnsdumpster.com/"
 
 
-@tool
-def dnsdumpster_lookup(domain: str) -> str:
-    """Queries DNSDumpster.com to find subdomains, DNS records, and host information for a given domain.
-    This is a powerful passive reconnaissance tool that requires no API key.
+class DnsDumpsterInput(BaseModel):
+    """Input for DNSDumpster subdomain enumeration."""
+
+    domain: str = Field(
+        description=(
+            "Root domain to enumerate (e.g. 'example.com'). "
+            "Must be a plain domain name — do NOT pass IPs, URLs, or subdomains."
+        ),
+    )
+
+
+def _fetch_jwt() -> str:
+    """Fetch a short-lived JWT from the DNSDumpster landing page."""
+    resp = requests.get(
+        _PAGE_URL,
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    match = re.search(r'"Authorization":\s*"(eyJ[^"]+)"', resp.text)
+    if not match:
+        raise RuntimeError("DNSDumpster page no longer contains an Authorization JWT.")
+    return match.group(1)
+
+
+def _parse_host_table(table: BeautifulSoup) -> list[dict]:
+    """Extract host records (subdomains) from a DNSDumpster HTML table."""
+    hosts: list[dict] = []
+    for row in table.find_all("tr"):
+        cols = row.find_all("td")
+        if len(cols) < 2:
+            continue
+        hostname = cols[0].get_text(strip=True)
+        ip_text = cols[1].get_text(strip=True)
+        asn_info = cols[2].get_text(strip=True) if len(cols) > 2 else ""
+        provider = cols[3].get_text(strip=True) if len(cols) > 3 else ""
+        # Extract clean IP (first token before any hostname appended)
+        ip_match = re.match(r"(\d{1,3}(?:\.\d{1,3}){3})", ip_text)
+        ip_addr = ip_match.group(1) if ip_match else ip_text
+        hosts.append({
+            "hostname": hostname,
+            "ip": ip_addr,
+            "asn": asn_info,
+            "provider": provider,
+        })
+    return hosts
+
+
+def _parse_simple_table(table: BeautifulSoup) -> list[str]:
+    """Extract plain-text rows from a DNS/MX/TXT table."""
+    rows: list[str] = []
+    for row in table.find_all("tr"):
+        cols = row.find_all("td")
+        texts = [c.get_text(strip=True) for c in cols if c.get_text(strip=True)]
+        if texts:
+            rows.append(" | ".join(texts))
+    return rows
+
+
+@tool(args_schema=DnsDumpsterInput)
+def dnsdumpster_lookup(domain: str) -> dict:
+    """Discover subdomains, DNS records, and hosting via DNSDumpster.
+
+    Fetches a short-lived JWT from dnsdumpster.com, then queries their
+    HTMX API to enumerate Host Records (A) — including subdomains with
+    IPs and hosting providers — plus NS, MX, and TXT records.
+    No API key required.
     """
-    session = requests.Session()
-    base_url = "https://dnsdumpster.com/"
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "gzip, deflate",
-        "Connection": "close",
-        "Upgrade-Insecure-Requests": "1",
-    }
+    try:
+        jwt = _fetch_jwt()
+    except Exception as exc:
+        return format_tool_output(
+            "dnsdumpster_lookup", domain, "error",
+            error=f"Failed to obtain DNSDumpster auth token: {exc}",
+        )
 
     try:
-
-        response = session.get(base_url, headers=headers, timeout=10, verify=False)
-        response.raise_for_status()
-
-        response.encoding = "utf-8"
-
-        csrf_token = session.cookies.get("csrftoken")
-
-        if not csrf_token:
-
-            soup = BeautifulSoup(response.text, "html.parser")
-            csrf_input = soup.find("input", {"name": "csrfmiddlewaretoken"})
-            if csrf_input and "value" in csrf_input.attrs:
-                csrf_token = csrf_input["value"]
-            else:
-
-                csrf_pattern = (
-                    r"name=['\"]csrfmiddlewaretoken['\"] value=['\"](.*?)['\"]"
-                )
-                csrf_match = re.search(csrf_pattern, response.text)
-                if csrf_match:
-                    csrf_token = csrf_match.group(1)
-                else:
-                    return "Could not obtain CSRF token from DNSDumpster. The site structure might have changed."
-
-        time.sleep(2)
-
-        post_headers = headers.copy()
-        post_headers.update(
-            {
-                "Origin": "https://dnsdumpster.com",
-                "Referer": "https://dnsdumpster.com/",
+        resp = requests.post(
+            _API_URL,
+            headers={
+                "Authorization": jwt,
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Cookie": f"csrftoken={csrf_token}",
-                "X-CSRFToken": csrf_token,
-            }
+                "User-Agent": "Mozilla/5.0",
+            },
+            data={"target": domain},
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return format_tool_output(
+            "dnsdumpster_lookup", domain, "error",
+            error=f"DNSDumpster API request failed: {exc}",
         )
 
-        post_data = {"csrfmiddlewaretoken": csrf_token, "targetip": domain}
-
-        response = session.post(
-            base_url, data=post_data, headers=post_headers, timeout=15, verify=False
-        )
-        response.raise_for_status()
-
-        response.encoding = "utf-8"
-
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        error_msg = soup.find("p", {"class": "error-message"})
-        if error_msg:
-            return f"DNSDumpster returned an error: {error_msg.text.strip()}"
-
+    try:
+        soup = BeautifulSoup(resp.text, "html.parser")
         tables = soup.find_all("table")
 
         if not tables:
-            return f"No results found for {domain} on DNSDumpster."
+            return format_tool_output(
+                "dnsdumpster_lookup", domain, "ok",
+                data={"hosts": [], "dns_servers": [], "mx_records": [], "txt_records": []},
+            )
 
-        output = [f"DNSDumpster report for {domain}:\n"]
-
-        def parse_table(table):
-            res = []
-            rows = table.find_all("tr")
-            for row in rows:
-                cols = row.find_all("td")
-                if len(cols) > 0:
-
-                    texts = []
-                    for col in cols:
-                        text = col.get_text(strip=True)
-                        if text and not text.isspace():
-
-                            text = "".join(c for c in text if c.isprintable())
-                            texts.append(text)
-                    if texts:
-                        res.append(" - ".join(texts))
-            return res
-
-        records = {
-            "DNS Servers": [],
-            "MX Records": [],
-            "TXT Records": [],
-            "Host Records (A)": [],
-        }
-
-        for table in tables:
-            header = table.find("th")
-            if header:
-                header_text = header.get_text(strip=True)
-                for key in records:
-                    if key in header_text:
-                        records[key] = parse_table(table)
-                        break
-
-
-        for title, data in records.items():
-            if data:
-                output.append(f"\n--- {title} ---")
-                output.extend(data)
-
-        from .utils import format_tool_output
+        # Table layout (observed Feb 2026):
+        #   0 — summary/stats (skip)
+        #   1 — Host Records (A) — subdomains
+        #   2 — MX Records
+        #   3 — DNS Servers (NS)
+        #   4 — TXT Records
+        hosts = _parse_host_table(tables[1]) if len(tables) > 1 else []
+        mx_records = _parse_simple_table(tables[2]) if len(tables) > 2 else []
+        dns_servers = _parse_simple_table(tables[3]) if len(tables) > 3 else []
+        txt_records = _parse_simple_table(tables[4]) if len(tables) > 4 else []
 
         return format_tool_output(
             "dnsdumpster_lookup",
             domain,
             "ok",
-            data=records,
+            data={
+                "hosts": hosts,
+                "dns_servers": dns_servers,
+                "mx_records": mx_records,
+                "txt_records": txt_records,
+            },
         )
-
-    except requests.exceptions.RequestException as e:
+    except Exception as exc:
         return format_tool_output(
-            "dnsdumpster_lookup",
-            domain,
-            "error",
-            error=f"Error connecting to DNSDumpster: {e}",
-        )
-    except Exception as e:
-        return format_tool_output(
-            "dnsdumpster_lookup",
-            domain,
-            "error",
-            error=f"An unexpected error occurred while querying DNSDumpster: {e}. Please try again later.",
+            "dnsdumpster_lookup", domain, "error",
+            error=f"Failed to parse DNSDumpster response: {exc}",
         )

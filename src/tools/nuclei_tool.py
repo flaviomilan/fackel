@@ -11,32 +11,49 @@ import shutil
 from typing import Any
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from .utils import ensure_target, format_tool_output, run_command
 
 
-@tool
+class NucleiInput(BaseModel):
+    """Input for Nuclei vulnerability scanner."""
+
+    target: str = Field(
+        description=(
+            "IP address, domain name, or full URL to scan. "
+            "Use the domain name first (DNS/SSL/HTTP-SNI templates need it), "
+            "then scan individual IPs."
+        ),
+    )
+    severity: str = Field(
+        default="",
+        description=(
+            "Comma-separated severity filter: 'critical', 'high', 'medium', "
+            "'low', 'info'. Examples: 'critical,high' for focused scans, "
+            "empty string for all severities (recommended for domain scans)."
+        ),
+    )
+    tags: str = Field(
+        default="",
+        description=(
+            "Comma-separated Nuclei template tags to filter by. "
+            "Examples: 'cve,wordpress', 'graphql,api', 'tech,misconfig'. "
+            "Common tags: cve, wordpress, joomla, drupal, graphql, api, "
+            "misconfig, exposure, tech, default-login, takeover, rce, xss, "
+            "sqli, lfi, ssrf, redirect, nginx, apache, iis. "
+            "Leave empty to use all templates."
+        ),
+    )
+
+
+@tool(args_schema=NucleiInput)
 def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, Any]:
-    """Scan a host or URL for vulnerabilities, misconfigurations, and exposed
-    technologies using Nuclei's template engine.
+    """Scan for vulnerabilities, misconfigurations, and technologies using
+    Nuclei's community-maintained template engine.
 
-    Nuclei runs community-maintained templates that detect CVEs, default
-    credentials, exposed panels, technology fingerprints, and misconfigurations.
-    Use `severity` and `tags` to focus scans on what matters.
-
-    Args:
-        target: IP address, domain, or full URL to scan.
-        severity: Comma-separated severity filter (e.g. "critical,high" or
-                  "medium,low,info"). Leave empty to scan all severities.
-        tags: Comma-separated template tags to filter (e.g. "cve,wordpress",
-              "graphql,api", "tech,misconfig"). Leave empty to use all templates.
-              Common tags: cve, wordpress, joomla, drupal, graphql, api,
-              misconfig, exposure, tech, default-login, takeover, rce, xss,
-              sqli, lfi, ssrf, redirect, nginx, apache, iis.
-
-    Returns:
-        List of findings with template_id, name, severity, matched URL, type,
-        host, IP, and template tags.
+    Detects CVEs, default credentials, exposed panels, technology fingerprints,
+    DNS records (DMARC, SPF, DKIM), SSL/TLS config, and security headers.
     """
     if not shutil.which("nuclei"):
         return format_tool_output("nuclei_scan", target, "error", error="nuclei not in PATH")

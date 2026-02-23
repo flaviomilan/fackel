@@ -36,12 +36,28 @@ class TriageResult(BaseModel):
     summary: str = Field(description="Brief overall assessment of scan coverage")
 
 
-def run_triage(findings: list[str], model_name: str | None = None) -> TriageResult:
-    """Analyse accumulated findings and return a structured triage result."""
+def run_triage(findings: list[dict], model_name: str | None = None) -> TriageResult:
+    """Analyse accumulated findings and return a structured triage result.
+
+    Parameters
+    ----------
+    findings:
+        List of ``Finding`` dicts with keys: phase, title, detail,
+        (optional) severity, source_tool, confidence.
+    """
     llm = ChatOpenAI(model=model_name or get_model("triage"))
     structured_llm = llm.with_structured_output(TriageResult)
 
-    context = "\n\n---\n\n".join(findings) if findings else "No findings collected."
+    # Serialise structured findings into text for the LLM.
+    sections: list[str] = []
+    for f in findings:
+        if isinstance(f, dict):
+            header = f.get("title", f.get("phase", "Finding"))
+            detail = f.get("detail", "")
+            sections.append(f"## {header}\n\n{detail}")
+        else:
+            sections.append(str(f))
+    context = "\n\n---\n\n".join(sections) if sections else "No findings collected."
 
     return structured_llm.invoke([
         SystemMessage(content=load_prompt("triage")),

@@ -19,13 +19,17 @@ to determine:
 These technologies are already covered by specialist tools and should **not**
 be flagged as unassessed unless the tool failed or was blocked:
 
-| Technology   | Covered By                              |
-|--------------|-----------------------------------------|
-| GraphQL      | `graphql_scan` (introspection, batching)|
-| WAF          | `wafw00f_detect` + nuclei WAF templates |
-| DNS records  | nuclei DNS templates (DMARC, SPF, DKIM) |
-| SSL/TLS      | nuclei SSL templates                    |
-| HTTP headers | nuclei HTTP templates                   |
+| Technology    | Covered By                               |
+|---------------|------------------------------------------|
+| GraphQL       | `graphql_scan` (introspection, batching) |
+| WAF           | `wafw00f_detect` + nuclei WAF templates  |
+| DNS records   | nuclei DNS templates (DMARC, SPF, DKIM)  |
+| SSL/TLS       | nuclei SSL templates                     |
+| HTTP headers  | nuclei HTTP templates                    |
+| Subdomains    | `crtsh_subdomain_enum` + `dnsdumpster_lookup` + `virustotal_subdomain_enum` |
+| Reverse DNS   | `reverse_dns_lookup` (PTR + shared hosting)     |
+| Hidden paths  | `feroxbuster_scan` (directory brute-force) |
+| Web endpoints | `katana_crawl` (URL/JS route discovery)  |
 
 Flag as unassessed **only** technologies NOT in the table above.
 

@@ -3,13 +3,29 @@ import os
 
 import requests
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
 
 
-@tool
-def virustotal_subdomain_enum(domain: str):
-    """Enumerates subdomains using VirusTotal API (structured payload)."""
+class VirusTotalSubdomainInput(BaseModel):
+    """Input for VirusTotal subdomain enumeration."""
+
+    domain: str = Field(
+        description=(
+            "Root domain to enumerate (e.g. 'example.com'). "
+            "Must be a plain domain name — do NOT pass subdomains, IPs, or URLs."
+        ),
+    )
+
+
+@tool(args_schema=VirusTotalSubdomainInput)
+def virustotal_subdomain_enum(domain: str) -> dict:
+    """Enumerate subdomains passively via VirusTotal's global sensor network.
+
+    Queries VirusTotal's passive DNS dataset.  Returns up to 40 subdomains.
+    Requires VIRUSTOTAL_API_KEY environment variable.
+    """
     api_key = os.getenv("VIRUSTOTAL_API_KEY")
     if not api_key:
         return format_tool_output(

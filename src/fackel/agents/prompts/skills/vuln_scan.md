@@ -16,48 +16,18 @@ agent can flag it as an unassessed area.
 
 ## Tools
 
-| Tool             | Purpose                                                    |
-|------------------|------------------------------------------------------------|
-| `nuclei_scan`    | Template-based: CVEs, misconfigs, DNS, SSL, tech detection |
-| `httpx_scan`     | HTTP probing: status, titles, tech, redirects, CDN         |
-| `wafw00f_detect` | WAF/IPS identification                                     |
-| `graphql_scan`   | GraphQL: introspection, batching, schema exposure          |
+| Tool               | Purpose                                                    |
+|--------------------|------------------------------------------------------------|
+| `nuclei_scan`      | Template-based: CVEs, misconfigs, DNS, SSL, tech detection |
+| `httpx_scan`       | HTTP probing: status, titles, tech, redirects, CDN         |
+| `wafw00f_detect`   | WAF/IPS identification                                     |
+| `graphql_scan`     | GraphQL: introspection, batching, schema exposure          |
+| `feroxbuster_scan` | Directory/content brute-forcing for hidden paths           |
+| `katana_crawl`     | Web crawling: URL discovery, JS routes, API endpoints      |
 
-### Parameters
-
-**nuclei_scan**
-
-| Param      | Type | Default | When to use                                        |
-|------------|------|---------------------------------------------------------|
-| `target`   | str  | —       | IP, domain, or URL.                                |
-| `severity` | str  | ""      | Empty = all severities (use for domain scan).      |
-|            |      |         | "critical,high" for focused IP scans.              |
-| `tags`     | str  | ""      | Tech-specific: "wordpress", "graphql,api", etc.    |
-
-**httpx_scan**
-
-| Param              | Type | Default | When to use                              |
-|--------------------|------|---------|------------------------------------------|
-| `domain`           | str  | —       | IP, domain, or URL.                      |
-| `ports`            | str  | ""      | Feed port-scan ports (e.g. "80,443").    |
-| `tech_detect`      | bool | true    | Technology fingerprinting.               |
-| `follow_redirects` | bool | true    | Follow HTTP redirects.                   |
-| `status_code`      | bool | true    | Include HTTP status codes.               |
-| `title`            | bool | true    | Include page titles.                     |
-
-**wafw00f_detect**
-
-| Param       | Type | Default | When to use                                  |
-|-------------|------|---------|----------------------------------------------|
-| `target`    | str  | —       | Use **domain name** (not bare IPs — SSL/SNI  |
-|             |      |         | fails on IPs behind CDNs like Cloudflare).   |
-| `check_all` | bool | false   | `true` to test all WAF signatures.           |
-
-**graphql_scan**
-
-| Param | Type | Default | When to use                                       |
-|-------|------|---------|---------------------------------------------------|
-| `url` | str  | —       | Full URL of GraphQL endpoint detected by nuclei.  |
+> Parameter details (types, defaults, constraints) are defined in each tool's
+> schema and visible to you automatically. The playbook below explains **when**
+> and **why** to use each tool.
 
 ## Playbook
 
@@ -89,13 +59,29 @@ Analyse nuclei results. When a finding has a matching specialist tool, use it:
 | `graphql-detect`, `graphql-*` | `graphql_scan(url=<matched_at URL>)`   |
 | Tech-specific templates     | `nuclei_scan(tags="<matching tech>")`    |
 
-### 4. IP-level scans
+### 4. Web surface discovery
+
+Expand the known attack surface beyond what nuclei templates alone find:
+
+1. `katana_crawl(target=<domain>)` — spider the site to discover JS-defined
+   API endpoints, form actions, redirect chains, and linked resources. This
+   finds URLs that template-based scanning misses.
+2. `feroxbuster_scan(target=<domain>)` — brute-force web paths for hidden
+   admin panels, backup files (`.bak`, `.sql`, `.zip`), config endpoints, and
+   unlinked content that crawling cannot reach.
+3. Review discovered URLs — feed interesting endpoints back to nuclei with
+   targeted `tags` if they reveal new technologies.
+
+> **Order matters**: crawl first (fast, link-based), then brute-force (slower,
+> wordlist-based). Both complement each other.
+
+### 5. IP-level scans
 
 Per discovered IPv4:
 - `nuclei_scan(target=<ip>, severity="critical,high")` for impactful vulns.
 - Optionally `severity="medium,low"` for broader coverage.
 
-### 5. Summary
+### 6. Summary
 
 Compile all results. Explicitly mention:
 - Technologies **investigated** with a specialist tool and what was found.
@@ -132,6 +118,10 @@ Compile all results. Explicitly mention:
 - Endpoint: <url> | Introspection: yes/no
 - Schema: X types, Y queries, Z mutations
 - Issues: <list>
+
+**Web Discovery** (via katana + feroxbuster):
+- Crawled URLs: <count> | Hidden paths: <count>
+- Notable: <admin panels, backup files, API endpoints found>
 
 **Tech Stack:** <from all sources>
 

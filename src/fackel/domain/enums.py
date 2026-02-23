@@ -12,6 +12,16 @@ class Phase(StrEnum):
     REPORT = "report"
 
 
+class Severity(StrEnum):
+    """Finding severity levels, ordered from highest to lowest impact."""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+
+
 class InformationType(StrEnum):
     """Semantic catalog of discoverable information types."""
 

@@ -1,10 +1,12 @@
 import re
 import os
+from typing import Any
 from urllib.parse import urlparse
 
 
 import nmap
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
 
@@ -103,34 +105,50 @@ def _extract_vulnerabilities(service: dict) -> list:
     return vulnerabilities
 
 
-@tool
+class NmapInput(BaseModel):
+    """Input for nmap port/service scanner."""
+
+    host: str = Field(
+        description="IP address or domain to scan. One target per call.",
+    )
+    ports: str = Field(
+        default="",
+        description=(
+            "Comma-separated ports or ranges (e.g. '22,80,443,8000-9000'). "
+            "Feed ports discovered by naabu_scan here for targeted analysis. "
+            "Leave empty for nmap's default top-1000 ports."
+        ),
+    )
+    scan_type: str = Field(
+        default="default",
+        description=(
+            "Scan intensity preset: "
+            "'default' = version detection + vuln scripts + T4 timing; "
+            "'quick' = version detection only, no vuln scripts (faster); "
+            "'deep' = all 65535 ports, version intensity 9, all vuln scripts."
+        ),
+    )
+    skip_host_discovery: bool = Field(
+        default=False,
+        description=(
+            "Skip host discovery (-Pn). Use when the host drops ICMP "
+            "or is behind a firewall that blocks ping probes."
+        ),
+    )
+
+
+@tool(args_schema=NmapInput)
 def nmap_port_scan(
     host: str,
     ports: str = "",
     scan_type: str = "default",
     skip_host_discovery: bool = False,
-):
-    """Advanced Nmap port/service scan with version detection, OS fingerprinting,
-    and vulnerability assessment via NSE scripts.
+) -> dict[str, Any]:
+    """Advanced Nmap scan with version detection, OS fingerprinting, and NSE
+    vulnerability scripts.
 
-    Use for **depth analysis** after naabu has identified open ports. Combines
+    Use for depth analysis after naabu has identified open ports.  Combines
     service version detection, default scripts, and vulnerability scanning.
-
-    Args:
-        host: IP address or domain to scan.
-        ports: Comma-separated ports or ranges (e.g. "22,80,443,8000-9000").
-               Use ports discovered by naabu for targeted scans. Leave empty
-               for nmap's default top-1000 ports.
-        scan_type: Scan intensity preset:
-            - "default" — version detection + vuln scripts + T4 timing
-            - "quick" — version detection only, T4, no vuln scripts (faster)
-            - "deep" — all ports (-p-), version intensity 9, all vuln scripts
-        skip_host_discovery: Skip host discovery (-Pn). Use when the host drops
-                             ICMP or is behind a firewall that blocks ping.
-
-    Returns:
-        Structured data: open ports, services, versions, OS info, CPEs, CVEs,
-        and NSE script output per port.
     """
     parsed = urlparse(host)
     target = parsed.netloc or parsed.path or host

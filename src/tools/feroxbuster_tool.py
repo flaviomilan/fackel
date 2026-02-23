@@ -3,14 +3,31 @@ import shutil
 from typing import Any
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 
 from .utils import ensure_target, run_command, format_tool_output
 
 
-@tool
+class FeroxbusterInput(BaseModel):
+    """Input for feroxbuster directory scanner."""
+
+    target: str = Field(
+        description=(
+            "URL or domain to scan (e.g. 'https://example.com' or 'example.com'). "
+            "Scheme is auto-added if missing. Discovers hidden admin panels, "
+            "backup files (.bak, .sql, .zip), config endpoints, and unlinked content."
+        ),
+    )
+
+
+@tool(args_schema=FeroxbusterInput)
 def feroxbuster_scan(target: str) -> dict[str, Any]:
-    """Directory/content discovery via feroxbuster (JSON lines)."""
+    """Recursive directory and content discovery via feroxbuster.
+
+    Brute-forces web paths using a wordlist to find hidden content that
+    crawling cannot reach: admin panels, backup files, config endpoints.
+    """
     if not shutil.which("feroxbuster"):
         return format_tool_output(
             "feroxbuster_scan",

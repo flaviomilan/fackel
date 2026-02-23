@@ -16,6 +16,7 @@ from collections.abc import Iterator
 from langgraph.types import Command
 
 from .graph import build_graph
+from .nodes import sanitize_target
 from .state import ScanState
 
 logger = logging.getLogger(__name__)
@@ -32,8 +33,9 @@ def _get_graph():
 
 
 def _initial_state(target: str, active_scan: bool) -> dict:
+    clean_target = sanitize_target(target)
     return {
-        "target": target,
+        "target": clean_target,
         "active_scan": active_scan,
         "discovered_ips": [],
         "findings": [],

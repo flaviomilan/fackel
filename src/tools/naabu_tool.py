@@ -3,12 +3,50 @@ import shutil
 from typing import Any
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 
 from .utils import run_command, extract_host, format_tool_output
 
 
-@tool
+class NaabuInput(BaseModel):
+    """Input for naabu port scanner."""
+
+    host: str = Field(
+        description="IP address or domain to scan. One target per call.",
+    )
+    ports: str = Field(
+        default="",
+        description=(
+            "Comma-separated ports or ranges (e.g. '80,443,8000-9000'). "
+            "Leave empty to use naabu's default port list. "
+            "Mutually exclusive with top_ports."
+        ),
+    )
+    top_ports: str = Field(
+        default="",
+        description=(
+            "Scan only the N most common ports. '100' for quick sweep, "
+            "'1000' for thorough coverage. Ignored when ports is set."
+        ),
+    )
+    rate: int = Field(
+        default=0,
+        description=(
+            "Packets per second (0 = naabu default ~1000). "
+            "Lower for stealth, higher (e.g. 5000) on reliable networks."
+        ),
+    )
+    skip_cdn: bool = Field(
+        default=False,
+        description=(
+            "Skip ports belonging to CDNs (Cloudflare, Akamai, etc.). "
+            "Use when the target is known to be behind a CDN proxy."
+        ),
+    )
+
+
+@tool(args_schema=NaabuInput)
 def naabu_scan(
     host: str,
     ports: str = "",
@@ -18,22 +56,8 @@ def naabu_scan(
 ) -> dict[str, Any]:
     """Fast SYN-based TCP port discovery using naabu.
 
-    Use for **breadth-first** port enumeration — fast sweep to find open ports
-    before deeper nmap analysis.
-
-    Args:
-        host: IP address or domain to scan.
-        ports: Comma-separated ports or ranges to scan (e.g. "80,443,8000-9000").
-               Leave empty to scan naabu's default port list.
-        top_ports: Scan only the N most common ports. Use "100" for a quick
-                   sweep or "1000" for thorough coverage. Ignored if `ports` is set.
-        rate: Packets per second (0 = naabu default ~1000). Lower for stealth,
-              higher (e.g. 5000) for speed on reliable networks.
-        skip_cdn: Skip ports identified as belonging to CDN (Cloudflare, etc.).
-                  Useful when you know the target is behind a CDN proxy.
-
-    Returns:
-        List of open ports with IP, port number, protocol, and timestamp.
+    Use for breadth-first port enumeration — fast sweep to find open ports
+    before deeper nmap analysis.  Feed discovered ports into nmap_port_scan.
     """
     if not shutil.which("naabu"):
         return format_tool_output(

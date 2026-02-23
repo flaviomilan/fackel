@@ -16,14 +16,33 @@ from fackel.agents.prompts import load_prompt
 def generate_report(
     target: str,
     active_scan: bool,
-    findings: list[str],
+    findings: list[dict],
     unassessed_areas: list[dict] | None = None,
     model_name: str | None = None,
 ) -> str:
-    """Render a Markdown pentest report from accumulated agent findings."""
+    """Render a Markdown pentest report from accumulated agent findings.
+
+    Parameters
+    ----------
+    findings:
+        List of ``Finding`` dicts with keys: phase, title, detail,
+        (optional) severity, source_tool, confidence.
+    """
     llm = ChatOpenAI(model=model_name or get_model("report"))
 
-    context = "\n\n---\n\n".join(findings) if findings else "No findings collected."
+    # Serialise structured findings into Markdown sections for the LLM.
+    sections: list[str] = []
+    for f in findings:
+        if isinstance(f, dict):
+            header = f.get("title", f.get("phase", "Finding"))
+            detail = f.get("detail", "")
+            sev = f.get("severity", "")
+            sev_tag = f" [severity: {sev}]" if sev else ""
+            sections.append(f"## {header}{sev_tag}\n\n{detail}")
+        else:
+            # Backward-compat: raw string
+            sections.append(str(f))
+    context = "\n\n---\n\n".join(sections) if sections else "No findings collected."
 
     parts = [
         f"Target: {target}",

@@ -4,6 +4,7 @@ import os
 
 import shodan
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
 
@@ -17,27 +18,27 @@ def _is_ip(value: str) -> bool:
         return False
 
 
-@tool
+class ShodanInput(BaseModel):
+    """Input for Shodan passive intelligence lookup."""
+
+    query: str = Field(
+        description=(
+            "An IP address (e.g. '104.21.36.250') for the host API — returns "
+            "organization, ISP, open ports, banners, hostnames, and known CVEs. "
+            "Or a Shodan search query (e.g. 'hostname:example.com', 'apache country:BR') "
+            "for broader discovery across Shodan's indexed database. "
+            "Always prefer IP addresses for richer per-host data."
+        ),
+    )
+
+
+@tool(args_schema=ShodanInput)
 def shodan_lookup(query: str) -> dict:
-    """Query Shodan for passive intelligence on an IP address or search term.
+    """Query Shodan for passive intelligence — no packets sent to the target.
 
-    When given an **IP address**, uses Shodan's host API to retrieve all known
-    services, banners, open ports, organization, ISP, and historical data —
-    without sending any packets to the target.
-
-    When given a **search query** (e.g. "apache country:BR"), performs a Shodan
-    search across its indexed database.
-
-    **Requires SHODAN_API_KEY** environment variable.
-
-    Args:
-        query: An IP address (e.g. "104.21.36.250") for host lookup, or a
-               Shodan search query string for broader searches.
-
-    Returns:
-        For IP lookups: organization, ISP, OS, open ports, services/banners,
-        hostnames, city/country, and last update timestamp.
-        For search queries: matching hosts with IP, port, org, and banner data.
+    Uses the host API for IP lookups (services, banners, ports, org, ISP,
+    hostnames, CVEs) or the search API for query strings.
+    Requires SHODAN_API_KEY environment variable.
     """
     api_key = os.getenv("SHODAN_API_KEY")
     if not api_key:

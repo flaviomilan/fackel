@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from .utils import run_command, extract_host, format_tool_output
 
@@ -19,7 +20,39 @@ def _normalize_target(domain: str) -> tuple[str | None, str | None]:
     return host, url
 
 
-@tool
+class HttpxInput(BaseModel):
+    """Input for ProjectDiscovery httpx HTTP prober."""
+
+    domain: str = Field(
+        description="IP address, domain, or full URL to probe for HTTP services.",
+    )
+    ports: str = Field(
+        default="",
+        description=(
+            "Comma-separated ports to probe (e.g. '80,443,8080,8443'). "
+            "Feed ports from naabu/nmap for thorough coverage. "
+            "Leave empty for httpx defaults (80, 443)."
+        ),
+    )
+    tech_detect: bool = Field(
+        default=True,
+        description="Enable technology fingerprinting (web frameworks, CMSs, etc.).",
+    )
+    follow_redirects: bool = Field(
+        default=True,
+        description="Follow HTTP redirects to the final destination.",
+    )
+    status_code: bool = Field(
+        default=True,
+        description="Include HTTP status codes in output.",
+    )
+    title: bool = Field(
+        default=True,
+        description="Include HTML page titles in output.",
+    )
+
+
+@tool(args_schema=HttpxInput)
 def httpx_scan(
     domain: str,
     ports: str = "",
@@ -30,23 +63,9 @@ def httpx_scan(
 ) -> dict[str, Any]:
     """HTTP probing and web surface mapping using ProjectDiscovery's httpx.
 
-    Use as the **first step** in vulnerability scanning to discover which
-    ports serve HTTP/HTTPS, what technologies run behind them, CDN presence,
-    and redirect behavior. Results feed into WAF detection and Nuclei targeting.
-
-    Args:
-        domain: IP address, domain, or full URL to probe.
-        ports: Comma-separated ports to probe (e.g. "80,443,8080,8443").
-               Leave empty to probe httpx defaults (80, 443).
-               Use ports discovered by naabu for thorough coverage.
-        tech_detect: Enable technology detection (web frameworks, CMSs, etc.).
-        follow_redirects: Follow HTTP redirects to final destination.
-        status_code: Include HTTP status codes in output.
-        title: Include page titles in output.
-
-    Returns:
-        Per-URL results: URL, status code, title, technologies, web server,
-        CDN, TLS version, IP, port, and response time.
+    Discovers which ports serve HTTP/HTTPS, what technologies run behind them,
+    CDN presence, TLS version, and redirect behavior.  Use before WAF detection
+    and Nuclei targeting.
     """
     if not shutil.which("httpx"):
         return format_tool_output(

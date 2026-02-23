@@ -17,26 +17,9 @@ on those ports.
 | `naabu_scan`     | Fast SYN-based TCP port discovery (breadth)     |
 | `nmap_port_scan` | Detailed service/version detection (depth)      |
 
-### Parameters
-
-**naabu_scan**
-
-| Param      | Type | Default | When to use                                   |
-|------------|------|---------|-----------------------------------------------|
-| `host`     | str  | —       | Always required. One IP per call.              |
-| `ports`    | str  | ""      | Specific ports (e.g. "80,443,8000-9000").      |
-| `top_ports`| str  | ""      | "100" quick, "1000" thorough.                  |
-| `rate`     | int  | 0       | Increase (e.g. 5000) on reliable networks.     |
-| `skip_cdn` | bool | false   | `true` when behind Cloudflare/CDN.             |
-
-**nmap_port_scan**
-
-| Param                 | Type | Default   | When to use                            |
-|-----------------------|------|-----------|----------------------------------------|
-| `host`                | str  | —         | Always required.                       |
-| `ports`               | str  | ""        | **Feed naabu-discovered ports here.**  |
-| `scan_type`           | str  | "default" | "quick" fast, "deep" for all 65535.    |
-| `skip_host_discovery` | bool | false     | `true` when host drops ICMP.           |
+> Parameter details (types, defaults, constraints) are defined in each tool's
+> schema and visible to you automatically. The playbook below explains **when**
+> and **why** to use each tool.
 
 ## Playbook
 

@@ -12,6 +12,7 @@ from typing import Any
 
 import requests
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
 
@@ -30,21 +31,25 @@ _INTROSPECTION_QUERY = """{
 _TIMEOUT = 30
 
 
-@tool
+class GraphqlInput(BaseModel):
+    """Input for GraphQL security scanner."""
+
+    url: str = Field(
+        description=(
+            "Full URL of the GraphQL endpoint "
+            "(e.g. 'https://example.com/api/graphql'). "
+            "Use when Nuclei or httpx detected a GraphQL endpoint — common "
+            "paths: /graphql, /api/graphql, /v1/graphql, /gql."
+        ),
+    )
+
+
+@tool(args_schema=GraphqlInput)
 def graphql_scan(url: str) -> dict[str, Any]:
     """Scan a GraphQL endpoint for security misconfigurations.
 
-    Tests for introspection exposure, query batching, field suggestion
-    leaks, and schema enumeration. Use when Nuclei or httpx detected
-    a GraphQL endpoint (paths like /graphql, /api/graphql, /v1/graphql).
-
-    Args:
-        url: Full URL of the GraphQL endpoint
-             (e.g. "https://example.com/api/graphql").
-
-    Returns:
-        Dict with introspection status, schema summary (types, queries,
-        mutations), batching support, and security observations.
+    Tests for introspection exposure, alias/array query batching, field
+    suggestion leaks, GET-method queries (CSRF risk), and schema enumeration.
     """
     if not url.startswith(("http://", "https://")):
         url = f"https://{url}"
