@@ -1,6 +1,5 @@
 import json
 import shutil
-import subprocess
 from typing import Any
 from urllib.parse import urlparse
 
@@ -84,21 +83,6 @@ def httpx_scan(
             "error",
             error="invalid target",
         )
-
-    # Detect whether httpx is the ProjectDiscovery version
-    try:
-        proc = subprocess.run(
-            ["httpx", "-version"], capture_output=True, text=True, timeout=5
-        )
-        if proc.returncode != 0 or "projectdiscovery" not in proc.stdout.lower():
-            return format_tool_output(
-                "httpx_scan",
-                domain,
-                "error",
-                error="httpx found is not ProjectDiscovery's (install https://github.com/projectdiscovery/httpx)",
-            )
-    except Exception:
-        pass
 
     cmd = ["httpx", target, "-json", "-silent"]
 

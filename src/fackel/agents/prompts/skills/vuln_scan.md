@@ -16,14 +16,16 @@ agent can flag it as an unassessed area.
 
 ## Tools
 
-| Tool               | Purpose                                                    |
-|--------------------|------------------------------------------------------------|
-| `nuclei_scan`      | Template-based: CVEs, misconfigs, DNS, SSL, tech detection |
-| `httpx_scan`       | HTTP probing: status, titles, tech, redirects, CDN         |
-| `wafw00f_detect`   | WAF/IPS identification                                     |
-| `graphql_scan`     | GraphQL: introspection, batching, schema exposure          |
-| `feroxbuster_scan` | Directory/content brute-forcing for hidden paths           |
-| `katana_crawl`     | Web crawling: URL discovery, JS routes, API endpoints      |
+| Tool                       | Purpose                                                    |
+|----------------------------|------------------------------------------------------------||
+| `nuclei_scan`              | Template-based: CVEs, misconfigs, DNS, SSL, tech detection |
+| `httpx_scan`               | HTTP probing: status, titles, tech, redirects, CDN         |
+| `wafw00f_detect`           | WAF/IPS identification                                     |
+| `graphql_scan`             | GraphQL: introspection, batching, schema exposure          |
+| `feroxbuster_scan`         | Directory/content brute-forcing for hidden paths           |
+| `katana_crawl`             | Web crawling: URL discovery, JS routes, API endpoints      |
+| `testssl_scan`             | Deep TLS/SSL: protocols, ciphers, cert chain, known vulns  |
+| `extract_webpage_content`  | Extract text from a web page for analysis                  |
 
 > Parameter details (types, defaults, constraints) are defined in each tool's
 > schema and visible to you automatically. The playbook below explains **when**
@@ -75,13 +77,32 @@ Expand the known attack surface beyond what nuclei templates alone find:
 > **Order matters**: crawl first (fast, link-based), then brute-force (slower,
 > wordlist-based). Both complement each other.
 
-### 5. IP-level scans
+### 5. TLS/SSL deep analysis
+
+When port 443 (or any TLS port) is open:
+- `testssl_scan(target=<domain>)` — provides cipher-level detail that nuclei
+  SSL templates cannot match: protocol versions (SSLv3, TLS 1.0–1.3), cipher
+  suite enumeration, certificate chain validation, HSTS preload status, and
+  known vulnerabilities (Heartbleed, POODLE, BEAST, ROBOT, DROWN, Logjam).
+- Run on the **domain name** first (SNI), then on individual IPs if different
+  certificates are expected.
+- Use `checks="vulnerabilities"` for a focused scan when time is limited.
+
+### 6. Page content analysis
+
+When katana or feroxbuster discovers interesting pages (admin panels, status
+pages, API docs):
+- `extract_webpage_content(url=<url>)` — read the page content to identify
+  technologies, version strings, or sensitive information exposed.
+- Useful for login pages, error pages, or any endpoint that may leak intel.
+
+### 7. IP-level scans
 
 Per discovered IPv4:
 - `nuclei_scan(target=<ip>, severity="critical,high")` for impactful vulns.
 - Optionally `severity="medium,low"` for broader coverage.
 
-### 6. Summary
+### 8. Summary
 
 Compile all results. Explicitly mention:
 - Technologies **investigated** with a specialist tool and what was found.
@@ -108,7 +129,10 @@ Compile all results. Explicitly mention:
 - DMARC: <value> | SPF: <value> | DKIM: found (selectors)
 - MX: <value> (service) | Nameservers: <values>
 
-**SSL/TLS:** TLS <version>, issuer: <name>, SANs: <values>
+**SSL/TLS** (via testssl_scan + nuclei):
+- Protocols: TLS <versions> | Ciphers: <count> (weak: <count>)
+- Certificate: issuer=<name>, SANs=<values>, expiry=<date>
+- Vulnerabilities: Heartbleed=<yes/no>, POODLE=<yes/no>, etc.
 
 **Web Security:**
 - WAF: <name> (source) | CSP: <assessment>

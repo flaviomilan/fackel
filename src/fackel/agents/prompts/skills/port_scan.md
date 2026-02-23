@@ -23,13 +23,21 @@ on those ports.
 
 ## Playbook
 
-1. **Breadth** — `naabu_scan` per IP with `top_ports="1000"`.
-2. **Collect** — Merge all open ports found across hosts.
-3. **Depth** — `nmap_port_scan` per IP with `ports` set to naabu's results
+1. **IPs first** — `naabu_scan` per unique IPv4 with `top_ports="1000"`.
+2. **Subdomains that add coverage** — If subdomains are listed, consider that
+   many may resolve to the same IP as the main domain or as each other.
+   Only scan a subdomain if it **might** resolve to a different server.
+   Subdomains behind a CDN (Cloudflare / AWS) often share IPs — skip duplicates.
+3. **Collect** — Merge all open ports found across hosts.
+4. **Depth** — `nmap_port_scan` per IP with `ports` set to naabu's results
    (e.g. `ports="80,443,8080,8443"`).
-4. If naabu finds nothing, try `nmap_port_scan` with `skip_host_discovery=true`.
-5. Behind a CDN → `skip_cdn=true` on naabu.
-6. Scan each IP **individually** for clear attribution.
+5. If naabu finds nothing, try `nmap_port_scan` with `skip_host_discovery=true`.
+6. Behind a CDN → `skip_cdn=true` on naabu.
+7. Scan each IP **individually** for clear attribution.
+
+> **Important:** With many subdomains, prioritise **unique IPs**. Don't scan
+> 100+ subdomains individually if they all point to the same few IPs. Scan
+> the IPs, then check only subdomains likely on different infrastructure.
 
 ## Output Format
 

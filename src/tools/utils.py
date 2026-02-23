@@ -1,6 +1,8 @@
 import subprocess
 from urllib.parse import urlparse
 
+from fackel.utils.target import extract_host  # noqa: F401 — re-exported
+
 DEFAULT_TIMEOUT = 180
 
 
@@ -9,14 +11,6 @@ def run_command(cmd: list[str], timeout: int = DEFAULT_TIMEOUT) -> tuple[int, st
     # capture_output=True implies stdout=PIPE and stderr=PIPE
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     return proc.returncode, proc.stdout, proc.stderr
-
-
-def extract_host(target: str) -> str | None:
-    """Normalize a target string to extract the hostname/IP."""
-    if not target:
-        return None
-    parsed = urlparse(target)
-    return parsed.netloc or parsed.path or target or None
 
 
 def ensure_target(target: str) -> str | None:

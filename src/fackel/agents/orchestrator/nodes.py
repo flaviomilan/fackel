@@ -14,16 +14,15 @@ Architecture layers (per recommendation):
 
 from __future__ import annotations
 
-import ipaddress
 import json
 import logging
-import re
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlparse
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command, interrupt
+
+from fackel.utils import is_reverse_ptr_subdomain, is_valid_domain, is_valid_ip, sanitize_target
 
 from .state import Finding, ScanState
 
@@ -36,7 +35,11 @@ EventCallback = Callable[[str, str, dict[str, Any]], None] | None
 _event_callback: EventCallback = None
 
 # Maximum ReAct iterations (tool calls) per agent invocation.
-MAX_AGENT_ITERATIONS = 15
+MAX_AGENT_ITERATIONS = 40
+
+# Maximum number of subdomains propagated to downstream agents.
+# Reverse-PTR entries are filtered first; this cap applies afterwards.
+_SUBDOMAIN_CAP = 30
 
 
 def set_event_callback(cb: EventCallback) -> None:
@@ -74,59 +77,6 @@ def _make_finding(
     )
 
 
-# ── Input validation ──────────────────────────────────────────────────────
-
-_DOMAIN_RE = re.compile(
-    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$"
-)
-
-
-def _is_valid_ip(value: str) -> bool:
-    """Return True if *value* is a valid IPv4 or IPv6 address."""
-    try:
-        ipaddress.ip_address(value.strip())
-        return True
-    except ValueError:
-        return False
-
-
-def _is_valid_domain(value: str) -> bool:
-    """Return True if *value* looks like a valid domain name."""
-    return bool(_DOMAIN_RE.match(value.strip()))
-
-
-def sanitize_target(raw: str) -> str:
-    """Normalise and validate a user-supplied target string.
-
-    Strips scheme/path from URLs, rejects shell metacharacters,
-    and ensures the result is a valid IP or domain.
-
-    Raises
-    ------
-    ValueError
-        If the target is empty, contains dangerous characters, or
-        is neither a valid IP nor a valid domain.
-    """
-    if not raw or not raw.strip():
-        raise ValueError("Target is empty.")
-
-    raw = raw.strip()
-
-    # Strip URL scheme / path if present.
-    parsed = urlparse(raw)
-    host = parsed.hostname or parsed.netloc or parsed.path.split("/")[0] or raw
-    host = host.strip().rstrip(".")
-
-    # Block shell metacharacters (prevent injection via subprocess tools).
-    if re.search(r"[;&|`$(){}!\[\]<>'\"\\\n\r]", host):
-        raise ValueError(f"Target contains forbidden characters: {host!r}")
-
-    if _is_valid_ip(host) or _is_valid_domain(host):
-        return host
-
-    raise ValueError(f"Target is not a valid IP or domain: {host!r}")
-
-
 # ── Tool output validation ────────────────────────────────────────────────
 
 
@@ -141,18 +91,18 @@ def _validate_tool_output(msg: ToolMessage) -> ToolMessage:
         if isinstance(payload, dict):
             status = payload.get("status")
             if status == "error":
-                logger.warning(
+                logger.debug(
                     "tool %s returned error: %s",
                     msg.name,
                     payload.get("error", "unknown"),
                 )
             elif "tool" not in payload:
-                logger.warning(
+                logger.debug(
                     "tool %s returned non-standard output (missing 'tool' key)",
                     msg.name,
                 )
     except (json.JSONDecodeError, TypeError, AttributeError):
-        logger.warning("tool %s returned non-JSON output", msg.name)
+        logger.debug("tool %s returned non-JSON output", msg.name)
     return msg
 
 
@@ -160,34 +110,113 @@ def _validate_tool_output(msg: ToolMessage) -> ToolMessage:
 
 
 def _extract_ips_from_messages(messages: list) -> list[str]:
-    """Pull IP addresses out of ToolMessage payloads returned by dns_resolve.
+    """Pull IP addresses out of ToolMessage payloads from all OSINT tools.
 
-    Handles both the ``format_tool_output`` envelope (``data.ips``) and
-    legacy flat format (``ips``).
+    Handles the ``format_tool_output`` envelope and extracts IPs from:
+    - ``dns_resolve`` — ``data.ips``
+    - ``dnsdumpster_lookup`` — ``data.hosts[*].ip``
+    - ``shodan_lookup`` — ``data.ip`` (host) / ``data.matches[*].ip`` (search)
+    - ``censys_lookup`` — ``data.hosts[*].ip``
     """
     ips: list[str] = []
+
+    def _add(value: object) -> None:
+        ip_str = str(value).strip()
+        if ip_str and ip_str not in ips and is_valid_ip(ip_str):
+            ips.append(ip_str)
+
     for msg in messages:
         if not isinstance(msg, ToolMessage):
             continue
         try:
             payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
-            # format_tool_output envelope: {"data": {"ips": [...]}}
-            inner = payload.get("data", payload) if isinstance(payload, dict) else payload
-            for ip in (inner.get("ips", []) if isinstance(inner, dict) else []):
-                ip_str = str(ip).strip()
-                if ip_str and ip_str not in ips:
-                    ips.append(ip_str)
+            if not isinstance(payload, dict):
+                continue
+
+            # Unwrap format_tool_output envelope → data dict
+            inner = payload.get("data", payload)
+            if not isinstance(inner, dict):
+                continue
+
+            # dns_resolve: {"ips": ["1.2.3.4", ...]}
+            for ip in inner.get("ips", []):
+                _add(ip)
+
+            # dnsdumpster_lookup: {"hosts": [{"hostname": ..., "ip": "1.2.3.4"}, ...]}
+            for host in inner.get("hosts", []):
+                if isinstance(host, dict) and "ip" in host:
+                    _add(host["ip"])
+
+            # shodan_lookup (host mode): {"ip": "1.2.3.4", ...}
+            if "ip" in inner and isinstance(inner["ip"], str):
+                _add(inner["ip"])
+
+            # shodan_lookup (search mode): {"matches": [{"ip": "1.2.3.4"}, ...]}
+            for match in inner.get("matches", []):
+                if isinstance(match, dict) and "ip" in match:
+                    _add(match["ip"])
         except (json.JSONDecodeError, TypeError, AttributeError):
             continue
     return ips
 
 
-def _is_ip(value: str) -> bool:
-    try:
-        ipaddress.ip_address(value.strip())
-        return True
-    except ValueError:
-        return False
+# ── Subdomain extraction ──────────────────────────────────────────────────
+
+
+def _extract_subdomains_from_messages(messages: list, base_domain: str) -> list[str]:
+    """Pull subdomain hostnames from ToolMessage payloads.
+
+    Extracts from:
+    - ``crtsh_subdomain_enum`` / ``virustotal_subdomain_enum`` / ``subfinder_enum`` — ``data.subdomains``
+    - ``dnsdumpster_lookup`` — ``data.hosts[*].hostname``
+    - ``subfinder_enum`` — ``data.details[*].subdomain`` (fallback)
+
+    Filters out reverse-PTR-style subdomains (e.g. ``200-210-75-128.example.com``)
+    that inflate the list without adding real scan value.
+    """
+    subs: list[str] = []
+    base_lower = base_domain.lower()
+
+    def _add(value: object) -> None:
+        host = str(value).strip().lower().rstrip(".")
+        if (
+            host
+            and host not in subs
+            and host != base_lower
+            and host.endswith(f".{base_lower}")
+            and is_valid_domain(host)
+            and not is_reverse_ptr_subdomain(host)
+        ):
+            subs.append(host)
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        try:
+            payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            if not isinstance(payload, dict):
+                continue
+
+            inner = payload.get("data", payload)
+            if not isinstance(inner, dict):
+                continue
+
+            # crtsh / virustotal / subfinder: {"subdomains": ["a.example.com", ...]}
+            for sub in inner.get("subdomains", []):
+                _add(sub)
+
+            # dnsdumpster: {"hosts": [{"hostname": "sub.example.com", ...}, ...]}
+            for host in inner.get("hosts", []):
+                if isinstance(host, dict) and "hostname" in host:
+                    _add(host["hostname"])
+
+            # subfinder details fallback: {"details": [{"subdomain": "x.example.com"}, ...]}
+            for detail in inner.get("details", []):
+                if isinstance(detail, dict) and "subdomain" in detail:
+                    _add(detail["subdomain"])
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            continue
+    return sorted(subs)
 
 
 def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
@@ -226,10 +255,27 @@ def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
                         _emit(phase, "reasoning", {"content": msg.content})
 
                 elif isinstance(msg, ToolMessage):
-                    _emit(phase, "tool_result", {
-                        "tool": msg.name,
-                        "content": str(msg.content)[:500],
-                    })
+                    # Distinguish tool errors from successful results.
+                    _is_error = False
+                    _error_hint = ""
+                    try:
+                        _pl = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+                        if isinstance(_pl, dict) and _pl.get("status") == "error":
+                            _is_error = True
+                            _error_hint = str(_pl.get("error", "unknown"))
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        pass
+
+                    if _is_error:
+                        _emit(phase, "tool_error", {
+                            "tool": msg.name,
+                            "error": _error_hint,
+                        })
+                    else:
+                        _emit(phase, "tool_result", {
+                            "tool": msg.name,
+                            "content": str(msg.content)[:500],
+                        })
 
         # ── Max-iterations guard ──
         if tool_call_count >= MAX_AGENT_ITERATIONS:
@@ -268,34 +314,59 @@ def osint_node(state: ScanState) -> dict:
     )
 
     ips = _extract_ips_from_messages(messages)
-    if not ips and _is_ip(target):
+    if not ips and is_valid_ip(target):
         ips = [target]
+
+    subdomains = (
+        _extract_subdomains_from_messages(messages, target)
+        if is_valid_domain(target)
+        else []
+    )
 
     summary = _agent_summary(messages)
     _emit("osint", "summary", {"content": summary})
     _emit("osint", "done", {})
     return {
         "discovered_ips": ips,
+        "discovered_subdomains": subdomains,
         "findings": [_make_finding("osint", "OSINT Findings", summary)],
     }
 
 
 def port_scan_node(state: ScanState) -> dict:
-    """Run the port-scan ReAct agent on discovered IPs."""
+    """Run the port-scan ReAct agent on discovered IPs and subdomains."""
     from fackel.agents.port_scan.agent import build
 
+    target = state["target"]
     ips = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
-    if not ips:
+    subdomains = state.get("discovered_subdomains", [])
+
+    if not ips and not subdomains:
         return {"findings": [_make_finding(
             "port_scan", "Port Scan", "No IPv4 targets available.",
             severity="info",
         )]}
 
-    ip_list = ", ".join(ips)
-    agent = build()
-    messages = _run_and_stream_agent(
-        agent, "port_scan", f"Scan these IPs for open ports and services: {ip_list}"
+    capped_subs = subdomains[:_SUBDOMAIN_CAP]
+    skipped = len(subdomains) - len(capped_subs)
+
+    parts = ["Scan the following targets for open ports and services."]
+    parts.append(f"\nMain domain: {target}")
+    if ips:
+        parts.append(f"IPv4 addresses: {', '.join(ips)}")
+    if capped_subs:
+        parts.append(f"Discovered subdomains ({len(capped_subs)}): {', '.join(capped_subs)}")
+    if skipped:
+        parts.append(f"({skipped} additional subdomains omitted — focus on the above.)")
+    parts.append(
+        "\nStrategy: scan the IPs first (naabu → nmap). Then scan only "
+        "subdomains that might resolve to DIFFERENT IPs than those already "
+        "scanned. Skip subdomains that point to the same IP — the IP scan "
+        "already covers them."
     )
+
+    agent = build()
+    messages = _run_and_stream_agent(agent, "port_scan", "\n".join(parts))
 
     summary = _agent_summary(messages)
     _emit("port_scan", "summary", {"content": summary})
@@ -326,16 +397,20 @@ def approval_gate(state: ScanState) -> Command:
     reject.
     """
     ips = state.get("discovered_ips", [])
+    subdomains = state.get("discovered_subdomains", [])
     target = state["target"]
 
     _emit("approval", "start", {})
 
+    summary_lines = [f"OSINT found {len(ips)} IP(s) for {target}: {', '.join(ips)}."]
+    if subdomains:
+        summary_lines.append(f"Subdomains ({len(subdomains)}): {', '.join(subdomains)}.")
+    summary_lines.append("Proceed with active scanning (port scan + vuln scan)?")
+
     approved = interrupt({
-        "question": (
-            f"OSINT found {len(ips)} IP(s) for {target}: {', '.join(ips)}.\n"
-            "Proceed with active scanning (port scan + vuln scan)?"
-        ),
+        "question": "\n".join(summary_lines),
         "targets": ips,
+        "subdomains": subdomains,
     })
 
     _emit("approval", "done", {"approved": approved})
@@ -346,21 +421,31 @@ def approval_gate(state: ScanState) -> Command:
 
 
 def vuln_scan_node(state: ScanState) -> dict:
-    """Run the vuln-scan ReAct agent on the target domain and discovered IPs."""
+    """Run the vuln-scan ReAct agent on the target domain, subdomains, and IPs."""
     from fackel.agents.vuln_scan.agent import build
 
     target = state["target"]
     ips = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
+    subdomains = state.get("discovered_subdomains", [])
+
+    capped_subs = subdomains[:_SUBDOMAIN_CAP]
+    skipped = len(subdomains) - len(capped_subs)
 
     parts = ["Run vulnerability scans on the target."]
     parts.append(f"\nOriginal target domain: {target}")
+    if capped_subs:
+        parts.append(f"Discovered subdomains ({len(capped_subs)}): {', '.join(capped_subs)}")
+    if skipped:
+        parts.append(f"({skipped} additional subdomains omitted — focus on the above.)")
     if ips:
         parts.append(f"Discovered IPv4 addresses: {', '.join(ips)}")
     else:
         parts.append("No IPv4 addresses were discovered.")
     parts.append(
-        "\nScan the DOMAIN first (DNS/SSL/HTTP templates need the hostname), "
-        "then scan individual IPs for port-specific checks."
+        "\nScan the DOMAIN first (nuclei with empty severity for full template "
+        "coverage). Then scan the most interesting subdomains (www, web apps, "
+        "APIs, panels). Then per-IP checks. Prioritise breadth — it's better "
+        "to scan more targets shallowly than fewer targets deeply."
     )
 
     agent = build()

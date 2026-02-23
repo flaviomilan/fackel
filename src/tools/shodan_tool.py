@@ -1,21 +1,13 @@
 
-import ipaddress
 import os
 
 import shodan
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from fackel.utils import is_valid_ip
+
 from .utils import format_tool_output
-
-
-def _is_ip(value: str) -> bool:
-    """Check if value is a valid IP address."""
-    try:
-        ipaddress.ip_address(value.strip())
-        return True
-    except ValueError:
-        return False
 
 
 class ShodanInput(BaseModel):
@@ -51,7 +43,7 @@ def shodan_lookup(query: str) -> dict:
 
     api = shodan.Shodan(api_key)
     try:
-        if _is_ip(query):
+        if is_valid_ip(query):
             # Direct host lookup — much richer data than search
             host = api.host(query.strip())
             services = []

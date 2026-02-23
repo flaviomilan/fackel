@@ -59,8 +59,17 @@ def _make_event_callback(verbose: bool):
         elif event_type == "tool_call":
             tool = data.get("tool", "?")
             args = data.get("args", {})
-            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+            args_str = ", ".join(
+                f"{k}={v}" for k, v in args.items() if v not in ("", None)
+            )
             console.print(f"  🔧 {tool}({args_str})", style="dim")
+
+        elif event_type == "tool_error":
+            tool = data.get("tool", "?")
+            error = data.get("error", "unknown error")
+            # Show a single clean line; strip tool banners / multi-line noise.
+            first_line = error.strip().splitlines()[-1].strip() if error.strip() else "unknown error"
+            console.print(f"  [red]✗ {tool}: {first_line}[/red]", style="dim")
 
         elif event_type == "tool_result":
             if verbose:
@@ -127,11 +136,23 @@ def scan(
         typer.echo("Provider key status:")
         for spec, configured in get_provider_key_status():
             status = "configured" if configured else "missing"
-            typer.echo(f"  {spec.provider} ({spec.env_var}): {status}")
+            vars_str = ", ".join(spec.env_vars)
+            typer.echo(f"  {spec.provider} ({vars_str}): {status}")
         typer.echo("")
 
     typer.echo(f"Target: {target}")
     typer.echo(f"Active scan: {'yes' if active_scan else 'no'}")
+
+    # Show tools that will be skipped due to missing API keys.
+    from fackel.provider_keys import get_unavailable_tool_names
+
+    unavailable = get_unavailable_tool_names()
+    if unavailable:
+        console.print("[yellow]⚠ Tools disabled (missing API keys):[/yellow]")
+        for tool_name, (provider, missing_vars) in unavailable.items():
+            vars_str = ", ".join(missing_vars)
+            console.print(f"  [dim]• {tool_name} — {provider} ({vars_str})[/dim]")
+        console.print()
 
     # Register real-time event callback
     set_event_callback(_make_event_callback(verbose))

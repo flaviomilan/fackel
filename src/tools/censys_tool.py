@@ -1,14 +1,29 @@
-import os
+"""Censys host/service search via the Censys REST API.
 
+Requires ``CENSYS_API_ID`` and ``CENSYS_API_SECRET`` environment variables.
+"""
+
+from __future__ import annotations
+
+import os
 
 from censys.search import CensysHosts
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from .utils import format_tool_output
 
 
-@tool
-def censys_lookup(domain: str):
+class CensysInput(BaseModel):
+    """Input schema for Censys host lookup."""
+
+    domain: str = Field(
+        description="Domain or IP to search in Censys host database.",
+    )
+
+
+@tool(args_schema=CensysInput)
+def censys_lookup(domain: str) -> dict:
     """Busca na API do Censys e retorna hosts/serviços de forma estruturada."""
     api_id = os.getenv("CENSYS_API_ID")
     api_secret = os.getenv("CENSYS_API_SECRET")

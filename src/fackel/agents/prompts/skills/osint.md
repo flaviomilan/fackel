@@ -8,10 +8,11 @@ external footprint without sending a single probe packet.
 ## Task
 
 Given a target (domain or IP), discover associated infrastructure using
-exclusively passive techniques: DNS resolution, WHOIS data, Shodan's
-historical scan database, subdomain enumeration via multiple sources
-(DNSDumpster, crt.sh, VirusTotal), and reverse DNS / reverse IP lookups
-for shared hosting detection.
+exclusively passive techniques: DNS resolution, WHOIS data, Shodan/Censys
+historical scan databases, subdomain enumeration via multiple sources
+(subfinder, DNSDumpster, crt.sh, VirusTotal), reverse DNS / reverse IP lookups
+for shared hosting detection, job posting analysis for tech stack discovery,
+and email analysis when addresses are found.
 
 ## Tools
 
@@ -20,10 +21,14 @@ for shared hosting detection.
 | `dns_resolve`               | Resolve a domain to IPs (A + AAAA records)                      |
 | `whois_lookup`              | Registration data — registrar, dates, nameservers               |
 | `shodan_lookup`             | Passive service/banner data from Shodan (API key req.)          |
+| `censys_lookup`             | Host/service search via Censys (API key req.)                   |
 | `dnsdumpster_lookup`        | Subdomain enum + DNS/MX/NS/TXT records via DNSDumpster          |
 | `virustotal_subdomain_enum` | Passive subdomain discovery via VirusTotal (API key req.)       |
 | `crtsh_subdomain_enum`      | Subdomain enum via Certificate Transparency logs — most reliable|
+| `subfinder_enum`            | Aggregate 40+ passive sources for subdomain discovery           |
 | `reverse_dns_lookup`        | PTR records + reverse IP for shared hosting detection           |
+| `job_search`                | Job posting search to identify tech stack and internal tools    |
+| `analyze_email`             | Email breach exposure (HIBP), reputation, service registrations |
 
 > Parameter details (types, defaults, constraints) are defined in each tool's
 > schema and visible to you automatically. The playbook below explains **when**
@@ -35,6 +40,8 @@ for shared hosting detection.
 2. **WHOIS** — `whois_lookup` for registrar, creation/expiration dates,
    nameservers. Reveals hosting provider and domain age.
 3. **Subdomain enumeration** — run **all available** tools for maximum coverage:
+   - `subfinder_enum` — aggregates 40+ passive sources (SecurityTrails, Censys,
+     crt.sh, etc.) in a single call. Most comprehensive subdomain discovery.
    - `crtsh_subdomain_enum` — Certificate Transparency logs. Most reliable
      passive subdomain source. Free, no API key. Reveals subdomains that
      ever had TLS certificates — including staging, internal, and forgotten hosts.
@@ -53,13 +60,26 @@ for shared hosting detection.
    - Critical for detecting multi-tenant environments — one compromised
      neighbour affects all tenants.
    - One call per unique IPv4.
-5. **Shodan** — `shodan_lookup` with each **IPv4** discovered. Returns org,
-   ISP, open ports, banners, hostnames, known CVEs. Pure passive data.
+5. **Shodan / Censys** — `shodan_lookup` and/or `censys_lookup` with each
+   **IPv4** discovered. Returns org, ISP, open ports, banners, hostnames,
+   known CVEs. Pure passive data.
    - Only call if dns_resolve returned IPs.
    - If API key error, skip and note it.
    - One call per IPv4 — each IP may belong to a different org.
-6. If the target is already an **IP**, skip DNS and subdomain enum but run
-   WHOIS, reverse DNS, and Shodan.
+   - Censys complements Shodan with different scan coverage — use both when
+     available.
+6. **Tech stack via job postings** — `job_search` with the **company/org name**
+   (from WHOIS registrant org, or the domain's SLD). Reveals internal tech
+   stack, cloud providers, frameworks, and tools from public job listings.
+   - Only for domain targets, not bare IPs.
+   - One call per organisation name.
+7. **Email analysis** — `analyze_email` when an email address is discovered
+   in WHOIS, DNS SOA, or other OSINT output. Checks breach exposure, reputation,
+   and service registrations.
+   - Only call with actual email addresses found during the scan.
+   - Do not fabricate email addresses to test.
+8. If the target is already an **IP**, skip DNS, subdomain enum, and job search
+   but run WHOIS, reverse DNS, and Shodan/Censys.
 
 ## Output Format
 
@@ -71,7 +91,7 @@ for shared hosting detection.
 - **Registrar**: <registrar>
 - **Name Servers**: <list>
 - **Created / Expires**: <dates>
-- **Subdomains**: <count> found (sources: crt.sh, DNSDumpster, VirusTotal)
+- **Subdomains**: <count> found (sources: subfinder, crt.sh, DNSDumpster, VirusTotal)
   - <subdomain1> → <ip>
   - <subdomain2> → <ip>
 - **Reverse DNS** (per IP):
@@ -79,6 +99,12 @@ for shared hosting detection.
     - <domain1>, <domain2>, ...
 - **Shodan** (per IP):
   - <IP>: org=<org>, ISP=<isp>, ports=<list>, hostnames=<list>
+- **Censys** (per IP):
+  - <IP>: services=<list>
+- **Tech Stack** (from job postings):
+  - <technologies found>
+- **Email Intelligence**:
+  - <email>: breaches=<count>, reputation=<score>
 ```
 
 ## Constraints
@@ -86,6 +112,6 @@ for shared hosting detection.
 - **Passive only** — no probes, no HTTP requests to the target, no active scanning.
 - Tool failure on one step must not block other steps.
 - Do not guess or fabricate records.
-- Call Shodan and reverse_dns_lookup with **IP addresses**, not domain names.
-- Call dnsdumpster, virustotal, and crtsh with **domain names**, not IPs.
+- Call Shodan, Censys, and reverse_dns_lookup with **IP addresses**, not domain names.
+- Call dnsdumpster, virustotal, crtsh, and subfinder with **domain names**, not IPs.
 - Deduplicate subdomains across sources before reporting.

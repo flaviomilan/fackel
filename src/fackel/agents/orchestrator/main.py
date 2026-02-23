@@ -15,8 +15,9 @@ from collections.abc import Iterator
 
 from langgraph.types import Command
 
+from fackel.utils import sanitize_target
+
 from .graph import build_graph
-from .nodes import sanitize_target
 from .state import ScanState
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ def _initial_state(target: str, active_scan: bool) -> dict:
         "target": clean_target,
         "active_scan": active_scan,
         "discovered_ips": [],
+        "discovered_subdomains": [],
         "findings": [],
         "unassessed_areas": [],
         "report": "",

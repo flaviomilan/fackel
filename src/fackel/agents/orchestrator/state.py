@@ -48,6 +48,9 @@ class ScanState(TypedDict):
     discovered_ips: list[str]
     """IP addresses discovered during OSINT (fed into port_scan)."""
 
+    discovered_subdomains: list[str]
+    """Subdomains discovered during OSINT (fed into port_scan and vuln_scan)."""
+
     findings: Annotated[list[Finding], add]
     """Structured findings accumulated across phases (append-only reducer)."""
 

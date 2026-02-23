@@ -1,7 +1,8 @@
 """Vulnerability scan specialist — ReAct agent for infrastructure vuln scanning.
 
-The LLM uses Nuclei, httpx, wafw00f, feroxbuster, and katana to detect
-vulnerabilities, map web surfaces, and identify WAF protections.
+The LLM uses Nuclei, httpx, wafw00f, feroxbuster, katana, testssl, and
+webpage extraction to detect vulnerabilities, map web surfaces, analyse TLS
+configurations, and identify WAF protections.
 """
 
 from __future__ import annotations
@@ -16,9 +17,20 @@ from tools.graphql_scanner import graphql_scan
 from tools.httpx_tool import httpx_scan
 from tools.katana_tool import katana_crawl
 from tools.nuclei_tool import nuclei_scan
+from tools.testssl_tool import testssl_scan
 from tools.wafw00f_tool import wafw00f_detect
+from tools.webpage_extractor import extract_webpage_content
 
-TOOLS = [nuclei_scan, httpx_scan, wafw00f_detect, graphql_scan, feroxbuster_scan, katana_crawl]
+TOOLS = [
+    nuclei_scan,
+    httpx_scan,
+    wafw00f_detect,
+    graphql_scan,
+    feroxbuster_scan,
+    katana_crawl,
+    testssl_scan,
+    extract_webpage_content,
+]
 
 
 def build(model_name: str | None = None):

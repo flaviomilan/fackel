@@ -58,12 +58,26 @@ class WebpageExtractor:
 
 extractor = WebpageExtractor()
 
+from pydantic import BaseModel, Field
+
 from .utils import format_tool_output
 
 
-@tool
+class WebpageExtractorInput(BaseModel):
+    """Input schema for webpage content extraction."""
+
+    url: str = Field(
+        description="Full URL to extract content from (must include http:// or https://).",
+    )
+
+
+@tool(args_schema=WebpageExtractorInput)
 def extract_webpage_content(url: str) -> dict:
-    """Extrai o conteúdo relevante de uma página web, removendo elementos HTML."""
+    """Extract relevant text content from a web page, stripping HTML boilerplate.
+
+    Useful for reading page content to identify technologies, organisation info,
+    or intel from discovered web endpoints.
+    """
     try:
         content = extractor.extract_content(url)
 

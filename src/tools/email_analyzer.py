@@ -55,12 +55,26 @@ class EmailAnalyzer:
 
 
 
+from pydantic import BaseModel, Field
+
 from .utils import format_tool_output
 
 
-@tool
-def analyze_email(email: str):
-    """Analisa um e-mail usando múltiplas fontes (serviços, vazamentos, reputação)."""
+class EmailAnalyzerInput(BaseModel):
+    """Input schema for email analysis."""
+
+    email: str = Field(
+        description="Email address to analyse for breach exposure, reputation, and service registrations.",
+    )
+
+
+@tool(args_schema=EmailAnalyzerInput)
+def analyze_email(email: str) -> dict:
+    """Analyse an email address across multiple sources: service registrations,
+    data breach exposure (HIBP), and reputation scoring (EmailRep).
+
+    HIBP and EmailRep checks degrade gracefully when API keys are missing.
+    """
     analyzer = EmailAnalyzer()
 
     try:

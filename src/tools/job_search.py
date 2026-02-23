@@ -1,20 +1,32 @@
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 try:
     from ddgs import DDGS
 except ImportError:
     try:
         from duckduckgo_search import DDGS
-
     except ImportError:
         DDGS = None
 
 from .utils import format_tool_output
 
 
-@tool
+class JobSearchInput(BaseModel):
+    """Input schema for job posting search."""
+
+    company_name: str = Field(
+        description="Company or organisation name to search job postings for.",
+    )
+
+
+@tool(args_schema=JobSearchInput)
 def job_search(company_name: str) -> dict:
-    """Busca vagas de emprego da empresa para identificar tecnologias e sistemas utilizados."""
+    """Search job postings to identify technologies and systems used by the target organisation.
+
+    Reveals tech stack, cloud providers, frameworks, and internal tools from
+    public job listings — pure passive OSINT.
+    """
     if DDGS is None:
         return format_tool_output(
             "job_search",
