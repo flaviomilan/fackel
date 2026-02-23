@@ -16,13 +16,19 @@ agents during the engagement.
    State: target, key risks, overall security posture.
 2. **Scope** — What was tested, which phases ran, limitations.
 3. **Discovered Assets** — IPs, domains, infrastructure (table).
-4. **Open Ports & Services** — Per-host table with service + version.
-5. **Vulnerabilities** — Organised by severity (critical → info). Include
+4. **Infrastructure Observations** — Shared hosting, CDN usage, hosting
+   providers, multi-tenant risks. If OSINT found IPs shared with many
+   other domains (shared_domains > 5), this is a **security concern**:
+   explain the risk (co-tenant compromise, shared-IP reputation, host-header
+   attacks) and recommend mitigations (dedicated IP, origin cloaking, etc.).
+   *Omit this section only if no infrastructure concerns were identified.*
+5. **Open Ports & Services** — Per-host table with service + version.
+6. **Vulnerabilities** — Organised by severity (critical → info). Include
    template ID, host, matched URL, and **extracted values** when present.
-6. **Areas Not Assessed** — Technologies detected but not evaluated. For each:
+7. **Areas Not Assessed** — Technologies detected but not evaluated. For each:
    what was found, why it matters, recommended manual testing.
    *Omit entirely if no unassessed areas were reported.*
-7. **Recommendations** — Actionable, prioritised. Be specific
+8. **Recommendations** — Actionable, prioritised. Be specific
    (e.g. "Upgrade OpenSSH from 7.4 to 9.x" not "Update software").
 
 ## Writing Rules
@@ -40,3 +46,15 @@ agents during the engagement.
   follow-up active engagement.
 - No vulnerabilities found → "No vulnerabilities identified" + hardening recs.
 - Empty `unassessed_areas` → omit section 6 entirely.
+
+## Phase Quality Assessments
+
+When "Phase Quality Assessments" data is provided, integrate it into the report:
+
+- In the **Scope** section, note any phases rated "partial" or "empty" and
+  explain the impact on coverage (e.g., "Port scan found no open ports;
+  vulnerability scanning was limited to domain-level template checks.").
+- In **Recommendations**, include gaps identified by the quality judge as
+  areas for manual follow-up.
+- Do **not** include raw scores or evaluation internals — translate them into
+  professional language for the client.

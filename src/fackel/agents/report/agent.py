@@ -18,6 +18,7 @@ def generate_report(
     active_scan: bool,
     findings: list[dict],
     unassessed_areas: list[dict] | None = None,
+    phase_evaluations: list[dict] | None = None,
     model_name: str | None = None,
 ) -> str:
     """Render a Markdown pentest report from accumulated agent findings.
@@ -27,6 +28,9 @@ def generate_report(
     findings:
         List of ``Finding`` dicts with keys: phase, title, detail,
         (optional) severity, source_tool, confidence.
+    phase_evaluations:
+        LLM-as-a-judge quality assessments for active-scan phases.
+        Each dict has: phase, completeness, score, key_findings, gaps, reasoning.
     """
     llm = ChatOpenAI(model=model_name or get_model("report"))
 
@@ -57,6 +61,28 @@ def generate_report(
             for a in unassessed_areas
         )
         parts.append(f"\nUnassessed Areas:\n\n{areas_text}")
+
+    if phase_evaluations:
+        eval_lines = []
+        for ev in phase_evaluations:
+            if not isinstance(ev, dict):
+                continue
+            phase = ev.get("phase", "?")
+            completeness = ev.get("completeness", "?")
+            score = ev.get("score", 0)
+            reasoning = ev.get("reasoning", "")
+            gaps = ev.get("gaps", [])
+            line = f"- **{phase}**: {completeness} (score: {score:.1f})"
+            if reasoning:
+                line += f" — {reasoning}"
+            if gaps:
+                line += f"\n  Gaps: {'; '.join(gaps)}"
+            eval_lines.append(line)
+        if eval_lines:
+            parts.append(
+                "\nPhase Quality Assessments (from automated judge):\n\n"
+                + "\n".join(eval_lines)
+            )
 
     response = llm.invoke([
         SystemMessage(content=load_prompt("report")),

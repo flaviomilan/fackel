@@ -45,7 +45,12 @@ def katana_crawl(target: str) -> dict[str, Any]:
             error="alvo inválido",
         )
 
-    cmd = ["katana", "-u", norm, "-json", "-silent"]
+    cmd = [
+        "katana", "-u", norm,
+        "-jsonl", "-silent",
+        "-d", "3",
+        "-ct", "120s",          # hard crawl-duration cap
+    ]
     try:
         code, out, err = run_command(cmd, timeout=240)
     except Exception as exc:
@@ -60,7 +65,12 @@ def katana_crawl(target: str) -> dict[str, Any]:
     for line in out.splitlines():
         try:
             data = json.loads(line)
-            url = data.get("url") or data.get("request")
+            # Newer katana uses request.endpoint; older used top-level url
+            req = data.get("request")
+            if isinstance(req, dict):
+                url = req.get("endpoint") or req.get("url")
+            else:
+                url = data.get("url") or req
             if url:
                 urls.append(url)
         except Exception:

@@ -24,6 +24,7 @@ from langgraph.types import Command, interrupt
 
 from fackel.utils import is_reverse_ptr_subdomain, is_valid_domain, is_valid_ip, sanitize_target
 
+from .evaluator import evaluate_phase
 from .state import Finding, ScanState
 
 logger = logging.getLogger(__name__)
@@ -300,6 +301,14 @@ def _agent_summary(messages: list) -> str:
     return "No findings."
 
 
+def _get_phase_evaluation(state: ScanState, phase: str) -> dict | None:
+    """Retrieve the latest LLM-as-a-judge evaluation for *phase* from state."""
+    for evaluation in reversed(state.get("phase_evaluations", [])):
+        if isinstance(evaluation, dict) and evaluation.get("phase") == phase:
+            return evaluation
+    return None
+
+
 # ── Nodes ──────────────────────────────────────────────────────────────────
 
 
@@ -370,8 +379,21 @@ def port_scan_node(state: ScanState) -> dict:
 
     summary = _agent_summary(messages)
     _emit("port_scan", "summary", {"content": summary})
+
+    # ── LLM-as-a-judge quality evaluation ──
+    scan_targets = ips + capped_subs
+    evaluation = evaluate_phase("port_scan", summary, scan_targets)
+    _emit("port_scan", "evaluation", {
+        "score": evaluation.score,
+        "completeness": evaluation.completeness,
+        "recommendation": evaluation.recommendation,
+    })
+
     _emit("port_scan", "done", {})
-    return {"findings": [_make_finding("port_scan", "Port Scan Findings", summary)]}
+    return {
+        "findings": [_make_finding("port_scan", "Port Scan Findings", summary)],
+        "phase_evaluations": [evaluation.model_dump()],
+    }
 
 
 def report_node(state: ScanState) -> dict:
@@ -384,6 +406,7 @@ def report_node(state: ScanState) -> dict:
         active_scan=state["active_scan"],
         findings=state.get("findings", []),
         unassessed_areas=state.get("unassessed_areas", []),
+        phase_evaluations=state.get("phase_evaluations", []),
     )
     _emit("report", "done", {})
     return {"report": report}
@@ -441,20 +464,64 @@ def vuln_scan_node(state: ScanState) -> dict:
         parts.append(f"Discovered IPv4 addresses: {', '.join(ips)}")
     else:
         parts.append("No IPv4 addresses were discovered.")
-    parts.append(
-        "\nScan the DOMAIN first (nuclei with empty severity for full template "
-        "coverage). Then scan the most interesting subdomains (www, web apps, "
-        "APIs, panels). Then per-IP checks. Prioritise breadth — it's better "
-        "to scan more targets shallowly than fewer targets deeply."
-    )
+
+    # ── Adapt strategy from port_scan evaluation ──
+    port_eval = _get_phase_evaluation(state, "port_scan")
+    if port_eval:
+        completeness = port_eval.get("completeness", "partial")
+        if completeness == "empty":
+            parts.append(
+                "\n⚠ PORT SCAN FOUND NO OPEN PORTS. Focus entirely on "
+                "domain-level checks: nuclei templates (DNS, SSL, HTTP), "
+                "wafw00f, httpx, and katana on the domain and subdomains. "
+                "Do NOT waste iterations on IP-specific scans."
+            )
+        elif completeness == "partial":
+            eval_gaps = port_eval.get("gaps", [])
+            if eval_gaps:
+                gaps_str = "; ".join(eval_gaps)
+                parts.append(f"\n⚠ Port scan gaps: {gaps_str}")
+            parts.append(
+                "\nPort scan was partial. Prioritise domain-level nuclei "
+                "and httpx. Run IP-specific checks only if ports were found "
+                "on that IP."
+            )
+        else:  # complete
+            parts.append(
+                "\nScan the DOMAIN first (nuclei with empty severity for full "
+                "template coverage). Then scan the most interesting subdomains "
+                "(www, web apps, APIs, panels). Then per-IP checks. Prioritise "
+                "breadth — it's better to scan more targets shallowly than "
+                "fewer targets deeply."
+            )
+    else:
+        parts.append(
+            "\nScan the DOMAIN first (nuclei with empty severity for full template "
+            "coverage). Then scan the most interesting subdomains (www, web apps, "
+            "APIs, panels). Then per-IP checks. Prioritise breadth — it's better "
+            "to scan more targets shallowly than fewer targets deeply."
+        )
 
     agent = build()
     messages = _run_and_stream_agent(agent, "vuln_scan", "\n".join(parts))
 
     summary = _agent_summary(messages)
     _emit("vuln_scan", "summary", {"content": summary})
+
+    # ── LLM-as-a-judge quality evaluation ──
+    scan_targets = [target] + capped_subs + ips
+    evaluation = evaluate_phase("vuln_scan", summary, scan_targets)
+    _emit("vuln_scan", "evaluation", {
+        "score": evaluation.score,
+        "completeness": evaluation.completeness,
+        "recommendation": evaluation.recommendation,
+    })
+
     _emit("vuln_scan", "done", {})
-    return {"findings": [_make_finding("vuln_scan", "Vulnerability Scan Findings", summary)]}
+    return {
+        "findings": [_make_finding("vuln_scan", "Vulnerability Scan Findings", summary)],
+        "phase_evaluations": [evaluation.model_dump()],
+    }
 
 
 def triage_node(state: ScanState) -> dict:
@@ -503,6 +570,22 @@ def triage_node(state: ScanState) -> dict:
 
 def route_after_osint(state: ScanState) -> str:
     """Decide next step: approval gate (active) or straight to report (passive)."""
-    if state.get("active_scan") and state.get("discovered_ips"):
-        return "approval_gate"
-    return "report"
+    if not state.get("active_scan"):
+        return "report"
+    ipv4 = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
+    has_scan_targets = bool(ipv4) or bool(state.get("discovered_subdomains"))
+    return "approval_gate" if has_scan_targets else "report"
+
+
+def route_after_port_scan(state: ScanState) -> str:
+    """Route after port scan: vuln_scan normally, or skip to triage if empty.
+
+    Uses the LLM-as-a-judge evaluation stored in state by ``port_scan_node``.
+    Only skips to triage when the judge explicitly recommends it — default
+    is to proceed to vuln_scan (which can still find domain-level issues).
+    """
+    port_eval = _get_phase_evaluation(state, "port_scan")
+    if port_eval and port_eval.get("recommendation") == "skip_downstream":
+        logger.info("routing: port_scan judge recommends skip → triage")
+        return "triage"
+    return "vuln_scan"

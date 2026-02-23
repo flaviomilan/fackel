@@ -57,5 +57,8 @@ class ScanState(TypedDict):
     unassessed_areas: Annotated[list[dict], add]
     """Technologies/opportunities detected but not covered by any specialist."""
 
+    phase_evaluations: Annotated[list[dict], add]
+    """LLM-as-a-judge quality assessments accumulated after each active phase."""
+
     report: str
     """Final rendered Markdown report."""

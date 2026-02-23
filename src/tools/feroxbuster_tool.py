@@ -45,7 +45,7 @@ def feroxbuster_scan(target: str) -> dict[str, Any]:
             error="alvo inválido",
         )
 
-    cmd = ["feroxbuster", "-u", norm, "-json", "-q"]
+    cmd = ["feroxbuster", "-u", norm, "--json", "-q", "--no-state"]
     try:
         code, out, err = run_command(cmd, timeout=300)
     except Exception as exc:

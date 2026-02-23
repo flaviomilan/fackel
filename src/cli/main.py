@@ -95,6 +95,20 @@ def _make_event_callback(verbose: bool):
                     padding=(1, 2),
                 ))
 
+        elif event_type == "evaluation":
+            score = data.get("score", 0)
+            completeness = data.get("completeness", "?")
+            recommendation = data.get("recommendation", "proceed")
+            style = (
+                "green" if completeness == "complete"
+                else "yellow" if completeness == "partial"
+                else "red"
+            )
+            console.print(
+                f"  [{style}]📊 Quality: {completeness} "
+                f"(score: {score:.1f}) → {recommendation}[/{style}]",
+            )
+
         elif event_type == "done":
             console.print(f"  [green]✓ {label} complete[/green]")
 
@@ -110,7 +124,7 @@ def scan(
         help="Enable active scanning phases",
     ),
     output: Path | None = typer.Option(
-        None, "--output", "-o", help="Write report to file"
+        None, "--output", "-o", help="Write full report to this file (default: auto-named in ./reports/)"
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Show LLM reasoning and detailed logs"
@@ -180,15 +194,27 @@ def scan(
         typer.echo("\nError: no report generated.", err=True)
         raise typer.Exit(code=1)
 
+    # ── Console: show the LLM-synthesised report ───────────────────────
     console.print()
     console.print(Rule("Final Report", style="bold green"))
-    if output:
-        output.write_text(report, encoding="utf-8")
-        console.print(Markdown(report))
-        console.print(f"\n[dim]Report saved to {output} ({duration:.1f}s)[/dim]")
-    else:
-        console.print(Markdown(report))
-        console.print(f"\n[dim]Completed in {duration:.1f}s[/dim]")
+    console.print(Markdown(report))
+    console.print(f"\n[dim]Completed in {duration:.1f}s[/dim]")
+
+    # ── Disk: save comprehensive markdown with all phase details ───────
+    from fackel.report_writer import build_full_report
+
+    full_md = build_full_report(result)
+
+    if output is None:
+        reports_dir = Path("reports")
+        reports_dir.mkdir(exist_ok=True)
+        safe_target = target.replace("/", "_").replace(":", "_")
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        output = reports_dir / f"{safe_target}_{ts}.md"
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(full_md, encoding="utf-8")
+    console.print(f"\n[green]📄 Full report saved to {output}[/green]")
 
 
 if __name__ == "__main__":

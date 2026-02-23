@@ -34,6 +34,21 @@ be flagged as unassessed unless the tool failed or was blocked:
 
 Flag as unassessed **only** technologies NOT in the table above.
 
+## Infrastructure Risk Signals
+
+Besides technology coverage, flag these infrastructure-level concerns:
+
+- **Shared hosting / multi-tenancy** — If OSINT reports high `shared_domains`
+  counts (>5) on any IP, flag it as a risk. Shared hosting means:
+  - Co-tenant compromise can affect the target (noisy-neighbour attacks).
+  - Shared-IP reputation issues (blacklists, abuse reports).
+  - Potential host-header routing attacks on the web server.
+  - CDN-shared IPs (Cloudflare, AWS CloudFront) are expected but still
+    noteworthy: the target shares infrastructure with unknown third parties.
+- **Unresolvable subdomains** — Subdomains with no IP (e.g. MX records
+  without A records) may indicate dangling DNS entries or subdomain takeover
+  opportunities.
+
 ## Analysis Guidelines
 
 - **Be specific** — name exact technology and version when available

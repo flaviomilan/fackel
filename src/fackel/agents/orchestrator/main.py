@@ -42,6 +42,7 @@ def _initial_state(target: str, active_scan: bool) -> dict:
         "discovered_subdomains": [],
         "findings": [],
         "unassessed_areas": [],
+        "phase_evaluations": [],
         "report": "",
     }
 

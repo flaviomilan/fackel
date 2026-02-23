@@ -96,11 +96,13 @@ pages, API docs):
   technologies, version strings, or sensitive information exposed.
 - Useful for login pages, error pages, or any endpoint that may leak intel.
 
-### 7. IP-level scans
+### 7. Subdomain scans
 
-Per discovered IPv4:
-- `nuclei_scan(target=<ip>, severity="critical,high")` for impactful vulns.
-- Optionally `severity="medium,low"` for broader coverage.
+Run `nuclei_scan(target=<subdomain>)` for each **subdomain** that resolves to
+an IP different from the main domain — they may host distinct services.
+**Do NOT** run nuclei on raw IPs; the domain-level scan already covers the web
+surface, and bare-IP scans behind CDN/proxy (e.g. Cloudflare) return nothing
+useful.
 
 ### 8. Summary
 

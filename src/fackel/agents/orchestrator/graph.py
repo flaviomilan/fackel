@@ -2,13 +2,18 @@
 
 Flow::
 
-    osint ──→ approval_gate ──→ port_scan ──→ vuln_scan ──→ triage ──→ report ──→ END
-          ↘ (passive / no IPs)                                        ↗
-           ───────────────── report ─────────────────────────────────
+    osint ──→ approval_gate ──→ port_scan ─┬──→ vuln_scan ──→ triage ──→ report ──→ END
+          ↘ (passive / no targets)         │                           ↗
+           ───────────── report ───────────│── (skip_downstream) ─────
+                                           └──→ triage ──→ report ──→ END
 
     The approval_gate uses ``interrupt()`` for Human-in-the-Loop and
     redirects via ``Command(goto=...)`` — approved goes to port_scan,
     rejected skips to report.
+
+    After port_scan, an LLM-as-a-judge evaluation decides whether to
+    proceed to vuln_scan (default) or skip straight to triage when
+    the port scan produced no actionable data.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from .nodes import (
     port_scan_node,
     report_node,
     route_after_osint,
+    route_after_port_scan,
     triage_node,
     vuln_scan_node,
 )
@@ -54,8 +60,12 @@ def build_graph():
     )
 
     # approval_gate returns Command(goto=...) — no explicit edges needed.
-    # port_scan → vuln_scan → triage → report (linear active chain)
-    graph.add_edge("port_scan", "vuln_scan")
+    # port_scan → judge-routed → vuln_scan | triage
+    graph.add_conditional_edges(
+        "port_scan",
+        route_after_port_scan,
+        {"vuln_scan": "vuln_scan", "triage": "triage"},
+    )
     graph.add_edge("vuln_scan", "triage")
     graph.add_edge("triage", "report")
     graph.add_edge("report", END)

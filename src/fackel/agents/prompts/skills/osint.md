@@ -97,6 +97,13 @@ and email analysis when addresses are found.
 - **Reverse DNS** (per IP):
   - <IP>: PTR=<hostname>, shared_domains=<count>
     - <domain1>, <domain2>, ...
+- **Shared Hosting Risk**:
+  - If ANY IP has shared_domains > 5, flag it:
+    "⚠ <IP> is shared hosting with <N> other domains. A compromise
+    of any co-tenant could impact the target (noisy-neighbour attacks,
+    shared-IP reputation, lateral movement via host headers)."
+  - If ALL IPs are dedicated (shared_domains ≤ 1), state:
+    "No shared hosting detected — target has dedicated IP infrastructure."
 - **Shodan** (per IP):
   - <IP>: org=<org>, ISP=<isp>, ports=<list>, hostnames=<list>
 - **Censys** (per IP):
