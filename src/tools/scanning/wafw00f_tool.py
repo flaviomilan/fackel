@@ -16,6 +16,8 @@ from fackel.tooling import (
     run_command,
 )
 
+_TIMEOUT = 120  # seconds
+
 
 class Wafw00fInput(BaseModel):
     """Input for wafw00f WAF detector."""
@@ -63,7 +65,7 @@ def wafw00f_detect(
         cmd.append("-a")
 
     try:
-        code, out, stderr = run_command(cmd, timeout=120)
+        code, out, stderr = run_command(cmd, timeout=_TIMEOUT)
     except Exception as exc:
         return format_tool_output("wafw00f_detect", target, "error", error=str(exc))
 
@@ -74,13 +76,16 @@ def wafw00f_detect(
 
     if not data:
         return format_tool_output(
-            "wafw00f_detect", target,
+            "wafw00f_detect",
+            target,
             "error" if code else "ok",
             error=stderr or "no results",
         )
 
     return format_tool_output(
-        "wafw00f_detect", target, "ok",
+        "wafw00f_detect",
+        target,
+        "ok",
         data={
             "identified": data.get("identified", []),
             "waf_name": data.get("waf_name"),

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import requests
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, guard_target, require_env
+
+_TIMEOUT = 20  # seconds
 
 
 class VirusTotalSubdomainInput(BaseModel):
@@ -21,7 +25,7 @@ class VirusTotalSubdomainInput(BaseModel):
 
 
 @tool(args_schema=VirusTotalSubdomainInput)
-def virustotal_subdomain_enum(domain: str) -> dict:
+def virustotal_subdomain_enum(domain: str) -> dict[str, Any]:
     """Enumerate subdomains passively via VirusTotal's global sensor network.
 
     Queries VirusTotal's passive DNS dataset.  Returns up to 40 subdomains.
@@ -39,7 +43,7 @@ def virustotal_subdomain_enum(domain: str) -> dict:
     headers = {"x-apikey": api_key}
 
     try:
-        response = requests.get(url, headers=headers, timeout=20)
+        response = requests.get(url, headers=headers, timeout=_TIMEOUT)
         response.raise_for_status()
 
         data = response.json()

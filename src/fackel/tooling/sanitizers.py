@@ -39,7 +39,10 @@ def sanitize_ports(value: str) -> tuple[str, str | None]:
     normalised = re.sub(r"\s*-\s*", "-", normalised)
 
     if not _PORTS_RE.match(normalised):
-        return "", f"invalid port specification: {value!r} — expected comma-separated ports or ranges (e.g. '80,443,8000-9000')"
+        return (
+            "",
+            f"invalid port specification: {value!r} — expected comma-separated ports or ranges (e.g. '80,443,8000-9000')",
+        )
 
     return normalised, None
 
@@ -70,7 +73,10 @@ def sanitize_top_ports(value: str) -> tuple[str, str | None]:
 
     num = int(stripped)
     if num not in _VALID_TOP_PORTS:
-        return "", f"unsupported top_ports value: {num} — allowed: {', '.join(str(v) for v in sorted(_VALID_TOP_PORTS))}"
+        return (
+            "",
+            f"unsupported top_ports value: {num} — allowed: {', '.join(str(v) for v in sorted(_VALID_TOP_PORTS))}",
+        )
 
     return stripped, None
 

@@ -16,6 +16,8 @@ from fackel.tooling import (
     run_command,
 )
 
+_TIMEOUT = 300  # seconds
+
 
 class FeroxbusterInput(BaseModel):
     """Input for feroxbuster directory scanner."""
@@ -49,7 +51,7 @@ def feroxbuster_scan(target: str) -> dict[str, Any]:
 
     cmd = ["feroxbuster", "-u", target, "--json", "-q", "--no-state"]
     try:
-        code, out, stderr = run_command(cmd, timeout=300)
+        code, out, stderr = run_command(cmd, timeout=_TIMEOUT)
     except Exception as exc:
         return format_tool_output("feroxbuster_scan", target, "error", error=str(exc))
 
@@ -67,7 +69,8 @@ def feroxbuster_scan(target: str) -> dict[str, Any]:
 
     if not results:
         return format_tool_output(
-            "feroxbuster_scan", target,
+            "feroxbuster_scan",
+            target,
             "error" if code else "ok",
             error=stderr or "no results",
         )

@@ -71,7 +71,7 @@ def httpx_scan(
     if verr:
         return verr
 
-    cmd = ["httpx", target, "-json", "-silent"]
+    cmd = ["httpx", "-u", target, "-json", "-silent"]
 
     if ports.strip():
         cmd.extend(["-p", ports.strip()])
@@ -93,7 +93,8 @@ def httpx_scan(
 
     if not results:
         return format_tool_output(
-            "httpx_scan", domain,
+            "httpx_scan",
+            domain,
             "error" if code else "ok",
             error=stderr or "no HTTP services found",
         )

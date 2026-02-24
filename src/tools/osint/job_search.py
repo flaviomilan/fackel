@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
@@ -17,7 +19,7 @@ class JobSearchInput(BaseModel):
 
 
 @tool(args_schema=JobSearchInput)
-def job_search(company_name: str) -> dict:
+def job_search(company_name: str) -> dict[str, Any]:
     """Search job postings to identify technologies and systems used by the target organisation.
 
     Reveals tech stack, cloud providers, frameworks, and internal tools from
@@ -26,12 +28,16 @@ def job_search(company_name: str) -> dict:
     company_name = company_name.strip()
     if not company_name:
         return format_tool_output(
-            "job_search", company_name, "error",
+            "job_search",
+            company_name,
+            "error",
             error="company name is empty",
         )
     if DDGS is None:
         return format_tool_output(
-            "job_search", company_name, "error",
+            "job_search",
+            company_name,
+            "error",
             error="ddgs not installed. pip install ddgs",
         )
     try:
@@ -44,28 +50,42 @@ def job_search(company_name: str) -> dict:
             results = ddgs.text(query, max_results=5)
 
             job_posts = [
-                {"title": r.get("title", ""), "body": r.get("body", ""),
-                 "url": r.get("href", ""), "type": "job"}
+                {
+                    "title": r.get("title", ""),
+                    "body": r.get("body", ""),
+                    "url": r.get("href", ""),
+                    "type": "job",
+                }
                 for r in results
             ]
 
-            careers_query = f'"{company_name}" (trabalhe-conosco OR carreiras OR opportunities OR careers)'
+            careers_query = (
+                f'"{company_name}" (trabalhe-conosco OR carreiras OR opportunities OR careers)'
+            )
             career_results = ddgs.text(careers_query, max_results=2)
             career_keywords = {"trabalhe", "carreira", "vaga", "opportunit", "career"}
             for r in career_results:
                 title = r.get("title", "")
                 if any(kw in title.lower() for kw in career_keywords):
                     job_posts.append(
-                        {"title": title, "body": r.get("body", ""),
-                         "url": r.get("href", ""), "type": "career_page"}
+                        {
+                            "title": title,
+                            "body": r.get("body", ""),
+                            "url": r.get("href", ""),
+                            "type": "career_page",
+                        }
                     )
 
             return format_tool_output(
-                "job_search", company_name, "ok",
+                "job_search",
+                company_name,
+                "ok",
                 data={"results": job_posts},
             )
     except Exception as e:
         return format_tool_output(
-            "job_search", company_name, "error",
+            "job_search",
+            company_name,
+            "error",
             error=f"Job search failed: {e}",
         )

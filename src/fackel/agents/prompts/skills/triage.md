@@ -14,6 +14,23 @@ to determine:
 2. What areas **could not be assessed** — detected but lacking automated
    coverage.
 
+## Structured Context
+
+In addition to textual findings, you will receive machine-readable data
+sections that you **must** use for evidence-backed risk scoring:
+
+- **IP Infrastructure Classification** — each IP classified as `cdn`, `cloud`,
+  `direct_host`, or `isp`. Use `direct_host` IPs as a +2.0 risk factor.
+  CDN-protected IPs are a -1.0 factor.
+- **Technology Fingerprints** — HTTP server headers, detected technologies,
+  CDN and WAF presence per host. Use No-WAF as a +0.5 risk factor.
+- **Phase Quality Evaluations** — LLM-as-a-judge scores for prior phases.
+  Low-quality phases indicate gaps in coverage — mention these in your summary.
+
+Cross-reference these structured signals with the textual findings.
+Do NOT ignore them — they contain evidence that may not appear in the
+agent's narrative output.
+
 ## Current Tool Coverage
 
 These technologies are already covered by specialist tools and should **not**
@@ -77,7 +94,47 @@ Return a structured `TriageResult` with:
 - `technologies_detected`: all identified technologies as a flat list.
 - `unassessed_areas`: only genuinely significant gaps with technology,
   detected_by, reason, and recommendation.
+- `risk_score`: quantitative exposure assessment (see rubric below).
 - `summary`: 2-3 sentence assessment of scan coverage quality.
 
 Empty `unassessed_areas` list if all detected technologies were adequately
 scanned.
+
+## Exposure Risk Scoring
+
+Produce a numeric **risk score** (0.0 – 10.0) based on the rubric below.
+Start at 0.0 and add/subtract points for each factor observed in the
+findings. Clamp the final result to the 0.0 – 10.0 range.
+
+### Scoring Rubric
+
+| Factor | Points | Notes |
+|--------|--------|-------|
+| Direct-host IP exposed (not behind CDN/WAF) | +2.0 | Per unique IP |
+| Critical or high severity vulnerability found | +2.0 | Per finding |
+| Medium severity vulnerability found | +1.0 | Per finding |
+| Subdomain outside CDN | +1.5 | Per unique subdomain |
+| Historical IP still live / resolvable | +1.5 | From SecurityTrails data |
+| Open admin panel or management interface | +1.0 | Per instance |
+| Leaked credentials or emails in breach DB | +1.0 | From HIBP / email analysis |
+| No WAF detected on primary domain | +0.5 | — |
+| Outdated software version with known CVEs | +1.0 | Per component |
+| MX hosted on major SaaS provider (low risk) | −0.5 | Google Workspace, O365, etc. |
+| CDN/WAF protecting primary domain | −1.0 | Cloudflare, Akamai, etc. |
+
+### Exposure Type Mapping
+
+| Score Range | exposure_type |
+|-------------|---------------|
+| 8.1 – 10.0 | `critical` |
+| 6.1 – 8.0 | `high` |
+| 4.1 – 6.0 | `moderate` |
+| 2.1 – 4.0 | `low` |
+| 0.0 – 2.0 | `minimal` |
+
+### Rules
+- `factors` must list each contributing factor with its point value
+  (e.g. "Direct-host IP 93.184.216.34 exposed (+2.0)").
+- Do NOT invent factors outside the rubric — only score what is evidenced.
+- If no active scanning was performed and only OSINT data is available,
+  score conservatively based on infrastructure signals alone.

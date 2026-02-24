@@ -8,9 +8,9 @@ degrade gracefully.
 from __future__ import annotations
 
 try:
-    from ddgs import DDGS  # noqa: F401
+    from ddgs import DDGS
 except ImportError:
     try:
-        from duckduckgo_search import DDGS  # noqa: F401
+        from duckduckgo_search import DDGS
     except ImportError:
         DDGS = None  # type: ignore[assignment,misc]

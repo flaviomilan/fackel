@@ -35,6 +35,16 @@ malfunctioned.
 
 ## Phase-Specific Expectations
 
+### osint
+- **Good outcome**: DNS resolved, WHOIS obtained, multiple subdomain sources
+  queried, IPs classified (ipinfo/bgpview), reverse DNS checked, HTTP
+  fingerprinting via httpx, TLS certs inspected.  At least 5-6 different
+  tool calls exercised.
+- **Partial outcome**: Only DNS and one or two other tools ran; no IP
+  classification, no subdomain enumeration, or no httpx fingerprinting.
+- **Empty outcome**: Only one tool was called (e.g. just dns_resolve) or
+  the agent produced no IPs, no subdomains, and no meaningful intelligence.
+
 ### port_scan
 - **Good outcome**: Open ports found on most targets, service versions
   identified via nmap.

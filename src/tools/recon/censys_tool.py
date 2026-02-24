@@ -5,6 +5,8 @@ Requires ``CENSYS_API_ID`` and ``CENSYS_API_SECRET`` environment variables.
 
 from __future__ import annotations
 
+from typing import Any
+
 from censys.search import CensysHosts
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -21,7 +23,7 @@ class CensysInput(BaseModel):
 
 
 @tool(args_schema=CensysInput)
-def censys_lookup(domain: str) -> dict:
+def censys_lookup(domain: str) -> dict[str, Any]:
     """Search host and service data via the Censys REST API."""
     domain, err = guard_target(domain, "censys_lookup", TargetType.HOST)
     if err:
@@ -39,7 +41,7 @@ def censys_lookup(domain: str) -> dict:
         query = f"services.tls.certificates.leaf_data.subject.common_name: {domain} OR services.tls.certificates.leaf_data.subject.organization: {domain}"
         results = client.search(query, per_page=5)
 
-        hosts: list[dict] = []
+        hosts: list[dict[str, Any]] = []
         for host in results:
             services = []
             for service in host.get("services", []):

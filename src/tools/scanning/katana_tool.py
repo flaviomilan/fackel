@@ -16,6 +16,8 @@ from fackel.tooling import (
     run_command,
 )
 
+_TIMEOUT = 240  # seconds
+
 
 class KatanaInput(BaseModel):
     """Input for katana web crawler."""
@@ -48,13 +50,18 @@ def katana_crawl(target: str) -> dict[str, Any]:
         target = f"https://{target}"
 
     cmd = [
-        "katana", "-u", target,
-        "-jsonl", "-silent",
-        "-d", "3",
-        "-ct", "120s",
+        "katana",
+        "-u",
+        target,
+        "-jsonl",
+        "-silent",
+        "-d",
+        "3",
+        "-ct",
+        "120s",
     ]
     try:
-        code, out, stderr = run_command(cmd, timeout=240)
+        code, out, stderr = run_command(cmd, timeout=_TIMEOUT)
     except Exception as exc:
         return format_tool_output("katana_crawl", target, "error", error=str(exc))
 
@@ -71,12 +78,15 @@ def katana_crawl(target: str) -> dict[str, Any]:
 
     if not urls:
         return format_tool_output(
-            "katana_crawl", target,
+            "katana_crawl",
+            target,
             "error" if code else "ok",
             error=stderr or "no results",
         )
 
     return format_tool_output(
-        "katana_crawl", target, "ok",
+        "katana_crawl",
+        target,
+        "ok",
         data={"urls": sorted(set(urls))},
     )

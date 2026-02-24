@@ -11,7 +11,7 @@
 
 <p align="center">
   <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12+-blue.svg" />
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg" />
+  <img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-green.svg" />
   <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-1.x-purple.svg" />
 </p>
 
@@ -452,4 +452,4 @@ uv run ruff format src/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE).

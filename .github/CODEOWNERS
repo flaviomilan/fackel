@@ -1,0 +1,13 @@
+# Default: require review for all changes
+* @dasein
+
+# CI and GitHub config
+.github/ @dasein
+
+# Core agent logic
+src/fackel/agents/ @dasein
+
+# Security-critical: input validation and sanitizers
+src/fackel/tooling/validators.py @dasein
+src/fackel/tooling/sanitizers.py @dasein
+src/tools/validators.py @dasein

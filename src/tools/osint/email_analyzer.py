@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from typing import Any
 
 import requests
 from langchain_core.tools import tool
@@ -15,6 +16,7 @@ from fackel.tooling import format_tool_output
 logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_TIMEOUT = 10  # seconds
 
 
 class EmailAnalyzerInput(BaseModel):
@@ -25,7 +27,7 @@ class EmailAnalyzerInput(BaseModel):
     )
 
 
-def _check_breaches(email: str) -> list[dict]:
+def _check_breaches(email: str) -> list[dict[str, Any]]:
     """Query HIBP for data breaches. Degrades gracefully without API key."""
     api_key = os.getenv("HIBP_API_KEY", "").strip()
     if not api_key:
@@ -34,7 +36,7 @@ def _check_breaches(email: str) -> list[dict]:
         resp = requests.get(
             f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
             headers={"hibp-api-key": api_key, "user-agent": "OSINT-Tool"},
-            timeout=10,
+            timeout=_TIMEOUT,
         )
         if resp.status_code == 200:
             return resp.json()
@@ -43,7 +45,7 @@ def _check_breaches(email: str) -> list[dict]:
     return []
 
 
-def _check_reputation(email: str) -> dict | None:
+def _check_reputation(email: str) -> dict[str, Any] | None:
     """Query EmailRep for reputation scoring. Degrades gracefully without API key."""
     api_key = os.getenv("EMAILREP_API_KEY", "").strip()
     if not api_key:
@@ -52,7 +54,7 @@ def _check_reputation(email: str) -> dict | None:
         resp = requests.get(
             f"https://emailrep.io/{email}",
             headers={"Key": api_key},
-            timeout=10,
+            timeout=_TIMEOUT,
         )
         if resp.status_code == 200:
             return resp.json()
@@ -62,7 +64,7 @@ def _check_reputation(email: str) -> dict | None:
 
 
 @tool(args_schema=EmailAnalyzerInput)
-def analyze_email(email: str) -> dict:
+def analyze_email(email: str) -> dict[str, Any]:
     """Analyse an email address across multiple sources: data breach exposure
     (HIBP) and reputation scoring (EmailRep).
 
@@ -71,7 +73,9 @@ def analyze_email(email: str) -> dict:
     email = email.strip()
     if not _EMAIL_RE.match(email):
         return format_tool_output(
-            "analyze_email", email, "error",
+            "analyze_email",
+            email,
+            "error",
             error="invalid email format",
         )
 
@@ -79,7 +83,9 @@ def analyze_email(email: str) -> dict:
     reputation = _check_reputation(email)
 
     return format_tool_output(
-        "analyze_email", email, "ok",
+        "analyze_email",
+        email,
+        "ok",
         data={
             "breaches": breaches,
             "reputation": reputation,

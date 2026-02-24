@@ -28,6 +28,8 @@ PROVIDER_KEYS: tuple[ProviderKeySpec, ...] = (
     ProviderKeySpec("Shodan", ("SHODAN_API_KEY",), ("shodan_lookup",)),
     ProviderKeySpec("VirusTotal", ("VIRUSTOTAL_API_KEY",), ("virustotal_subdomain_enum",)),
     ProviderKeySpec("Censys", ("CENSYS_API_ID", "CENSYS_API_SECRET"), ("censys_lookup",)),
+    ProviderKeySpec("SecurityTrails", ("SECURITYTRAILS_API_KEY",), ("securitytrails_history",)),
+    ProviderKeySpec("AlienVaultOTX", ("OTX_API_KEY",), ("otx_passive_dns",)),
     ProviderKeySpec("HaveIBeenPwned", ("HIBP_API_KEY",), ("analyze_email",), hard_fail=False),
     ProviderKeySpec("EmailRep", ("EMAILREP_API_KEY",), ("analyze_email",), hard_fail=False),
 )
@@ -39,10 +41,7 @@ def _is_env_set(var: str) -> bool:
 
 def get_provider_key_status() -> list[tuple[ProviderKeySpec, bool]]:
     """Return each provider with a boolean indicating if all its keys are configured."""
-    return [
-        (spec, all(_is_env_set(v) for v in spec.env_vars))
-        for spec in PROVIDER_KEYS
-    ]
+    return [(spec, all(_is_env_set(v) for v in spec.env_vars)) for spec in PROVIDER_KEYS]
 
 
 def get_unavailable_tool_names() -> dict[str, tuple[str, tuple[str, ...]]]:
@@ -81,5 +80,3 @@ def filter_tools(
         else:
             available.append(tool)
     return available, skipped
-
-
