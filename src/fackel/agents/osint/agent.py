@@ -15,17 +15,17 @@ from langgraph.prebuilt import create_react_agent
 from fackel.agents.config import get_model
 from fackel.agents.prompts import load_prompt
 from fackel.provider_keys import filter_tools
-from tools.censys_tool import censys_lookup
-from tools.crtsh_tool import crtsh_subdomain_enum
-from tools.dns_resolver import dns_resolve
-from tools.dnsdumpster_tool import dnsdumpster_lookup
-from tools.email_analyzer import analyze_email
-from tools.job_search import job_search
-from tools.reverse_dns_tool import reverse_dns_lookup
-from tools.shodan_tool import shodan_lookup
-from tools.subfinder_tool import subfinder_enum
-from tools.virustotal_tool import virustotal_subdomain_enum
-from tools.whois import whois_lookup
+from tools.osint.email_analyzer import analyze_email
+from tools.osint.job_search import job_search
+from tools.recon.censys_tool import censys_lookup
+from tools.recon.crtsh_tool import crtsh_subdomain_enum
+from tools.recon.dns_resolver import dns_resolve
+from tools.recon.dnsdumpster_tool import dnsdumpster_lookup
+from tools.recon.reverse_dns_tool import reverse_dns_lookup
+from tools.recon.shodan_tool import shodan_lookup
+from tools.recon.subfinder_tool import subfinder_enum
+from tools.recon.virustotal_tool import virustotal_subdomain_enum
+from tools.recon.whois import whois_lookup
 
 logger = logging.getLogger(__name__)
 

@@ -11,8 +11,8 @@ from langgraph.prebuilt import create_react_agent
 
 from fackel.agents.config import get_model
 from fackel.agents.prompts import load_prompt
-from tools.naabu_tool import naabu_scan
-from tools.nmap_scanner import nmap_port_scan
+from tools.scanning.naabu_tool import naabu_scan
+from tools.scanning.nmap_scanner import nmap_port_scan
 
 TOOLS = [naabu_scan, nmap_port_scan]
 

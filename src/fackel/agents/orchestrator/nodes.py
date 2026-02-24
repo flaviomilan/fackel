@@ -17,12 +17,12 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command, interrupt
 
-from fackel.utils import is_reverse_ptr_subdomain, is_valid_domain, is_valid_ip, sanitize_target
+from fackel.tooling import is_reverse_ptr_subdomain, is_valid_domain, is_valid_ip, sanitize_target
 
 from .evaluator import evaluate_phase
 from .state import Finding, ScanState
@@ -63,7 +63,7 @@ def _make_finding(
     title: str,
     detail: str,
     *,
-    severity: str = "info",
+    severity: Literal["critical", "high", "medium", "low", "info"] = "info",
     source_tool: str = "",
     confidence: float = 1.0,
 ) -> Finding:
@@ -347,7 +347,11 @@ def port_scan_node(state: ScanState) -> dict:
     from fackel.agents.port_scan.agent import build
 
     target = state["target"]
-    ips = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
+    all_ips = state.get("discovered_ips", [])
+    ips = [ip for ip in all_ips if ":" not in ip]
+    dropped = len(all_ips) - len(ips)
+    if dropped:
+        logger.info("port_scan: dropping %d IPv6 address(es) — not yet supported", dropped)
     subdomains = state.get("discovered_subdomains", [])
 
     if not ips and not subdomains:
@@ -448,7 +452,11 @@ def vuln_scan_node(state: ScanState) -> dict:
     from fackel.agents.vuln_scan.agent import build
 
     target = state["target"]
-    ips = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
+    all_ips = state.get("discovered_ips", [])
+    ips = [ip for ip in all_ips if ":" not in ip]
+    dropped = len(all_ips) - len(ips)
+    if dropped:
+        logger.info("vuln_scan: dropping %d IPv6 address(es) — not yet supported", dropped)
     subdomains = state.get("discovered_subdomains", [])
 
     capped_subs = subdomains[:_SUBDOMAIN_CAP]
@@ -572,7 +580,11 @@ def route_after_osint(state: ScanState) -> str:
     """Decide next step: approval gate (active) or straight to report (passive)."""
     if not state.get("active_scan"):
         return "report"
-    ipv4 = [ip for ip in state.get("discovered_ips", []) if ":" not in ip]
+    all_ips = state.get("discovered_ips", [])
+    ipv4 = [ip for ip in all_ips if ":" not in ip]
+    dropped = len(all_ips) - len(ipv4)
+    if dropped:
+        logger.info("route_after_osint: dropping %d IPv6 address(es) — not yet supported", dropped)
     has_scan_targets = bool(ipv4) or bool(state.get("discovered_subdomains"))
     return "approval_gate" if has_scan_targets else "report"
 

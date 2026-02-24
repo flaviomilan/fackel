@@ -7,7 +7,7 @@ Findings are structured dicts (not free-text) so downstream consumers
 from __future__ import annotations
 
 from operator import add
-from typing import Annotated
+from typing import Annotated, Literal
 
 from typing_extensions import TypedDict
 
@@ -28,7 +28,7 @@ class Finding(TypedDict, total=False):
     detail: str
     """Full Markdown content — the agent's analysis text."""
 
-    severity: str
+    severity: Literal["critical", "high", "medium", "low", "info"]
     """Overall severity: critical | high | medium | low | info."""
 
     source_tool: str

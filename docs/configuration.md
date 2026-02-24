@@ -92,7 +92,6 @@ from agents (see [Provider key gating](#provider-key-gating)).
 | `VIRUSTOTAL_API_KEY` | VirusTotal | `virustotal_subdomain_enum` | No |
 | `CENSYS_API_ID` | Censys | `censys_lookup` | No |
 | `CENSYS_API_SECRET` | Censys | `censys_lookup` | No |
-| `SERPAPI_API_KEY` | SerpAPI | `serp_search`, `search_linkedin_for_employees` | No |
 | `HIBP_API_KEY` | HaveIBeenPwned | `analyze_email` (breach data) | No |
 | `EMAILREP_API_KEY` | EmailRep | `analyze_email` (reputation) | No |
 
@@ -170,7 +169,6 @@ Provider         Status    Tools
 Shodan           ✓         shodan_lookup
 VirusTotal       ✗         virustotal_subdomain_enum
 Censys           ✗         censys_lookup
-SerpAPI          ✓         serp_search, search_linkedin_for_employees
 HaveIBeenPwned   ✗         analyze_email (graceful)
 EmailRep         ✗         analyze_email (graceful)
 ```
@@ -194,7 +192,6 @@ and cannot attempt to call them.
 | Shodan | Yes | `shodan_lookup` removed entirely |
 | VirusTotal | Yes | `virustotal_subdomain_enum` removed |
 | Censys | Yes | `censys_lookup` removed |
-| SerpAPI | Yes | `serp_search`, `search_linkedin_for_employees` removed |
 | HaveIBeenPwned | **No** | `analyze_email` stays; HIBP source silently skipped |
 | EmailRep | **No** | `analyze_email` stays; EmailRep source silently skipped |
 
@@ -294,7 +291,7 @@ result = run("example.com", active_scan=False)
 ```
 
 Model and API key configuration still uses environment variables — set them
-before calling `run()` or `run_stream()`.
+before calling `run()`.
 
 ```python
 import os

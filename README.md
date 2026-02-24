@@ -299,7 +299,6 @@ export FACKEL_MODEL_REPORT=gpt-4o
 | `SHODAN_API_KEY` | No | `shodan_lookup` |
 | `VIRUSTOTAL_API_KEY` | No | `virustotal_subdomain_enum` |
 | `CENSYS_API_ID` / `CENSYS_API_SECRET` | No | `censys_lookup` |
-| `SERPAPI_API_KEY` | No | `serp_search`, `search_linkedin_for_employees` |
 | `HIBP_API_KEY` | No | `analyze_email` (graceful degradation) |
 | `EMAILREP_API_KEY` | No | `analyze_email` (graceful degradation) |
 
@@ -328,15 +327,11 @@ See [docs/configuration.md](docs/configuration.md) for full configuration refere
 ## Python API
 
 ```python
-from fackel.agents.orchestrator import run, run_stream
+from fackel.agents.orchestrator import run
 
 # Blocking — returns final state
 result = run("example.com", active_scan=True)
 print(result["report"])
-
-# Streaming — yields (node_name, partial_update) per step
-for node, update in run_stream("example.com", active_scan=False):
-    print(f"[{node}] {list(update.keys())}")
 ```
 
 ---
@@ -401,16 +396,13 @@ src/
 │   │   │   ├── state.py             # ScanState (TypedDict + reducers)
 │   │   │   ├── nodes.py             # Graph nodes + event streaming
 │   │   │   ├── graph.py             # StateGraph definition + routing
-│   │   │   ├── main.py              # Public API: run(), run_stream()
+│   │   │   ├── main.py              # Public API: run()
 │   │   │   └── evaluator.py         # LLM-as-a-judge quality scoring
 │   │   ├── osint/agent.py           # OSINT ReAct agent (11 tools)
 │   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
 │   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (8 tools)
 │   │   ├── triage/agent.py          # Triage structured output
 │   │   └── report/agent.py          # Report synthesis
-│   ├── domain/
-│   │   ├── enums.py                 # Phase, Severity, InformationType, etc.
-│   │   └── models.py                # ToolExecution, InformationRecord, etc.
 │   ├── provider_keys.py             # API key gating + tool filtering
 │   ├── report_writer.py             # Full archival report builder
 │   └── utils/

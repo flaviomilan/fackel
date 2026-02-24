@@ -28,7 +28,6 @@ PROVIDER_KEYS: tuple[ProviderKeySpec, ...] = (
     ProviderKeySpec("Shodan", ("SHODAN_API_KEY",), ("shodan_lookup",)),
     ProviderKeySpec("VirusTotal", ("VIRUSTOTAL_API_KEY",), ("virustotal_subdomain_enum",)),
     ProviderKeySpec("Censys", ("CENSYS_API_ID", "CENSYS_API_SECRET"), ("censys_lookup",)),
-    ProviderKeySpec("SerpAPI", ("SERPAPI_API_KEY",), ("serp_search", "search_linkedin_for_employees")),
     ProviderKeySpec("HaveIBeenPwned", ("HIBP_API_KEY",), ("analyze_email",), hard_fail=False),
     ProviderKeySpec("EmailRep", ("EMAILREP_API_KEY",), ("analyze_email",), hard_fail=False),
 )
@@ -84,6 +83,3 @@ def filter_tools(
     return available, skipped
 
 
-def has_any_provider_key() -> bool:
-    """Return True when at least one provider key is configured."""
-    return any(configured for _, configured in get_provider_key_status())

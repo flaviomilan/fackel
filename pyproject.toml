@@ -19,23 +19,15 @@ dependencies = [
   "langchain-openai",
   "langchain-community",
   "langgraph",
-  "markdown2",
   "beautifulsoup4",
   "requests",
   "python-dotenv",
   "google-search-results>=2.4.2",
-  "holehe",
-  "aiohttp",
-  "playwright",
   "python-nmap",
   "pyyaml>=6.0",
   "langfuse",
   "pydantic>=2.6",
   "typer>=0.12",
-  "pymongo>=4.6",
-  "numpy>=1.24",
-  "scikit-learn>=1.3",
-  "redis>=5.0",
 ]
 
 [project.scripts]

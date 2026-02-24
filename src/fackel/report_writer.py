@@ -162,7 +162,10 @@ def build_full_report(state: dict) -> str:
                 continue
             phase = ev.get("phase", "?")
             completeness = ev.get("completeness", "?")
-            score = ev.get("score", 0)
+            try:
+                score = float(ev.get("score", 0))
+            except (TypeError, ValueError):
+                score = 0.0
             rec = ev.get("recommendation", "?")
             sections.append(f"| {phase} | {completeness} | {score:.1f} | {rec} |")
         sections.append("")
@@ -250,7 +253,10 @@ def _format_evaluation(ev: dict) -> str:
     """Render a single phase evaluation as Markdown."""
     parts: list[str] = []
     completeness = ev.get("completeness", "?")
-    score = ev.get("score", 0)
+    try:
+        score = float(ev.get("score", 0))
+    except (TypeError, ValueError):
+        score = 0.0
     rec = ev.get("recommendation", "?")
     reasoning = ev.get("reasoning", "")
     gaps = ev.get("gaps", [])

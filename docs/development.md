@@ -92,13 +92,10 @@ src/
 │   │       ├── graph.py        # build_graph() — node + edge wiring
 │   │       ├── nodes.py        # Node functions (run_osint, run_port_scan, ...)
 │   │       ├── state.py        # ScanState TypedDict + reducers
-│   │       ├── main.py         # run(), run_stream() entry points
+│   │       ├── main.py         # run() entry point
 │   │       ├── config.py       # Orchestrator-level settings
 │   │       └── workspace/
 │   │           └── prompt.md   # Soul prompt (shared identity)
-│   └── domain/
-│       ├── models.py           # Pydantic domain models (Finding, TriageResult, etc.)
-│       └── enums.py            # Domain enumerations
 ├── tools/
 │   ├── validators.py           # guard_target(), TargetType enum
 │   ├── utils.py                # run_command(), format_tool_output(), etc.
@@ -111,7 +108,7 @@ src/
 
 **Key conventions:**
 
-- One tool per file in `src/tools/`
+- One tool per file in `src/tools/{recon,osint,scanning,vuln}/`
 - One agent builder per file in `src/fackel/agents/`
 - Orchestrator graph logic isolated in `src/fackel/agents/orchestrator/`
 - Domain models in `src/fackel/domain/` — no infrastructure dependencies
@@ -187,9 +184,9 @@ Do **not** use these words in code, comments, or documentation:
 - ~~Insight~~ → use `InformationRecord`
 - ~~Signal~~ → use `InformationRecord`
 
-> **Note:** The `Finding` Pydantic model in `domain/models.py` predates this
-> glossary and is used in the scan pipeline output. It should be treated as a
-> pipeline concept distinct from the persistence domain glossary.
+> **Note:** The `Finding` model in `state.py` is used in the scan pipeline
+> output. It should be treated as a pipeline concept distinct from the
+> persistence domain glossary.
 
 ---
 
@@ -219,11 +216,10 @@ Do **not** use these words in code, comments, or documentation:
 ### 1. Create the tool file
 
 ```python
-# src/tools/my_new_tool.py
+# src/tools/recon/my_new_tool.py
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
-from tools.validators import TargetType, guard_target
-from tools.utils import format_tool_output, run_command
+from fackel.tooling import TargetType, format_tool_output, guard_target, run_command
 
 class MyNewToolInput(BaseModel):
     """Input schema — Pydantic model with Field descriptions."""
@@ -248,10 +244,10 @@ def my_new_tool(target: str, timeout: int = 30) -> str:
 ### 2. Wire it into an agent
 
 Add the tool to the agent's tool list in the respective agent builder
-(e.g. `src/fackel/agents/osint_agent.py`):
+(e.g. `src/fackel/agents/osint/agent.py`):
 
 ```python
-from tools.my_new_tool import my_new_tool
+from tools.recon.my_new_tool import my_new_tool
 
 tools = [
     # ... existing tools ...
@@ -279,7 +275,7 @@ ProviderKeySpec(
 - [ ] `format_tool_output()` for return value (standardised envelope)
 - [ ] Provider key gating if API key needed
 - [ ] Tool added to agent tool list
-- [ ] Tested manually: `uv run python -c "from tools.my_new_tool import my_new_tool"`
+- [ ] Tested manually: `uv run python -c "from tools.recon.my_new_tool import my_new_tool"`
 
 ---
 
@@ -291,8 +287,8 @@ ProviderKeySpec(
 # src/fackel/agents/my_agent.py
 from fackel.agents.config import create_agent, get_model
 from fackel.agents.provider_keys import filter_tools
-from tools.tool_a import tool_a
-from tools.tool_b import tool_b
+from tools.recon.tool_a import tool_a
+from tools.recon.tool_b import tool_b
 
 TOOLS = [tool_a, tool_b]
 
@@ -455,7 +451,7 @@ When working with MongoDB or any persistence layer:
 
 | Rule | Detail |
 |------|--------|
-| One collection per concept | `ToolExecution`, `InformationRecord`, `InformationTimeline` each get their own collection |
+| One collection per concept | Each domain concept gets its own collection |
 | No polymorphic documents | Don't store mixed types in one collection |
 | No deep nesting | Prefer references over embedded documents |
 | Append-only history | **Never** update or delete historical records |

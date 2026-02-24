@@ -12,14 +12,14 @@ from langgraph.prebuilt import create_react_agent
 
 from fackel.agents.config import get_model
 from fackel.agents.prompts import load_prompt
-from tools.feroxbuster_tool import feroxbuster_scan
-from tools.graphql_scanner import graphql_scan
-from tools.httpx_tool import httpx_scan
-from tools.katana_tool import katana_crawl
-from tools.nuclei_tool import nuclei_scan
-from tools.testssl_tool import testssl_scan
-from tools.wafw00f_tool import wafw00f_detect
-from tools.webpage_extractor import extract_webpage_content
+from tools.scanning.feroxbuster_tool import feroxbuster_scan
+from tools.scanning.graphql_scanner import graphql_scan
+from tools.scanning.httpx_tool import httpx_scan
+from tools.scanning.katana_tool import katana_crawl
+from tools.scanning.wafw00f_tool import wafw00f_detect
+from tools.vuln.nuclei_tool import nuclei_scan
+from tools.vuln.testssl_tool import testssl_scan
+from tools.vuln.webpage_extractor import extract_webpage_content
 
 TOOLS = [
     nuclei_scan,

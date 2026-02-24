@@ -6,12 +6,16 @@ and areas that could not be evaluated due to missing specialist agents.
 
 from __future__ import annotations
 
+import logging
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from fackel.agents.config import get_model
 from fackel.agents.prompts import load_prompt
+
+logger = logging.getLogger(__name__)
 
 
 class UnassessedArea(BaseModel):
@@ -51,10 +55,19 @@ def run_triage(findings: list[dict], model_name: str | None = None) -> TriageRes
     # Serialise structured findings into text for the LLM.
     context = _serialize_findings(findings)
 
-    return structured_llm.invoke([
-        SystemMessage(content=load_prompt("triage")),
-        HumanMessage(content=f"Analyse these scan findings:\n\n{context}"),
-    ])
+    try:
+        return structured_llm.invoke([
+            SystemMessage(content=load_prompt("triage")),
+            HumanMessage(content=f"Analyse these scan findings:\n\n{context}"),
+        ])
+    except Exception:
+        logger.exception("Triage LLM call failed — returning fallback result")
+        return TriageResult(
+            technologies_detected=[],
+            unassessed_areas=[],
+            summary="Triage analysis could not be completed due to an LLM error. "
+                    "Review the raw findings manually.",
+        )
 
 
 def _serialize_findings(findings: list[dict]) -> str:

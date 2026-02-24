@@ -472,20 +472,6 @@ Extract relevant text content from a web page, stripping HTML boilerplate.
 
 ---
 
-## Available but unwired tools
-
-These tools exist in `src/tools/` but are not currently wired into any agent.
-They can be added to agents as needed:
-
-| Tool | File | Purpose |
-|------|------|---------|
-| `serp_search` | `serpapi_tool.py` | Google search via SerpAPI |
-| `search_linkedin_for_employees` | `linkedin_employee_search.py` | LinkedIn employee search via SerpAPI |
-| `duckduckgo_lookup` | `duckduckgo_tool.py` | DuckDuckGo web search |
-| `profile_analyzer` | `profile_analyzer.py` | Social media profile analysis |
-
----
-
 ## External binaries
 
 Fackel wraps several security tools via subprocess. Install the ones you need:
@@ -511,7 +497,7 @@ The LLM sees the error and can try alternative tools.
 
 ## Shared utilities
 
-Defined in `src/tools/utils.py`:
+Defined in `src/fackel/tooling/execution.py`:
 
 | Function | Signature | Purpose |
 |----------|-----------|---------|

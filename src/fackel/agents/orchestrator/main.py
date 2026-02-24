@@ -1,7 +1,7 @@
 """Orchestrator entry point.
 
-Provides ``run`` (blocking) and ``run_stream`` (incremental snapshots)
-as the public interface consumed by the CLI and tests.
+Provides ``run`` (blocking) as the public interface consumed by the CLI
+and tests.
 
 Supports Human-in-the-Loop via ``interrupt()`` — when the graph pauses
 at the approval gate, callers must resume with ``Command(resume=value)``.
@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Iterator
 
 from langgraph.types import Command
 
-from fackel.utils import sanitize_target
+from fackel.tooling import sanitize_target
 
 from .graph import build_graph
 from .state import ScanState
@@ -97,48 +96,3 @@ def run(
         snapshot = graph.get_state(config)
 
     return result
-
-
-def run_stream(
-    target: str,
-    *,
-    active_scan: bool = True,
-    approval_callback=None,
-) -> Iterator[tuple[str, dict]]:
-    """Yield ``(node_name, partial_update)`` as each graph node completes.
-
-    Handles interrupt/resume transparently via *approval_callback*.
-    """
-    logger.info("orchestrator: stream %s (active_scan=%s)", target, active_scan)
-
-    graph = _get_graph()
-    config = _config()
-
-    for chunk in graph.stream(
-        _initial_state(target, active_scan),
-        config=config,
-        stream_mode="updates",
-    ):
-        for node_name, update in chunk.items():
-            yield node_name, update
-
-    # Handle interrupt-resume loop
-    snapshot = graph.get_state(config)
-    while snapshot.next:
-        interrupt_values = snapshot.tasks[0].interrupts
-        if interrupt_values:
-            interrupt_data = interrupt_values[0].value
-            if approval_callback is not None:
-                approved = approval_callback(interrupt_data)
-            else:
-                approved = True
-        else:
-            approved = True
-
-        for chunk in graph.stream(
-            Command(resume=approved), config=config, stream_mode="updates"
-        ):
-            for node_name, update in chunk.items():
-                yield node_name, update
-
-        snapshot = graph.get_state(config)

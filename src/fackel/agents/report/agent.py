@@ -6,11 +6,15 @@ professional Markdown report in a single call.
 
 from __future__ import annotations
 
+import logging
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from fackel.agents.config import get_model
 from fackel.agents.prompts import load_prompt
+
+logger = logging.getLogger(__name__)
 
 
 def generate_report(
@@ -83,8 +87,17 @@ def generate_report(
                 + "\n".join(eval_lines)
             )
 
-    response = llm.invoke([
-        SystemMessage(content=load_prompt("report")),
-        HumanMessage(content="\n".join(parts)),
-    ])
-    return response.content
+    try:
+        response = llm.invoke([
+            SystemMessage(content=load_prompt("report")),
+            HumanMessage(content="\n".join(parts)),
+        ])
+        return response.content
+    except Exception:
+        logger.exception("Report LLM call failed — returning raw findings as fallback")
+        return (
+            f"# Penetration Test Report — {target}\n\n"
+            "**Note:** The LLM report generation failed. "
+            "Raw findings are included below for manual review.\n\n"
+            + "\n\n---\n\n".join(parts)
+        )

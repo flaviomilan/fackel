@@ -377,7 +377,6 @@ that can only return errors.
 | Shodan | `SHODAN_API_KEY` | `shodan_lookup` | Yes |
 | VirusTotal | `VIRUSTOTAL_API_KEY` | `virustotal_subdomain_enum` | Yes |
 | Censys | `CENSYS_API_ID`, `CENSYS_API_SECRET` | `censys_lookup` | Yes |
-| SerpAPI | `SERPAPI_API_KEY` | `serp_search`, `search_linkedin_for_employees` | Yes |
 | HaveIBeenPwned | `HIBP_API_KEY` | `analyze_email` | No (graceful) |
 | EmailRep | `EMAILREP_API_KEY` | `analyze_email` | No (graceful) |
 
