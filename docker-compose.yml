@@ -5,6 +5,24 @@
 # All other components are bound to localhost (127.0.0.1) to only accept connections from the local machine.
 # External connections from other machines will not be able to reach these services directly.
 services:
+  # MongoDB for Fackel scan persistence and query system
+  mongodb:
+    image: docker.io/mongo:7
+    restart: always
+    ports:
+      - 127.0.0.1:27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-fackel}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-fackelpass} # CHANGEME
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-fackel}
+    volumes:
+      - fackel_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   langfuse-worker:
     image: docker.io/langfuse/langfuse-worker:3
     restart: always
@@ -163,6 +181,8 @@ services:
       - langfuse_postgres_data:/var/lib/postgresql/data
 
 volumes:
+  fackel_mongo_data:
+    driver: local
   langfuse_postgres_data:
     driver: local
   langfuse_clickhouse_data:

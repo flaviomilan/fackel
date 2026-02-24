@@ -19,15 +19,12 @@ dependencies = [
   "langchain-openai",
   "langchain-community",
   "langgraph",
-  "markdown2",
   "beautifulsoup4",
   "requests",
   "python-dotenv",
   "google-search-results>=2.4.2",
-  "holehe",
-  "aiohttp",
-  "playwright",
   "python-nmap",
+  "pyyaml>=6.0",
   "langfuse",
   "pydantic>=2.6",
   "typer>=0.12",
@@ -42,6 +39,10 @@ dev = [
   "mypy>=1.9",
   "pytest>=8.2",
   "coverage>=7.5",
+]
+api = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.23",
 ]
 
 [tool.setuptools]

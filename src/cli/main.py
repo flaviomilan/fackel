@@ -1,64 +1,220 @@
+"""Fackel CLI — pentest scan runner."""
+
 from __future__ import annotations
 
-import re
+import logging
+import time
 from pathlib import Path
-from urllib.parse import urlparse
+from typing import Any
 
 import typer
+from dotenv import load_dotenv
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.rule import Rule
 
-from fackel.agents.graph_agent import LangGraphAgent
+load_dotenv()
+
+app = typer.Typer(help="Fackel CLI")
+console = Console()
 
 
-def _safe_stem(target: str) -> str:
-    """Generate a filesystem-safe stem from a domain or URL."""
-    parsed = urlparse(target)
-    base = parsed.netloc or parsed.path or target
-    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
-    return safe or "report"
+# ── Phase labels ───────────────────────────────────────────────────────────
 
-app = typer.Typer(help="Fackel – Agente Autônomo de OSINT")
+_PHASE_LABELS = {
+    "osint": "OSINT",
+    "approval": "Approval",
+    "port_scan": "Port Scan",
+    "vuln_scan": "Vuln Scan",
+    "triage": "Triage",
+    "report": "Report",
+}
+
+
+# ── HIL approval handler ──────────────────────────────────────────────────
+
+
+def _approval_prompt(interrupt_data: dict) -> bool:
+    """Prompt the user to approve or reject active scanning."""
+    question = interrupt_data.get("question", "Proceed with active scanning?")
+    console.print()
+    console.print(Panel(question, title="⚠ Approval Required", border_style="yellow"))
+    return typer.confirm("Approve?", default=True)
+
+
+# ── Event renderer ─────────────────────────────────────────────────────────
+
+
+def _make_event_callback(verbose: bool):
+    """Return a callback that prints agent ReAct events to the terminal."""
+
+    def _callback(phase: str, event_type: str, data: dict[str, Any]) -> None:
+        label = _PHASE_LABELS.get(phase, phase)
+
+        if event_type == "start":
+            console.print()
+            console.print(Rule(f"▶ {label}", style="bold blue"))
+
+        elif event_type == "tool_call":
+            tool = data.get("tool", "?")
+            args = data.get("args", {})
+            args_str = ", ".join(
+                f"{k}={v}" for k, v in args.items() if v not in ("", None)
+            )
+            console.print(f"  🔧 {tool}({args_str})", style="dim")
+
+        elif event_type == "tool_error":
+            tool = data.get("tool", "?")
+            error = data.get("error", "unknown error")
+            # Show a single clean line; strip tool banners / multi-line noise.
+            first_line = error.strip().splitlines()[-1].strip() if error.strip() else "unknown error"
+            console.print(f"  [red]✗ {tool}: {first_line}[/red]", style="dim")
+
+        elif event_type == "tool_result":
+            if verbose:
+                tool = data.get("tool", "?")
+                content = data.get("content", "")
+                preview = content[:200] + "…" if len(content) > 200 else content
+                console.print(f"  ← {tool}: {preview}", style="dim")
+
+        elif event_type == "reasoning":
+            if verbose:
+                content = data.get("content", "")
+                for line in content.splitlines():
+                    console.print(f"  💭 {line}", style="dim italic")
+
+        elif event_type == "summary":
+            content = data.get("content", "")
+            if content:
+                console.print()
+                console.print(Panel(
+                    Markdown(content),
+                    title=f"📋 {label} Summary",
+                    border_style="cyan",
+                    padding=(1, 2),
+                ))
+
+        elif event_type == "evaluation":
+            score = data.get("score", 0)
+            completeness = data.get("completeness", "?")
+            recommendation = data.get("recommendation", "proceed")
+            style = (
+                "green" if completeness == "complete"
+                else "yellow" if completeness == "partial"
+                else "red"
+            )
+            console.print(
+                f"  [{style}]📊 Quality: {completeness} "
+                f"(score: {score:.1f}) → {recommendation}[/{style}]",
+            )
+
+        elif event_type == "done":
+            console.print(f"  [green]✓ {label} complete[/green]")
+
+    return _callback
 
 
 @app.command()
-def run(
-    domain: str = typer.Argument(..., help="Domínio ou host alvo"),
-    active_scan: bool = typer.Option(False, help="Habilita ferramentas ativas (ex: Nmap)"),
-    output: Path | None = typer.Option(None, help="Salvar relatório HTML/Markdown"),
-    save_json: bool = typer.Option(True, help="Salvar saída estruturada (JSON)"),
-):
-    agent = LangGraphAgent(active_scan=active_scan)
-    result = agent.run(domain)
+def scan(
+    target: str = typer.Argument(..., help="Target domain or IP"),
+    active_scan: bool = typer.Option(
+        True,
+        "--active-scan/--no-active-scan",
+        help="Enable active scanning phases",
+    ),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write full report to this file (default: auto-named in ./reports/)"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show LLM reasoning and detailed logs"
+    ),
+    check_providers: bool = typer.Option(
+        False, "--check-providers", help="Print provider key status before scan"
+    ),
+) -> None:
+    """Run a full scan workflow and emit the final report."""
+    from fackel.agents.orchestrator import run
+    from fackel.agents.orchestrator.nodes import set_event_callback
+    from fackel.provider_keys import get_provider_key_status
 
-    summary = result["summary"]
-    store = result["store"]
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    if verbose:
+        logging.getLogger("fackel").setLevel(logging.DEBUG)
 
-    typer.echo(summary)
+    if check_providers:
+        typer.echo("Provider key status:")
+        for spec, configured in get_provider_key_status():
+            status = "configured" if configured else "missing"
+            vars_str = ", ".join(spec.env_vars)
+            typer.echo(f"  {spec.provider} ({vars_str}): {status}")
+        typer.echo("")
 
-    if output:
-        output_path = Path(output)
-        output_path.write_text(summary, encoding="utf-8")
-        typer.echo(f"[Exporter] Markdown salvo em {output_path}")
-        if save_json:
-            json_path = output_path.with_suffix(".json")
-            store.save_json(str(json_path))
-            typer.echo(f"[Exporter] JSON estruturado salvo em {json_path}")
-    else:
-        if save_json:
-            safe_stem = _safe_stem(domain)
-            json_path = Path(f"{safe_stem}_report.json")
-            store.save_json(str(json_path))
-            typer.echo(f"[Exporter] JSON estruturado salvo em {json_path}")
+    typer.echo(f"Target: {target}")
+    typer.echo(f"Active scan: {'yes' if active_scan else 'no'}")
 
+    # Show tools that will be skipped due to missing API keys.
+    from fackel.provider_keys import get_unavailable_tool_names
 
-@app.command()
-def doctor():
-    """Mostra informações básicas do ambiente."""
-    import platform
-    import sys
+    unavailable = get_unavailable_tool_names()
+    if unavailable:
+        console.print("[yellow]⚠ Tools disabled (missing API keys):[/yellow]")
+        for tool_name, (provider, missing_vars) in unavailable.items():
+            vars_str = ", ".join(missing_vars)
+            console.print(f"  [dim]• {tool_name} — {provider} ({vars_str})[/dim]")
+        console.print()
 
-    typer.echo(f"Python: {sys.version.split()[0]}")
-    typer.echo(f"Plataforma: {platform.platform()}")
-    typer.echo("Ferramentas disponíveis serão calculadas em runtime pelo agente.")
+    # Register real-time event callback
+    set_event_callback(_make_event_callback(verbose))
+    started_at = time.perf_counter()
+
+    try:
+        result = run(
+            target,
+            active_scan=active_scan,
+            approval_callback=_approval_prompt,
+        )
+    except KeyboardInterrupt:
+        typer.echo("\nScan interrupted by user.", err=True)
+        raise typer.Exit(code=130)
+    except Exception as exc:
+        typer.echo(f"\nScan failed: {exc}", err=True)
+        raise typer.Exit(code=1)
+    finally:
+        set_event_callback(None)
+
+    report = result.get("report", "")
+    duration = time.perf_counter() - started_at
+
+    if not report.strip():
+        typer.echo("\nError: no report generated.", err=True)
+        raise typer.Exit(code=1)
+
+    # ── Console: show the LLM-synthesised report ───────────────────────
+    console.print()
+    console.print(Rule("Final Report", style="bold green"))
+    console.print(Markdown(report))
+    console.print(f"\n[dim]Completed in {duration:.1f}s[/dim]")
+
+    # ── Disk: save comprehensive markdown with all phase details ───────
+    from fackel.report_writer import build_full_report
+
+    full_md = build_full_report(result)
+
+    if output is None:
+        reports_dir = Path("reports")
+        reports_dir.mkdir(exist_ok=True)
+        safe_target = target.replace("/", "_").replace(":", "_")
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        output = reports_dir / f"{safe_target}_{ts}.md"
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(full_md, encoding="utf-8")
+    console.print(f"\n[green]📄 Full report saved to {output}[/green]")
 
 
 if __name__ == "__main__":
