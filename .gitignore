@@ -304,3 +304,4 @@ pip-selfcheck.json
 
 reports/
 .vscode/
+node_modules/
