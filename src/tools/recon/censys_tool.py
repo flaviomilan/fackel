@@ -37,8 +37,9 @@ def censys_lookup(domain: str) -> dict[str, Any]:
 
         hosts: list[dict[str, Any]] = []
         for host in results:
+            host_data: dict[str, Any] = dict(host)  # type: ignore[arg-type]
             services = []
-            for service in host.get("services", []):
+            for service in host_data.get("services", []):
                 svc = {
                     "port": service.get("port"),
                     "protocol": service.get("transport_protocol"),
@@ -48,7 +49,7 @@ def censys_lookup(domain: str) -> dict[str, Any]:
 
             hosts.append(
                 {
-                    "ip": host.get("ip"),
+                    "ip": host_data.get("ip"),
                     "services": services,
                 }
             )

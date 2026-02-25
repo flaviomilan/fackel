@@ -13,8 +13,6 @@ from tools.scanning.graphql_scanner import (
     graphql_scan,
 )
 
-# ── Introspection probe ───────────────────────────────────────────────────
-
 
 class TestProbeIntrospection:
     """Verify introspection detection logic."""
@@ -66,9 +64,6 @@ class TestProbeIntrospection:
         assert issues == []
 
 
-# ── Alias batching probe ──────────────────────────────────────────────────
-
-
 class TestProbeAliasBatching:
     """Verify alias batching detection."""
 
@@ -92,9 +87,6 @@ class TestProbeAliasBatching:
 
         issues = _probe_alias_batching("https://example.com/graphql", {})
         assert issues == []
-
-
-# ── Array batching probe ──────────────────────────────────────────────────
 
 
 class TestProbeArrayBatching:
@@ -123,9 +115,6 @@ class TestProbeArrayBatching:
         assert issues == []
 
 
-# ── GET method probe ──────────────────────────────────────────────────────
-
-
 class TestProbeGetMethod:
     """Verify GET method query detection."""
 
@@ -142,9 +131,6 @@ class TestProbeGetMethod:
         )
         assert len(issues) == 1
         assert issues[0]["severity"] == "info"
-
-
-# ── Field suggestions probe ──────────────────────────────────────────────
 
 
 class TestProbeFieldSuggestions:
@@ -169,9 +155,6 @@ class TestProbeFieldSuggestions:
 
         issues = _probe_field_suggestions("https://example.com/graphql", {})
         assert issues == []
-
-
-# ── Full tool integration ─────────────────────────────────────────────────
 
 
 class TestGraphqlScan:

@@ -13,8 +13,6 @@ from pydantic import ValidationError
 
 from fackel.agents.triage.agent import RiskScore, TriageResult, UnassessedArea, run_triage
 
-# ── RiskScore model validation ─────────────────────────────────────────────
-
 
 class TestRiskScoreModel:
     """Pydantic validation for the RiskScore model."""
@@ -57,9 +55,6 @@ class TestRiskScoreModel:
     def test_factors_default_empty(self) -> None:
         rs = RiskScore(score=3.0, exposure_type="low")
         assert rs.factors == []
-
-
-# ── TriageResult with risk_score ───────────────────────────────────────────
 
 
 class TestTriageResultWithRisk:
@@ -110,9 +105,6 @@ class TestTriageResultWithRisk:
         assert result.risk_score.score == 7.0
 
 
-# ── run_triage fallback ────────────────────────────────────────────────────
-
-
 class TestRunTriageFallback:
     """run_triage returns a valid fallback with risk_score on LLM failure."""
 
@@ -128,9 +120,6 @@ class TestRunTriageFallback:
         assert result.risk_score.exposure_type == "minimal"
         assert len(result.risk_score.factors) == 1
         assert "failed" in result.risk_score.factors[0].lower()
-
-
-# ── triage_node risk extraction ────────────────────────────────────────────
 
 
 class TestTriageNodeRiskExtraction:
@@ -187,7 +176,6 @@ class TestTriageNodeRiskExtraction:
         state = {"target": "example.com", "active_scan": False, "findings": []}
         triage_node(state, {})
 
-        # Check "done" event carries risk info
         done_calls = [c for c in mock_emit.call_args_list if c.args[1] == "done"]
         assert len(done_calls) >= 1
         done_data = done_calls[-1].args[2]
@@ -222,9 +210,6 @@ class TestTriageNodeRiskExtraction:
         assert "Subdomain outside CDN" in finding["detail"]
 
 
-# ── Report agent risk_score passthrough ────────────────────────────────────
-
-
 class TestReportRiskScorePassthrough:
     """generate_report correctly injects risk_score into LLM context."""
 
@@ -247,7 +232,6 @@ class TestReportRiskScorePassthrough:
             risk_score=risk,
         )
 
-        # Verify the risk data was passed to the LLM
         call_args = mock_llm.invoke.call_args[0][0]
         human_msg = call_args[1].content
         assert "7.2/10" in human_msg

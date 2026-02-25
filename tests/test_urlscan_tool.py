@@ -109,7 +109,7 @@ class TestUrlscanSearchHappyPath:
 
         call_args = mock_get.call_args
         assert call_args.kwargs["params"]["q"] == "domain:example.com"
-        assert call_args.kwargs["params"]["size"] == 10
+        assert call_args.kwargs["params"]["size"] == "10"
 
     @patch("tools.recon.urlscan_tool.get_session")
     def test_empty_results(self, mock_gs: MagicMock) -> None:

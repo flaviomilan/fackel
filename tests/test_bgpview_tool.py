@@ -26,9 +26,6 @@ def _error_response(status: int) -> MagicMock:
     return resp
 
 
-# ── Unit tests for internal helpers ────────────────────────────────────────
-
-
 class TestParseRir:
     """RIR extraction from RIPEstat block description."""
 
@@ -76,9 +73,6 @@ class TestParseHolder:
         name, desc = _parse_holder("AS-NAME - Some Org - Extra Info")
         assert name == "AS-NAME"
         assert desc == "Some Org - Extra Info"
-
-
-# ── Integration tests for the tool (mocked HTTP) ──────────────────────────
 
 
 class TestBgpLookupHappyPath:

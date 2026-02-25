@@ -8,8 +8,6 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-# ── HTTP response mock factories ───────────────────────────────────────────
-
 
 @pytest.fixture()
 def ok_response():
@@ -49,9 +47,6 @@ def error_response():
         return resp
 
     return _make
-
-
-# ── API key environment fixtures ───────────────────────────────────────────
 
 
 @pytest.fixture()

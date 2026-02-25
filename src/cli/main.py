@@ -72,7 +72,7 @@ def _make_approval_prompt(
 ) -> tuple[Any, Any]:
     """Create approval prompt closures that pause the Live area."""
 
-    def approval_prompt(interrupt_data: dict) -> bool:
+    def approval_prompt(interrupt_data: dict[str, Any]) -> bool:
         renderer._persist_content()
         renderer._stop_live()
         question = interrupt_data.get("question", "Proceed with active scanning?")
@@ -99,7 +99,7 @@ def _make_approval_prompt(
         console.print()
         return approved
 
-    def tool_approval_prompt(interrupt_data: dict) -> str:
+    def tool_approval_prompt(interrupt_data: dict[str, Any]) -> str:
         renderer._persist_content()
         renderer._stop_live()
         description = interrupt_data.get("description", str(interrupt_data))
@@ -225,11 +225,12 @@ def _execute_scan(
 ) -> dict[str, Any]:
     """Run the orchestrator and handle interrupts / errors."""
     try:
-        return run_fn(
+        result: dict[str, Any] = run_fn(
             target,
             active_scan=active_scan,
             approval_callback=approval_prompt,
         )
+        return result
     except KeyboardInterrupt:
         renderer.shutdown()
         elapsed = time.perf_counter() - started_at

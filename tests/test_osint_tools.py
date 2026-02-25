@@ -11,8 +11,6 @@ from tools.osint.email_analyzer import (
 )
 from tools.osint.job_search import job_search
 
-# ── Email analyzer ─────────────────────────────────────────────────────────
-
 
 class TestCheckBreaches:
     """Verify HIBP breach checking."""
@@ -83,9 +81,6 @@ class TestAnalyzeEmail:
         result = analyze_email.invoke({"email": "test@example.com"})
         assert len(result["data"]["breaches"]) == 1
         assert result["data"]["reputation"]["reputation"] == "high"
-
-
-# ── Job search ─────────────────────────────────────────────────────────────
 
 
 class TestJobSearch:

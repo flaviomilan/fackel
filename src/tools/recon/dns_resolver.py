@@ -47,7 +47,7 @@ def dns_resolve(target: str) -> dict[str, Any]:
     try:
         resolved: set[str] = set()
         for result in socket.getaddrinfo(target, None):
-            resolved.add(result[4][0])
+            resolved.add(str(result[4][0]))
         return format_tool_output(
             "dns_resolve",
             target,

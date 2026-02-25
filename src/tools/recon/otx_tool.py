@@ -108,5 +108,4 @@ def otx_passive_dns(domain: str) -> dict[str, Any]:
 
 otx_passive_dns.handle_tool_error = True
 
-
 otx_passive_dns.handle_tool_error = True

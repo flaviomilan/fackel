@@ -14,8 +14,6 @@ from tools.scanning.nmap_scanner import (
     nmap_port_scan,
 )
 
-# ── Pure helper tests ──────────────────────────────────────────────────────
-
 
 class TestIsRoot:
     """Verify _is_root without side-effects."""

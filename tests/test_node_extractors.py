@@ -28,9 +28,6 @@ def _tool_msg(name: str, payload: dict) -> ToolMessage:
     )
 
 
-# ── Tech fingerprint extraction ───────────────────────────────────────────
-
-
 class TestExtractTechFingerprints:
     """extract_tech_fingerprints from httpx_scan results."""
 
@@ -208,9 +205,6 @@ class TestExtractTechFingerprints:
         assert extract_tech_fingerprints([]) == []
 
 
-# ── IP classification extraction ──────────────────────────────────────────
-
-
 class TestExtractIpClassifications:
     """extract_ip_classifications from ipinfo/bgp."""
 
@@ -267,9 +261,6 @@ class TestExtractIpClassifications:
         assert extract_ip_classifications([], "example.com") == []
 
 
-# ── IP extraction ─────────────────────────────────────────────────────────
-
-
 class TestExtractIps:
     """extract_ips — basic happy path."""
 
@@ -309,9 +300,6 @@ class TestExtractIps:
         assert extract_ips([]) == []
 
 
-# ── SAN domain extraction from tlscert ─────────────────────────────────────
-
-
 class TestExtractSanDomains:
     """extract_san_domains from tlscert_lookup results."""
 
@@ -336,7 +324,6 @@ class TestExtractSanDomains:
         assert "www.example.com" in subs
         assert "api.example.com" in subs
         assert "staging.example.com" in subs
-        # base domain itself is excluded
         assert "example.com" not in subs
 
     def test_ignores_unrelated_domains(self) -> None:
@@ -438,9 +425,6 @@ class TestExtractSanDomains:
         )
         subs = extract_san_domains([msg], "example.com")
         assert subs == sorted(subs)
-
-
-# ── Historical IP extraction from SecurityTrails ────────────────────────────────────
 
 
 class TestExtractHistoricalIps:

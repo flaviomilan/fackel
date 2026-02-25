@@ -41,6 +41,10 @@ dev = [
   "pip-audit>=2.7",
   "python-semantic-release>=9.0",
   "commitizen>=4.0",
+  "pre-commit>=4.0",
+  "types-requests>=2.31",
+  "types-python-nmap>=0.7",
+  "types-beautifulsoup4>=4.12",
 ]
 api = [
   "fastapi>=0.110",

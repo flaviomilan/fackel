@@ -13,7 +13,6 @@ from typing import Literal
 
 IpClass = Literal["cdn", "cloud", "direct_host", "isp"]
 
-
 _CDN_ASNS: frozenset[int] = frozenset(
     {
         13335,
@@ -31,7 +30,6 @@ _CDN_ASNS: frozenset[int] = frozenset(
         15169,
     }
 )
-
 
 _CLOUD_ASNS: frozenset[int] = frozenset(
     {
@@ -57,7 +55,6 @@ _CLOUD_ASNS: frozenset[int] = frozenset(
     }
 )
 
-
 _CDN_ORG_KEYWORDS: tuple[str, ...] = (
     "cloudflare",
     "akamai",
@@ -74,7 +71,6 @@ _CDN_ORG_KEYWORDS: tuple[str, ...] = (
     "bunny",
     "maxcdn",
 )
-
 
 _CLOUD_ORG_KEYWORDS: tuple[str, ...] = (
     "amazon",

@@ -52,7 +52,7 @@ class TlsCertInput(BaseModel):
     )
 
 
-def _parse_rdns(rdns_tuples: tuple) -> dict[str, str]:
+def _parse_rdns(rdns_tuples: tuple[tuple[tuple[str, str], ...], ...]) -> dict[str, str]:
     """Flatten an RDN sequence from ``getpeercert()`` into a plain dict.
 
     ``ssl.SSLSocket.getpeercert()`` returns subject/issuer as nested tuples:
@@ -122,7 +122,7 @@ def _decode_der_cert(der_cert: bytes) -> dict[str, Any]:
     try:
         with os.fdopen(fd, "w") as f:
             f.write(pem)
-        return ssl._ssl._test_decode_cert(path)  # type: ignore[attr-defined]
+        return ssl._ssl._test_decode_cert(path)  # type: ignore[attr-defined,no-any-return]
     finally:
         os.unlink(path)
 

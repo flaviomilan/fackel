@@ -24,9 +24,9 @@ def _is_root() -> bool:
     return os.geteuid() == 0 if hasattr(os, "geteuid") else False
 
 
-def _parse_os_info(nm, host: str) -> dict[str, Any]:
+def _parse_os_info(nm: nmap.PortScanner, host: str) -> dict[str, Any]:
     """Extract OS detection information."""
-    os_info = {
+    os_info: dict[str, list[dict[str, Any]]] = {
         "os_matches": [],
         "os_classes": [],
     }
@@ -58,9 +58,9 @@ def _parse_os_info(nm, host: str) -> dict[str, Any]:
     return os_info
 
 
-def _parse_hostscript(nm, host: str) -> dict[str, Any]:
+def _parse_hostscript(nm: nmap.PortScanner, host: str) -> dict[str, Any]:
     """Extract host-level script results."""
-    scripts = {}
+    scripts: dict[str, str] = {}
 
     try:
         if "hostscript" in nm[host]:
@@ -75,7 +75,7 @@ def _parse_hostscript(nm, host: str) -> dict[str, Any]:
 
 def _extract_vulnerabilities(service: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract CVEs and vulnerabilities from service scripts."""
-    vulnerabilities = []
+    vulnerabilities: list[dict[str, Any]] = []
 
     if "script" not in service:
         return vulnerabilities

@@ -12,8 +12,6 @@ from fackel.agents.orchestrator.nodes.report_and_gates import (
     route_after_port_scan,
 )
 
-# ── make_finding ──────────────────────────────────────────────────────────
-
 
 class TestMakeFinding:
     """Verify Finding dict construction."""
@@ -34,9 +32,6 @@ class TestMakeFinding:
         assert f["confidence"] == 1.0
 
 
-# ── get_phase_evaluation ─────────────────────────────────────────────────
-
-
 class TestGetPhaseEvaluation:
     """Verify evaluation lookup from state."""
 
@@ -55,9 +50,6 @@ class TestGetPhaseEvaluation:
         state = {"phase_evaluations": [], "target": "example.com"}
         result = get_phase_evaluation(state, "port_scan")
         assert result is None
-
-
-# ── prepare_scan_targets ──────────────────────────────────────────────────
 
 
 class TestPrepareScanTargets:
@@ -87,9 +79,6 @@ class TestPrepareScanTargets:
         ips, subs = prepare_scan_targets(state)
         assert ips == []
         assert subs == []
-
-
-# ── Routing functions ─────────────────────────────────────────────────────
 
 
 class TestRouteAfterOsint:

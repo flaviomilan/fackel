@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import shodan
+import shodan  # type: ignore[import-untyped]
 from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 

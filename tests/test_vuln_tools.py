@@ -9,8 +9,6 @@ from tools.vuln.nuclei_tool import nuclei_scan
 from tools.vuln.testssl_tool import _parse_severity, testssl_scan
 from tools.vuln.webpage_extractor import _extract_text, extract_webpage_content
 
-# ── Nuclei ─────────────────────────────────────────────────────────────────
-
 
 class TestNucleiScan:
     """Verify nuclei CLI construction and result parsing."""
@@ -87,9 +85,6 @@ class TestNucleiScan:
     def test_command_exception_returns_error(self, _bin, _run):
         result = nuclei_scan.invoke({"target": "example.com"})
         assert "timeout" in result
-
-
-# ── TestSSL ────────────────────────────────────────────────────────────────
 
 
 class TestParseSeverity:
@@ -175,9 +170,6 @@ class TestTestsslScan:
     def test_command_exception_returns_error(self, _bin, _run):
         result = testssl_scan.invoke({"target": "example.com"})
         assert "binary not found" in result
-
-
-# ── Webpage extractor ──────────────────────────────────────────────────────
 
 
 class TestExtractText:

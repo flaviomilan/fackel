@@ -43,7 +43,6 @@ EventCallback = Callable[[str, str, dict[str, Any]], None] | None
 
 ToolApprovalCallback = Callable[[dict[str, Any]], str] | None
 
-
 _event_callback: EventCallback = None
 _tool_approval_callback: ToolApprovalCallback = None
 _tool_approval_enabled: bool = False

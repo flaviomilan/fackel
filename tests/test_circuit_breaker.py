@@ -29,7 +29,7 @@ class TestCircuitBreakerClosed:
 
     def test_passes_through_on_success(self):
         with circuit_breaker("test_service"):
-            pass  # no error
+            pass
         cb = _get_circuit("test_service")
         assert cb.state is _CircuitState.CLOSED
         assert cb.failure_count == 0
@@ -39,7 +39,7 @@ class TestCircuitBreakerClosed:
             raise ValueError("boom")
         cb = _get_circuit("test_service")
         assert cb.failure_count == 1
-        assert cb.state is _CircuitState.CLOSED  # not yet threshold
+        assert cb.state is _CircuitState.CLOSED
 
     def test_opens_after_threshold(self):
         for _ in range(FAILURE_THRESHOLD):
@@ -59,16 +59,18 @@ class TestCircuitBreakerOpen:
 
     def test_raises_tool_exception_immediately(self):
         self._open_circuit()
-        with pytest.raises(ToolException, match="temporarily unavailable"), circuit_breaker("test_service"):
+        with (
+            pytest.raises(ToolException, match="temporarily unavailable"),
+            circuit_breaker("test_service"),
+        ):
             pass
 
     def test_transitions_to_half_open_after_timeout(self):
         self._open_circuit()
         cb = _get_circuit("test_service")
-        # Simulate time passing beyond reset timeout
         cb.last_failure_time = time.monotonic() - 120
         with circuit_breaker("test_service"):
-            pass  # probe succeeds
+            pass
         assert cb.state is _CircuitState.CLOSED
 
     def test_half_open_probe_failure_reopens(self):

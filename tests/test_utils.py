@@ -50,8 +50,7 @@ class TestRequireBinary:
     """require_binary raises ToolException when binary is missing."""
 
     def test_existing_binary(self) -> None:
-        # 'python3' should exist in any test environment
-        require_binary("python3", "test_tool")  # should not raise
+        require_binary("python3", "test_tool")
 
     def test_missing_binary(self) -> None:
         with pytest.raises(ToolException, match="not found"):

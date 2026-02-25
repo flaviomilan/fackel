@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-import whois
+import whois  # type: ignore[import-untyped]
 from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
@@ -37,7 +37,7 @@ class WhoisInput(BaseModel):
     )
 
 
-def _whois_query(domain: str) -> whois.WhoisEntry:
+def _whois_query(domain: str) -> Any:
     """Try the built-in NICClient first, fall back to the system ``whois`` binary."""
     try:
         record = whois.whois(domain)
@@ -55,7 +55,7 @@ def _whois_query(domain: str) -> whois.WhoisEntry:
     raise whois.parser.PywhoisError(f"WHOIS lookup failed for {domain}")
 
 
-def _extract_field(record: whois.WhoisEntry, field: str) -> str | list[str] | None:
+def _extract_field(record: Any, field: str) -> str | list[str] | None:
     """Safely extract a field from a WhoisEntry, returning ``None`` on failure."""
     val = getattr(record, field, None)
     if val is None:
@@ -65,7 +65,7 @@ def _extract_field(record: whois.WhoisEntry, field: str) -> str | list[str] | No
     return str(val)
 
 
-def _build_whois_data(record: whois.WhoisEntry) -> dict[str, Any]:
+def _build_whois_data(record: Any) -> dict[str, Any]:
     """Build the normalised data dict from a ``WhoisEntry``."""
     registrar = _extract_field(record, "registrar")
     name_servers = _extract_field(record, "name_servers")
@@ -110,7 +110,7 @@ def _rdap_server_for_tld(tld: str) -> str | None:
         for service in data.get("services", []):
             tlds, urls = service
             if tld.lower() in (t.lower() for t in tlds):
-                return urls[0].rstrip("/")
+                return str(urls[0]).rstrip("/")
     except Exception:
         logger.debug("RDAP bootstrap lookup failed for TLD '%s'", tld)
     return None
@@ -133,7 +133,8 @@ def _rdap_query(domain: str) -> dict[str, Any] | None:
             headers={"Accept": "application/rdap+json"},
         )
         resp = urllib.request.urlopen(req, timeout=_RDAP_TIMEOUT)  # noqa: S310
-        return json.loads(resp.read())
+        result: dict[str, Any] = json.loads(resp.read())
+        return result
     except urllib.error.HTTPError as exc:
         logger.debug("RDAP HTTP %s for %s", exc.code, domain)
     except Exception:
@@ -145,12 +146,12 @@ def _extract_rdap_registrar(data: dict[str, Any]) -> str | None:
     """Extract registrar name from RDAP entities list."""
     for entity in data.get("entities", []):
         if "registrar" in entity.get("roles", []):
-            vcard = entity.get("vcardArray", [None, []])
+            vcard: list[Any] = entity.get("vcardArray", [None, []])
             if len(vcard) >= 2:
                 for prop in vcard[1]:
                     if len(prop) >= 4 and prop[0] == "fn":
                         return str(prop[3])
-            handle = entity.get("handle")
+            handle: str | None = entity.get("handle")
             if handle:
                 return handle
     return None
@@ -165,7 +166,8 @@ def _extract_rdap_event(data: dict[str, Any], action: str) -> str | None:
     """Extract event date string for *action* (e.g. 'registration', 'expiration')."""
     for event in data.get("events", []):
         if event.get("eventAction") == action:
-            return event.get("eventDate")
+            date: str | None = event.get("eventDate")
+            return date
     return None
 
 

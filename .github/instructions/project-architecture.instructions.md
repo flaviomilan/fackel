@@ -110,12 +110,12 @@ Rules:
 
 High-level flow:
 
-Tool Execution  
-→ Raw Output  
-→ Tool Output Translator  
-→ Normalized Information Candidates  
-→ Deduplication (fingerprint)  
-→ Persistence  
+Tool Execution
+→ Raw Output
+→ Tool Output Translator
+→ Normalized Information Candidates
+→ Deduplication (fingerprint)
+→ Persistence
 → Timeline Update
 
 Rules:

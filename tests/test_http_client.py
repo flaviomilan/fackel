@@ -11,7 +11,6 @@ class TestGetSession:
     def test_returns_session_instance(self):
         import tools.http_client as mod
 
-        # Reset module state for clean test
         mod._session = None
         session = get_session()
         assert session is not None

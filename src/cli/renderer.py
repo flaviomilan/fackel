@@ -55,7 +55,6 @@ class EventRenderer:
         self._live: Live | None = None
         self._live_kind: str | None = None
 
-
     def _build_display(self) -> Group:
         """Build the renderable shown inside the Live area."""
         spinner = Spinner("dots", text=f"  {self._spinner_msg}", style="dim")
@@ -64,7 +63,6 @@ class EventRenderer:
         if self._live_kind == "thinking" and self._thinking_text.strip():
             return Group(self._build_thinking_panel(), "", spinner)
         return Group("", spinner)
-
 
     def _refresh_live(self) -> None:
         """Start or update the single Live area."""
@@ -89,6 +87,7 @@ class EventRenderer:
 
     def _persist_content(self) -> None:
         """Print the current content permanently, then stop the Live area."""
+        content: Table | Panel | None
         if self._live_kind == "tools" and self._tool_batch:
             content = self._build_tool_table()
         elif self._live_kind == "thinking" and self._thinking_text.strip():
@@ -110,7 +109,6 @@ class EventRenderer:
         """Clean up all live displays."""
         self._stop_live()
 
-
     def handle(self, phase: str, event_type: str, data: dict[str, Any]) -> None:
         """Route an agent event to the appropriate renderer."""
         label = PHASE_LABELS.get(phase, phase)
@@ -122,7 +120,6 @@ class EventRenderer:
         handler = self._EVENT_HANDLERS.get(event_type)
         if handler is not None:
             handler(self, label=label, icon=icon, data=data)
-
 
     def _on_start(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
         self._persist_content()
@@ -138,7 +135,6 @@ class EventRenderer:
         self._spinner_msg = f"{label}: analyzing\u2026"
         self._live_kind = None
         self._refresh_live()
-
 
     def _build_tool_table(self) -> Table:
         """Build a table showing the current tool batch with live status."""
@@ -242,7 +238,6 @@ class EventRenderer:
             self._refresh_live()
         self._check_batch_complete()
 
-
     def _build_thinking_panel(self) -> Panel:
         """Build a Panel renderable from the current thinking text."""
         text = self._thinking_text.strip()
@@ -330,7 +325,6 @@ class EventRenderer:
             meta.append(f"{self._suppressed_errors} duplicate errors hidden")
         meta_str = f" [dim]({', '.join(meta)})[/dim]" if meta else ""
         self._console.print(f"  [green]✓ {label} complete[/green]{meta_str}")
-
 
     _EVENT_HANDLERS: ClassVar[dict[str, Any]] = {
         "start": _on_start,

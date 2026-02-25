@@ -13,8 +13,6 @@ from tools.recon.dns_resolver import dns_resolve
 from tools.recon.reverse_dns_tool import reverse_dns_lookup
 from tools.recon.subfinder_tool import subfinder_enum
 
-# ── DNS Resolver ───────────────────────────────────────────────────────────
-
 
 class TestDnsResolve:
     """Verify DNS resolution tool."""
@@ -40,9 +38,6 @@ class TestDnsResolve:
     def test_resolution_failure_returns_error(self, _mock):
         result = dns_resolve.invoke({"target": "nonexistent.example"})
         assert "dns_resolve" in result
-
-
-# ── crt.sh ─────────────────────────────────────────────────────────────────
 
 
 class TestCrtShSubdomainEnum:
@@ -86,9 +81,6 @@ class TestCrtShSubdomainEnum:
         assert result["data"]["count"] == 0
 
 
-# ── Reverse DNS ────────────────────────────────────────────────────────────
-
-
 class TestReverseDnsLookup:
     """Verify reverse DNS and reverse IP lookup."""
 
@@ -128,9 +120,6 @@ class TestReverseDnsLookup:
 
         result = reverse_dns_lookup.invoke({"ip": "1.2.3.4"})
         assert result["data"]["shared_domains"] == []
-
-
-# ── Subfinder ──────────────────────────────────────────────────────────────
 
 
 class TestSubfinderEnum:

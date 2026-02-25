@@ -55,7 +55,7 @@ def _parse_rir(block: dict[str, Any]) -> str:
     admin_match = re.search(r"Administered by (\w+)", desc)
     if admin_match:
         return admin_match.group(1)
-    return desc
+    return str(desc)
 
 
 def _parse_holder(holder: str) -> tuple[str, str]:

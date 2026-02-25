@@ -44,7 +44,6 @@ from langchain_core.tools import ToolException
 
 logger = logging.getLogger(__name__)
 
-
 FAILURE_THRESHOLD: int = 3
 
 RESET_TIMEOUT: float = 60.0
