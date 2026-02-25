@@ -1,7 +1,5 @@
 """Tests for shared tool utilities — format_tool_output, run_command, parse_jsonl."""
 
-import pytest
-
 from fackel.tooling import format_tool_output, parse_jsonl, require_binary
 
 

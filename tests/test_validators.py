@@ -4,19 +4,21 @@ import pytest
 
 from fackel.tooling import TargetType, guard_target
 
-
 # ── TargetType.DOMAIN ──────────────────────────────────────────────────
 
 
 class TestGuardTargetDomain:
     """guard_target with TargetType.DOMAIN."""
 
-    @pytest.mark.parametrize("value", [
-        "example.com",
-        "sub.example.com",
-        "deep.nested.example.com",
-        "example.co.uk",
-    ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "example.com",
+            "sub.example.com",
+            "deep.nested.example.com",
+            "example.co.uk",
+        ],
+    )
     def test_valid_domains(self, value: str) -> None:
         cleaned, err = guard_target(value, "test_tool", TargetType.DOMAIN)
         assert err is None
@@ -41,13 +43,16 @@ class TestGuardTargetDomain:
         _, err = guard_target("   ", "test_tool", TargetType.DOMAIN)
         assert err is not None
 
-    @pytest.mark.parametrize("value", [
-        "example.com; rm -rf /",
-        "example.com | cat /etc/passwd",
-        "example.com`whoami`",
-        "$(evil)",
-        "test&bg",
-    ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "example.com; rm -rf /",
+            "example.com | cat /etc/passwd",
+            "example.com`whoami`",
+            "$(evil)",
+            "test&bg",
+        ],
+    )
     def test_rejects_shell_metacharacters(self, value: str) -> None:
         _, err = guard_target(value, "test_tool", TargetType.DOMAIN)
         assert err is not None
@@ -60,13 +65,16 @@ class TestGuardTargetDomain:
 class TestGuardTargetIP:
     """guard_target with TargetType.IP."""
 
-    @pytest.mark.parametrize("value", [
-        "192.168.1.1",
-        "10.0.0.1",
-        "127.0.0.1",
-        "::1",
-        "2606:4700::6811:d209",
-    ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "192.168.1.1",
+            "10.0.0.1",
+            "127.0.0.1",
+            "::1",
+            "2606:4700::6811:d209",
+        ],
+    )
     def test_valid_ips(self, value: str) -> None:
         cleaned, err = guard_target(value, "test_tool", TargetType.IP)
         assert err is None
@@ -105,11 +113,14 @@ class TestGuardTargetHost:
 class TestGuardTargetURL:
     """guard_target with TargetType.URL."""
 
-    @pytest.mark.parametrize("value", [
-        "http://example.com",
-        "https://example.com/path?q=1",
-        "https://sub.example.com:8443/api",
-    ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "http://example.com",
+            "https://example.com/path?q=1",
+            "https://sub.example.com:8443/api",
+        ],
+    )
     def test_valid_urls(self, value: str) -> None:
         cleaned, err = guard_target(value, "test_tool", TargetType.URL)
         assert err is None

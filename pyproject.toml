@@ -8,24 +8,24 @@ version = "0.1.0"
 description = "Autonomous OSINT and security intelligence agent"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "Fackel Team" }]
 dependencies = [
-  "python-whois",
-  "shodan",
+  "python-whois>=0.9",
+  "shodan>=1.31",
   "ddgs>=1.1.1",
   "censys>=2.2",
-  "langchain",
-  "langchain-openai",
-  "langchain-community",
-  "langgraph",
-  "beautifulsoup4",
-  "requests",
-  "python-dotenv",
+  "langchain>=1.0",
+  "langchain-openai>=1.0",
+  "langchain-community>=0.4",
+  "langgraph>=1.0",
+  "beautifulsoup4>=4.12",
+  "requests>=2.31",
+  "python-dotenv>=1.0",
   "google-search-results>=2.4.2",
-  "python-nmap",
+  "python-nmap>=0.7",
   "pyyaml>=6.0",
-  "langfuse",
+  "langfuse>=3.0",
   "pydantic>=2.6",
   "typer>=0.12",
 ]
@@ -58,11 +58,15 @@ package = true
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF"]
 ignore = ["E501"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"tests/**/*.py" = ["S101"]
+"src/cli/**/*.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -79,6 +83,10 @@ exclude = ["tests/fixtures"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "integration: marks tests that hit external services",
+]
 
 [tool.coverage.run]
 source = ["src"]

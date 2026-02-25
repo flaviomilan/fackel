@@ -22,6 +22,8 @@ from fackel.tooling import (
     sanitize_tags,
 )
 
+_TIMEOUT = 3000  # seconds
+
 
 class NucleiInput(BaseModel):
     """Input for Nuclei vulnerability scanner."""
@@ -85,7 +87,7 @@ def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, An
         cmd.extend(["-tags", tags])
 
     try:
-        code, out, stderr = run_command(cmd, timeout=3000)
+        code, out, stderr = run_command(cmd, timeout=_TIMEOUT)
     except Exception as exc:
         return format_tool_output("nuclei_scan", target, "error", error=str(exc))
 
@@ -113,10 +115,18 @@ def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, An
         findings.append(finding)
 
     if not findings:
-        msg = "no vulnerabilities found" if code == 0 else (stderr.strip() or "scan produced no output")
-        return format_tool_output("nuclei_scan", target, "ok", data={"findings": [], "message": msg})
+        msg = (
+            "no vulnerabilities found"
+            if code == 0
+            else (stderr.strip() or "scan produced no output")
+        )
+        return format_tool_output(
+            "nuclei_scan", target, "ok", data={"findings": [], "message": msg}
+        )
 
     return format_tool_output(
-        "nuclei_scan", target, "ok",
+        "nuclei_scan",
+        target,
+        "ok",
         data={"total": len(findings), "findings": findings},
     )

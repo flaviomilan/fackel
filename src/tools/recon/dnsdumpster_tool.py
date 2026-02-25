@@ -7,6 +7,7 @@ subdomains, DNS/MX/NS/TXT records, and hosting providers.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -17,6 +18,8 @@ from fackel.tooling import TargetType, format_tool_output, guard_target
 
 _API_URL = "https://api.dnsdumpster.com/htmld/"
 _PAGE_URL = "https://dnsdumpster.com/"
+_JWT_TIMEOUT = 15  # seconds - page fetch for JWT
+_API_TIMEOUT = 30  # seconds - API query
 
 
 class DnsDumpsterInput(BaseModel):
@@ -35,7 +38,7 @@ def _fetch_jwt() -> str:
     resp = requests.get(
         _PAGE_URL,
         headers={"User-Agent": "Mozilla/5.0"},
-        timeout=15,
+        timeout=_JWT_TIMEOUT,
     )
     resp.raise_for_status()
     match = re.search(r'"Authorization":\s*"(eyJ[^"]+)"', resp.text)
@@ -44,9 +47,9 @@ def _fetch_jwt() -> str:
     return match.group(1)
 
 
-def _parse_host_table(table: BeautifulSoup) -> list[dict]:
+def _parse_host_table(table: BeautifulSoup) -> list[dict[str, Any]]:
     """Extract host records (subdomains) from a DNSDumpster HTML table."""
-    hosts: list[dict] = []
+    hosts: list[dict[str, Any]] = []
     for row in table.find_all("tr"):
         cols = row.find_all("td")
         if len(cols) < 2:
@@ -58,12 +61,14 @@ def _parse_host_table(table: BeautifulSoup) -> list[dict]:
         # Extract clean IP (first token before any hostname appended)
         ip_match = re.match(r"(\d{1,3}(?:\.\d{1,3}){3})", ip_text)
         ip_addr = ip_match.group(1) if ip_match else ip_text
-        hosts.append({
-            "hostname": hostname,
-            "ip": ip_addr,
-            "asn": asn_info,
-            "provider": provider,
-        })
+        hosts.append(
+            {
+                "hostname": hostname,
+                "ip": ip_addr,
+                "asn": asn_info,
+                "provider": provider,
+            }
+        )
     return hosts
 
 
@@ -79,7 +84,7 @@ def _parse_simple_table(table: BeautifulSoup) -> list[str]:
 
 
 @tool(args_schema=DnsDumpsterInput)
-def dnsdumpster_lookup(domain: str) -> dict:
+def dnsdumpster_lookup(domain: str) -> dict[str, Any]:
     """Discover subdomains, DNS records, and hosting via DNSDumpster.
 
     Fetches a short-lived JWT from dnsdumpster.com, then queries their
@@ -95,7 +100,9 @@ def dnsdumpster_lookup(domain: str) -> dict:
         jwt = _fetch_jwt()
     except Exception as exc:
         return format_tool_output(
-            "dnsdumpster_lookup", domain, "error",
+            "dnsdumpster_lookup",
+            domain,
+            "error",
             error=f"Failed to obtain DNSDumpster auth token: {exc}",
         )
 
@@ -108,12 +115,14 @@ def dnsdumpster_lookup(domain: str) -> dict:
                 "User-Agent": "Mozilla/5.0",
             },
             data={"target": domain},
-            timeout=30,
+            timeout=_API_TIMEOUT,
         )
         resp.raise_for_status()
     except requests.RequestException as exc:
         return format_tool_output(
-            "dnsdumpster_lookup", domain, "error",
+            "dnsdumpster_lookup",
+            domain,
+            "error",
             error=f"DNSDumpster API request failed: {exc}",
         )
 
@@ -123,7 +132,9 @@ def dnsdumpster_lookup(domain: str) -> dict:
 
         if not tables:
             return format_tool_output(
-                "dnsdumpster_lookup", domain, "ok",
+                "dnsdumpster_lookup",
+                domain,
+                "ok",
                 data={"hosts": [], "dns_servers": [], "mx_records": [], "txt_records": []},
             )
 
@@ -151,6 +162,8 @@ def dnsdumpster_lookup(domain: str) -> dict:
         )
     except Exception as exc:
         return format_tool_output(
-            "dnsdumpster_lookup", domain, "error",
+            "dnsdumpster_lookup",
+            domain,
+            "error",
             error=f"Failed to parse DNSDumpster response: {exc}",
         )

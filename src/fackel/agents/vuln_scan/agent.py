@@ -8,6 +8,7 @@ configurations, and identify WAF protections.
 from __future__ import annotations
 
 from langchain_openai import ChatOpenAI
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
 
 from fackel.agents.config import get_model
@@ -33,7 +34,7 @@ TOOLS = [
 ]
 
 
-def build(model_name: str | None = None):
+def build(model_name: str | None = None) -> CompiledStateGraph:
     """Return a compiled ReAct vulnerability scan agent."""
     llm = ChatOpenAI(model=model_name or get_model("vuln_scan"))
     return create_react_agent(llm, TOOLS, prompt=load_prompt("vuln_scan"))

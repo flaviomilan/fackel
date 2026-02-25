@@ -1,8 +1,6 @@
 """Tests for report_writer — build_full_report and helpers."""
 
-import pytest
-
-from fackel.report_writer import build_full_report, _extract_section, _format_evaluation
+from fackel.report_writer import _extract_section, _format_evaluation, build_full_report
 
 
 class TestExtractSection:

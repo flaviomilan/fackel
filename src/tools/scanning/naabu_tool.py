@@ -106,7 +106,8 @@ def naabu_scan(
 
     if not results:
         return format_tool_output(
-            "naabu_scan", host,
+            "naabu_scan",
+            host,
             "error" if code else "ok",
             error=stderr or "no open ports found",
         )

@@ -14,12 +14,12 @@ Usage inside a tool::
 
 Available target types:
 
-* ``DOMAIN``  – valid domain name; rejects IPs, URLs, and shell meta-characters.
-* ``IP``      – valid IPv4 / IPv6 address.
-* ``HOST``    – domain **or** IP.
-* ``HOST_PORT`` – domain or IP, optionally with ``:port``.
-* ``URL``     – must include ``http://`` or ``https://`` scheme.
-* ``HOST_OR_URL`` – domain, IP, or full URL.
+* ``DOMAIN``  - valid domain name; rejects IPs, URLs, and shell meta-characters.
+* ``IP``      - valid IPv4 / IPv6 address.
+* ``HOST``    - domain **or** IP.
+* ``HOST_PORT`` - domain or IP, optionally with ``:port``.
+* ``URL``     - must include ``http://`` or ``https://`` scheme.
+* ``HOST_OR_URL`` - domain, IP, or full URL.
 """
 
 from __future__ import annotations
@@ -33,9 +33,7 @@ from fackel.tooling.execution import format_tool_output
 
 # ── Low-level validation helpers ───────────────────────────────────────
 
-_DOMAIN_RE = re.compile(
-    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$"
-)
+_DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$")
 
 _OCTET_QUAD_RE = re.compile(r"^\d{1,3}(?:-\d{1,3}){3}$")
 
@@ -74,9 +72,9 @@ class TargetType(Enum):
 
     DOMAIN = "domain"
     IP = "ip"
-    HOST = "host"            # domain or IP
+    HOST = "host"  # domain or IP
     HOST_PORT = "host_port"  # domain or IP, optionally with :port
-    URL = "url"              # requires scheme
+    URL = "url"  # requires scheme
     HOST_OR_URL = "host_or_url"  # domain, IP, or full URL
 
 
@@ -115,9 +113,7 @@ def guard_target(
     if accept is TargetType.URL:
         parsed = urlparse(raw)
         if parsed.scheme not in ("http", "https"):
-            return _err(
-                f"expected a full URL (http/https), got: {raw}"
-            )
+            return _err(f"expected a full URL (http/https), got: {raw}")
         if not parsed.hostname:
             return _err(f"URL has no hostname: {raw}")
         host = parsed.hostname
@@ -132,7 +128,7 @@ def guard_target(
             host = parsed.hostname
             if _SHELL_META_RE.search(host):
                 return _err(f"target contains forbidden characters: {host!r}")
-            return raw, None      # keep full URL
+            return raw, None  # keep full URL
         # fall through → treat as HOST
         return guard_target(raw, tool_name, TargetType.HOST)
 
@@ -154,9 +150,7 @@ def guard_target(
 
     if accept is TargetType.IP:
         if not is_valid_ip(host):
-            return _err(
-                f"{tool_name} requires an IP address, got: {host!r}"
-            )
+            return _err(f"{tool_name} requires an IP address, got: {host!r}")
         return host, None
 
     if accept is TargetType.HOST:
@@ -171,7 +165,7 @@ def guard_target(
         if ":" in candidate and not candidate.startswith("["):
             # Simple host:port (not IPv6).  Split on the *last* colon.
             last_colon = candidate.rfind(":")
-            maybe_port = candidate[last_colon + 1:]
+            maybe_port = candidate[last_colon + 1 :]
             if maybe_port.isdigit():
                 candidate = candidate[:last_colon]
                 port_part = f":{maybe_port}"

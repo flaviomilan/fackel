@@ -7,13 +7,19 @@ free reverse IP API to discover other domains hosted on the same IP
 
 from __future__ import annotations
 
+import logging
 import socket
+from typing import Any
 
 import requests
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, guard_target
+
+logger = logging.getLogger(__name__)
+
+_TIMEOUT = 15  # seconds
 
 
 class ReverseDnsInput(BaseModel):
@@ -29,7 +35,7 @@ class ReverseDnsInput(BaseModel):
 
 
 @tool(args_schema=ReverseDnsInput)
-def reverse_dns_lookup(ip: str) -> dict:
+def reverse_dns_lookup(ip: str) -> dict[str, Any]:
     """Reverse-resolve an IP to its PTR hostname and discover co-hosted domains.
 
     Combines two passive techniques: system PTR lookup (instant) and
@@ -52,25 +58,21 @@ def reverse_dns_lookup(ip: str) -> dict:
         ptr_hostname = result[0]
         ptr_aliases = list(result[1]) if result[1] else []
     except socket.herror:
-        pass  # No PTR record — common for cloud IPs
+        logger.debug("No PTR record for %s", ip)
     except Exception:
-        pass
+        logger.debug("PTR lookup failed for %s", ip)
 
     # --- HackerTarget reverse IP (free, no key) ---
     try:
         resp = requests.get(
             f"https://api.hackertarget.com/reverseiplookup/?q={ip}",
-            timeout=15,
+            timeout=_TIMEOUT,
             headers={"User-Agent": "Mozilla/5.0"},
         )
         if resp.status_code == 200:
             text = resp.text.strip()
             if not text.startswith("error") and not text.startswith("API count"):
-                shared_domains = [
-                    line.strip()
-                    for line in text.split("\n")
-                    if line.strip()
-                ]
+                shared_domains = [line.strip() for line in text.split("\n") if line.strip()]
     except requests.RequestException:
         pass  # Best-effort — continue with PTR data alone
 

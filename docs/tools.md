@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete reference for all 25 tool wrappers in Fackel. Each tool is a
+Complete reference for all 27 tool wrappers in Fackel. Each tool is a
 LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema
 and standardised output envelope.
 
@@ -20,6 +20,12 @@ and standardised output envelope.
   - [crtsh_subdomain_enum](#crtsh_subdomain_enum)
   - [subfinder_enum](#subfinder_enum)
   - [reverse_dns_lookup](#reverse_dns_lookup)
+  - [ipinfo_lookup](#ipinfo_lookup)
+  - [bgp_lookup](#bgp_lookup)
+  - [tlscert_lookup](#tlscert_lookup)
+  - [securitytrails_history](#securitytrails_history)
+  - [urlscan_search](#urlscan_search)
+  - [otx_passive_dns](#otx_passive_dns)
   - [job_search](#job_search)
   - [analyze_email](#analyze_email)
 - [Port scan tools](#port-scan-tools)
@@ -34,7 +40,6 @@ and standardised output envelope.
   - [katana_crawl](#katana_crawl)
   - [testssl_scan](#testssl_scan)
   - [extract_webpage_content](#extract_webpage_content)
-- [Available but unwired tools](#available-but-unwired-tools)
 - [External binaries](#external-binaries)
 - [Shared utilities](#shared-utilities)
 
@@ -77,6 +82,12 @@ specification of the validation system.
 | `crtsh_subdomain_enum` | `DOMAIN` | Domain | IPs, URLs |
 | `subfinder_enum` | `DOMAIN` | Domain | IPs, URLs |
 | `reverse_dns_lookup` | `IP` | IPv4/IPv6 | Domains, URLs |
+| `ipinfo_lookup` | `IP` | IPv4/IPv6 | Domains, URLs |
+| `bgp_lookup` | `IP` | IPv4/IPv6 | Domains, URLs |
+| `tlscert_lookup` | `DOMAIN` | Domain | IPs, URLs |
+| `securitytrails_history` | `DOMAIN` | Domain | IPs, URLs |
+| `urlscan_search` | `DOMAIN` | Domain | IPs, URLs |
+| `otx_passive_dns` | `DOMAIN` | Domain | IPs, URLs |
 | `naabu_scan` | `HOST` | Domain, IP | URLs |
 | `nmap_port_scan` | `HOST` | Domain, IP | URLs |
 | `nuclei_scan` | `DOMAIN` | Domain | IPs, URLs |
@@ -90,6 +101,8 @@ specification of the validation system.
 
 Tools not listed (`shodan_lookup`, `job_search`, `analyze_email`) have custom
 or no target validation (free-text inputs).
+
+> **Note:** `httpx_scan` is shared between the **OSINT** and **Vuln Scan** agents.
 
 All target types reject **shell metacharacters** (`; & | \` $ ( ) { } ! [ ] < > ' " \ \n \r`).
 
@@ -254,6 +267,135 @@ Reverse-resolve an IP to its PTR hostname and discover co-hosted domains.
 - `shared_domain_count` — count of co-hosted domains
 
 **Requires:** Nothing (stdlib `socket` + HackerTarget API)
+
+---
+
+### ipinfo_lookup
+
+Look up IP geolocation, ASN, and organisation via ipinfo.io.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ip` | `str` | *(required)* | IPv4 address to look up (e.g. `104.21.36.250`). Returns ASN, organisation, CIDR, geolocation, and anycast flag. Call once per discovered IP to classify infrastructure. |
+
+**Returns:**
+- `ip` — queried IP address
+- `hostname` — reverse hostname (if any)
+- `city` — city name
+- `region` — region / state
+- `country` — country code
+- `org` — organisation name (ASN holder)
+- `asn` — AS number (e.g. `AS13335`)
+- `anycast` — whether the IP is an anycast address (common for CDNs)
+
+**Requires:** Nothing (free tier, no API key needed; 50 000 req/month)
+
+---
+
+### bgp_lookup
+
+Look up ASN and prefix information for an IP via RIPEstat.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ip` | `str` | *(required)* | IPv4 address (e.g. `104.21.36.250`). Returns ASN, ASN holder, CIDR prefix, and RIR allocation. Call once per discovered IP to get BGP-level context. |
+
+**Returns:**
+- `ip` — queried IP address
+- `asn` — AS number
+- `asn_name` — short ASN holder name (e.g. `CLOUDFLARENET`)
+- `asn_description` — full ASN holder description (e.g. `Cloudflare, Inc.`)
+- `prefix` — announcing CIDR prefix
+- `cidr` — prefix length as integer
+- `rir` — Regional Internet Registry (ARIN, RIPE, APNIC, etc.)
+
+**Requires:** Nothing (free public RIPEstat API, no authentication)
+
+---
+
+### tlscert_lookup
+
+Inspect the TLS certificate of a host.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `hostname` | `str` | *(required)* | Domain name to inspect (e.g. `example.com`). Connects via TLS and extracts certificate metadata including SANs for subdomain discovery. |
+| `port` | `int` | `443` | TCP port for the TLS connection (1–65535). |
+
+**Returns:**
+- `subject_cn` — certificate Subject Common Name
+- `issuer_org` — issuer organisation name
+- `issuer_cn` — issuer Common Name
+- `san_domains` — Subject Alternative Name domains (useful for subdomain discovery)
+- `serial` — certificate serial number (hex)
+- `fingerprint_sha256` — SHA-256 fingerprint
+- `not_before` — validity start date (ISO-8601)
+- `not_after` — validity end date (ISO-8601)
+- `protocol_version` — negotiated TLS protocol version
+- `verified` — whether the certificate chain was trusted
+
+**Requires:** Nothing (pure Python stdlib, no external binary)
+
+---
+
+### securitytrails_history
+
+Look up historical DNS records via SecurityTrails.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `domain` | `str` | *(required)* | Domain name to query (e.g. `example.com`). Returns historical A, MX, and NS records — reveals previous IPs, hosting provider changes, and nameserver migrations. Old IPs may still be reachable and bypass CDN protection. |
+
+**Returns:**
+- `a_records` — list of `{value, first_seen, last_seen, org}` for historical A (IPv4) records
+- `mx_records` — list of `{value, first_seen, last_seen, org}` for historical MX records
+- `ns_records` — list of `{value, first_seen, last_seen, org}` for historical NS records
+
+**Requires:** `SECURITYTRAILS_API_KEY` env var (free tier: 50 queries/month)
+
+---
+
+### urlscan_search
+
+Search Urlscan.io for cached scan results of a domain.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `domain` | `str` | *(required)* | Domain name to search (e.g. `example.com`). Returns cached scan results from community scans — URLs, IPs, server headers, technologies, ASN info. |
+
+**Returns:**
+- `total` — total number of matching scans
+- `results` — up to 10 most recent results, each containing:
+  - `url` — scanned URL
+  - `domain` — domain
+  - `ip` — resolved IP
+  - `server` — server header
+  - `asn` / `asnname` — ASN number and name
+  - `title` — page title
+  - `status` — HTTP status code
+  - `mime_type` — content MIME type
+  - `country` — server country
+  - `technologies` — detected protocols/technologies
+  - `scan_time` — when the scan was performed
+  - `visibility` — scan visibility (public/unlisted)
+
+**Requires:** Nothing (free, no API key required)
+
+---
+
+### otx_passive_dns
+
+Look up passive DNS records via AlienVault OTX.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `domain` | `str` | *(required)* | Domain name to query (e.g. `example.com`). Returns historical passive DNS records — IP resolutions with first-seen / last-seen timestamps. Complements SecurityTrails and other passive DNS sources. |
+
+**Returns:**
+- `count` — number of deduplicated records
+- `records` — list of `{address, hostname, record_type, first_seen, last_seen, asn}`
+
+**Requires:** `OTX_API_KEY` env var (free registration at AlienVault OTX)
 
 ---
 

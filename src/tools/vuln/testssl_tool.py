@@ -26,6 +26,8 @@ from fackel.tooling import (
     sanitize_severity,
 )
 
+_TIMEOUT = 300  # seconds
+
 
 class TestSSLInput(BaseModel):
     """Input schema for testssl.sh TLS/SSL scanner."""
@@ -93,8 +95,10 @@ def testssl_scan(
     cmd = [
         "testssl.sh",
         "--jsonfile=-",  # JSON to stdout
-        "--warnings", "off",
-        "--color", "0",
+        "--warnings",
+        "off",
+        "--color",
+        "0",
         "--sneaky",  # less intrusive timing
     ]
 
@@ -115,10 +119,13 @@ def testssl_scan(
     cmd.append(host)
 
     try:
-        code, out, stderr = run_command(cmd, timeout=300)
+        _code, out, _stderr = run_command(cmd, timeout=_TIMEOUT)
     except Exception as exc:
         return format_tool_output(
-            "testssl_scan", target, "error", error=str(exc),
+            "testssl_scan",
+            target,
+            "error",
+            error=str(exc),
         )
 
     # Parse JSON output (testssl.sh outputs a JSON array to stdout with --jsonfile=-).
@@ -157,13 +164,15 @@ def testssl_scan(
         if severity_filter and sev not in severity_filter:
             continue
 
-        findings.append({
-            "id": finding_id,
-            "severity": sev,
-            "finding": finding_text,
-            "cve": record.get("cve", ""),
-            "cwe": record.get("cwe", ""),
-        })
+        findings.append(
+            {
+                "id": finding_id,
+                "severity": sev,
+                "finding": finding_text,
+                "cve": record.get("cve", ""),
+                "cwe": record.get("cwe", ""),
+            }
+        )
 
     # Categorise findings for the summary.
     protocols = [f for f in findings if f["id"].startswith(("SSLv", "TLS", "NPN", "ALPN"))]

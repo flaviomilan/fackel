@@ -23,6 +23,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command, interrupt
 
 from fackel.tooling import is_reverse_ptr_subdomain, is_valid_domain, is_valid_ip, sanitize_target
+from fackel.tooling.ip_classifier import classify_ip
 
 from .evaluator import evaluate_phase
 from .state import Finding, ScanState
@@ -45,7 +46,7 @@ _SUBDOMAIN_CAP = 30
 
 def set_event_callback(cb: EventCallback) -> None:
     """Set the callback that receives real-time ReAct events."""
-    global _event_callback  # noqa: PLW0603
+    global _event_callback
     _event_callback = cb
 
 
@@ -110,7 +111,7 @@ def _validate_tool_output(msg: ToolMessage) -> ToolMessage:
 # ── IP extraction ─────────────────────────────────────────────────────────
 
 
-def _extract_ips_from_messages(messages: list) -> list[str]:
+def _extract_ips_from_messages(messages: list[Any]) -> list[str]:
     """Pull IP addresses out of ToolMessage payloads from all OSINT tools.
 
     Handles the ``format_tool_output`` envelope and extracts IPs from:
@@ -164,7 +165,7 @@ def _extract_ips_from_messages(messages: list) -> list[str]:
 # ── Subdomain extraction ──────────────────────────────────────────────────
 
 
-def _extract_subdomains_from_messages(messages: list, base_domain: str) -> list[str]:
+def _extract_subdomains_from_messages(messages: list[Any], base_domain: str) -> list[str]:
     """Pull subdomain hostnames from ToolMessage payloads.
 
     Extracts from:
@@ -220,6 +221,243 @@ def _extract_subdomains_from_messages(messages: list, base_domain: str) -> list[
     return sorted(subs)
 
 
+# ── IP classification extraction ──────────────────────────────────────────
+
+# Maximum IPs to classify (avoids excessive API calls when many IPs found).
+_IP_CLASS_CAP = 15
+
+
+def _extract_ip_classifications_from_messages(
+    messages: list[Any],
+    target_domain: str,
+) -> list[dict[str, Any]]:
+    """Build IP classification entries from ipinfo/bgp ToolMessage payloads.
+
+    For each IP that has an ipinfo_lookup result, the pure ``classify_ip``
+    function determines the infrastructure class (cdn / cloud / direct_host
+    / isp).  RIPEstat BGP data supplements when available.
+    """
+    # Collect raw per-IP data from tool outputs.
+    ip_data: dict[str, dict] = {}  # ip → merged fields
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        try:
+            payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            if not isinstance(payload, dict):
+                continue
+            inner = payload.get("data", payload)
+            if not isinstance(inner, dict):
+                continue
+            tool_name = payload.get("tool", msg.name or "")
+            ip_key = inner.get("ip", "")
+            if not ip_key:
+                continue
+
+            entry = ip_data.setdefault(ip_key, {})
+
+            if tool_name == "ipinfo_lookup":
+                entry["org"] = inner.get("org", "")
+                entry["asn"] = inner.get("asn", "")
+                entry["hostname"] = inner.get("hostname", "")
+                entry["anycast"] = inner.get("anycast", False)
+                entry["city"] = inner.get("city", "")
+                entry["country"] = inner.get("country", "")
+
+            elif tool_name == "bgp_lookup":
+                entry.setdefault("org", "")
+                entry["asn_name"] = inner.get("asn_name", "")
+                entry["asn_description"] = inner.get("asn_description", "")
+                entry.setdefault("asn", inner.get("asn", ""))
+                entry["prefix"] = inner.get("prefix", "")
+                entry["rir"] = inner.get("rir", "")
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            continue
+
+    # Run the classifier for each collected IP.
+    classifications: list[dict[str, Any]] = []
+    for ip, data in ip_data.items():
+        ip_class = classify_ip(
+            org=data.get("org", ""),
+            asn=data.get("asn"),
+            asn_name=data.get("asn_name", ""),
+            hostname=data.get("hostname", ""),
+            anycast=data.get("anycast", False),
+            target_domain=target_domain,
+        )
+        classifications.append(
+            {
+                "ip": ip,
+                "ip_class": ip_class,
+                "org": data.get("org", ""),
+                "asn": str(data.get("asn", "")),
+                "asn_name": data.get("asn_name", ""),
+                "country": data.get("country", ""),
+                "anycast": data.get("anycast", False),
+            }
+        )
+    return classifications
+
+
+# ── Tech fingerprint extraction ───────────────────────────────────────────
+
+
+def _extract_tech_fingerprints_from_messages(messages: list[Any]) -> list[dict[str, Any]]:
+    """Build tech fingerprint entries from httpx_scan ToolMessage payloads.
+
+    Each httpx result contains status code, server header, detected
+    technologies, redirect chain, TLS info, etc.  We normalise these
+    into a flat dict per probed target.
+    """
+    fingerprints: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        try:
+            payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("tool") != "httpx_scan":
+                continue
+            if payload.get("status") != "ok":
+                continue
+
+            inner = payload.get("data", {})
+            results = inner.get("results", [])
+            if not isinstance(results, list):
+                continue
+
+            for entry in results:
+                if not isinstance(entry, dict):
+                    continue
+                url = entry.get("url", entry.get("input", ""))
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+
+                techs = entry.get("tech", [])
+                if isinstance(techs, str):
+                    techs = [techs]
+
+                fingerprints.append(
+                    {
+                        "target": url,
+                        "host": entry.get("host", entry.get("input", "")),
+                        "status_code": entry.get("status_code", entry.get("status-code")),
+                        "server": entry.get("webserver", entry.get("server", "")),
+                        "title": entry.get("title", ""),
+                        "technologies": techs or [],
+                        "content_type": entry.get("content_type", entry.get("content-type", "")),
+                        "redirect_chain": entry.get("chain", []),
+                        "tls": {
+                            "version": entry.get("tls", {}).get("version", "")
+                            if isinstance(entry.get("tls"), dict)
+                            else "",
+                            "cipher": entry.get("tls", {}).get("cipher", "")
+                            if isinstance(entry.get("tls"), dict)
+                            else "",
+                        },
+                        "cdn": entry.get("cdn", False),
+                        "waf": entry.get("waf", ""),
+                    }
+                )
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            continue
+    return fingerprints
+
+
+# ── Historical IP extraction from SecurityTrails ──────────────────────────
+
+
+def _extract_historical_ips_from_messages(
+    messages: list[Any],
+    current_ips: list[str],
+) -> list[str]:
+    """Pull historical A-record IPs from securitytrails_history ToolMessages.
+
+    Returns IPs that appear in historical A records but are **not** in
+    *current_ips* — these are potential direct-origin candidates that may
+    bypass CDN protection.  Deduplicates and validates each IP.
+    """
+    historical: list[str] = []
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        try:
+            payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("tool") != "securitytrails_history":
+                continue
+            if payload.get("status") != "ok":
+                continue
+
+            inner = payload.get("data", {})
+            for record in inner.get("a_records", []):
+                if not isinstance(record, dict):
+                    continue
+                ip_str = str(record.get("value", "")).strip()
+                if (
+                    ip_str
+                    and ip_str not in historical
+                    and ip_str not in current_ips
+                    and is_valid_ip(ip_str)
+                ):
+                    historical.append(ip_str)
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            continue
+    return historical
+
+
+# ── SAN extraction from TLS certificates ──────────────────────────────────
+
+
+def _extract_san_domains_from_messages(messages: list[Any], base_domain: str) -> list[str]:
+    """Pull SAN domains from tlscert_lookup ToolMessage payloads.
+
+    Returns validated subdomain hostnames belonging to *base_domain*,
+    deduplicated and sorted.  Wildcard prefixes (``*.``) are stripped
+    before validation.
+    """
+    sans: list[str] = []
+    base_lower = base_domain.lower()
+
+    def _add(value: object) -> None:
+        host = str(value).strip().lower().rstrip(".")
+        if (
+            host
+            and host not in sans
+            and host != base_lower
+            and host.endswith(f".{base_lower}")
+            and is_valid_domain(host)
+            and not is_reverse_ptr_subdomain(host)
+        ):
+            sans.append(host)
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        try:
+            payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("tool") != "tlscert_lookup":
+                continue
+            if payload.get("status") != "ok":
+                continue
+
+            inner = payload.get("data", {})
+            for san in inner.get("san_domains", []):
+                _add(san)
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            continue
+    return sorted(sans)
+
+
 def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
     """Stream a ReAct agent and emit events, returning all collected messages.
 
@@ -234,9 +472,8 @@ def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
         {"messages": [HumanMessage(content=user_message)]},
         stream_mode="updates",
     ):
-        for node_name, data in event.items():
+        for _node_name, data in event.items():
             for msg in data.get("messages", []):
-
                 # ── Output validation on tool results ──
                 if isinstance(msg, ToolMessage):
                     msg = _validate_tool_output(msg)
@@ -248,10 +485,14 @@ def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
                     if tool_calls:
                         for tc in tool_calls:
                             tool_call_count += 1
-                            _emit(phase, "tool_call", {
-                                "tool": tc["name"],
-                                "args": tc.get("args", {}),
-                            })
+                            _emit(
+                                phase,
+                                "tool_call",
+                                {
+                                    "tool": tc["name"],
+                                    "args": tc.get("args", {}),
+                                },
+                            )
                     elif msg.content:
                         _emit(phase, "reasoning", {"content": msg.content})
 
@@ -260,7 +501,9 @@ def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
                     _is_error = False
                     _error_hint = ""
                     try:
-                        _pl = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+                        _pl = (
+                            json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+                        )
                         if isinstance(_pl, dict) and _pl.get("status") == "error":
                             _is_error = True
                             _error_hint = str(_pl.get("error", "unknown"))
@@ -268,40 +511,57 @@ def _run_and_stream_agent(agent, phase: str, user_message: str) -> list:
                         pass
 
                     if _is_error:
-                        _emit(phase, "tool_error", {
-                            "tool": msg.name,
-                            "error": _error_hint,
-                        })
+                        _emit(
+                            phase,
+                            "tool_error",
+                            {
+                                "tool": msg.name,
+                                "error": _error_hint,
+                            },
+                        )
                     else:
-                        _emit(phase, "tool_result", {
-                            "tool": msg.name,
-                            "content": str(msg.content)[:500],
-                        })
+                        _emit(
+                            phase,
+                            "tool_result",
+                            {
+                                "tool": msg.name,
+                                "content": str(msg.content)[:500],
+                            },
+                        )
 
         # ── Max-iterations guard ──
         if tool_call_count >= MAX_AGENT_ITERATIONS:
             logger.warning(
                 "%s: hit max iterations (%d tool calls) — stopping agent",
-                phase, MAX_AGENT_ITERATIONS,
+                phase,
+                MAX_AGENT_ITERATIONS,
             )
-            _emit(phase, "reasoning", {
-                "content": f"⚠ Agent stopped: reached {MAX_AGENT_ITERATIONS} tool call limit.",
-            })
+            _emit(
+                phase,
+                "reasoning",
+                {
+                    "content": f"⚠ Agent stopped: reached {MAX_AGENT_ITERATIONS} tool call limit.",
+                },
+            )
             break
 
     return all_messages
 
 
-def _agent_summary(messages: list) -> str:
+def _agent_summary(messages: list[Any]) -> str:
     """Return the last AI message content, or a fallback."""
     for msg in reversed(messages):
-        if isinstance(msg, AIMessage) and msg.content and msg.content.strip():
-            if not getattr(msg, "tool_calls", None):
-                return msg.content.strip()
+        if (
+            isinstance(msg, AIMessage)
+            and msg.content
+            and msg.content.strip()
+            and not getattr(msg, "tool_calls", None)
+        ):
+            return msg.content.strip()
     return "No findings."
 
 
-def _get_phase_evaluation(state: ScanState, phase: str) -> dict | None:
+def _get_phase_evaluation(state: ScanState, phase: str) -> dict[str, Any] | None:
     """Retrieve the latest LLM-as-a-judge evaluation for *phase* from state."""
     for evaluation in reversed(state.get("phase_evaluations", [])):
         if isinstance(evaluation, dict) and evaluation.get("phase") == phase:
@@ -312,25 +572,113 @@ def _get_phase_evaluation(state: ScanState, phase: str) -> dict | None:
 # ── Nodes ──────────────────────────────────────────────────────────────────
 
 
-def osint_node(state: ScanState) -> dict:
-    """Run the OSINT ReAct agent for passive reconnaissance."""
+def osint_node(state: ScanState) -> dict[str, Any]:
+    """Run the OSINT ReAct agent for passive reconnaissance.
+
+    Includes LLM-as-a-judge quality evaluation and self-reflection retry:
+    if the first pass produces thin output (judge says "empty"), the agent
+    is re-invoked with enriched instructions based on the judge's gaps.
+    """
     from fackel.agents.osint.agent import build
 
     target = sanitize_target(state["target"])
     agent = build()
+
+    # ── First agent pass ──
     messages = _run_and_stream_agent(
         agent, "osint", f"Perform passive OSINT reconnaissance on: {target}"
     )
+
+    first_summary = _agent_summary(messages)
+
+    # ── LLM-as-a-judge quality evaluation ──
+    evaluation = evaluate_phase("osint", first_summary, [target])
+    _emit(
+        "osint",
+        "evaluation",
+        {
+            "score": evaluation.score,
+            "completeness": evaluation.completeness,
+            "recommendation": evaluation.recommendation,
+        },
+    )
+
+    # ── Self-reflection retry on poor quality ──
+    if evaluation.completeness == "empty" and evaluation.score < 0.3:
+        logger.info(
+            "osint: judge rated output as empty (score=%.1f) — retrying with enriched prompt",
+            evaluation.score,
+        )
+        gaps_text = "; ".join(evaluation.gaps) if evaluation.gaps else "thin output"
+        retry_prompt = (
+            f"Your first OSINT pass on {target} was insufficient.\n"
+            f"Quality assessment: {evaluation.completeness} (score: {evaluation.score:.1f})\n"
+            f"Gaps identified: {gaps_text}\n"
+            f"Reasoning: {evaluation.reasoning}\n\n"
+            f"Please perform a MORE THOROUGH reconnaissance on: {target}\n"
+            "Use ALL available tools from your playbook — DNS, WHOIS, subdomain "
+            "enumeration, reverse DNS, IP classification, Shodan/Censys, httpx, "
+            "TLS certs. Do not stop after one or two tools."
+        )
+        _emit("osint", "retry", {"reason": gaps_text})
+        retry_messages = _run_and_stream_agent(agent, "osint", retry_prompt)
+        messages = messages + retry_messages  # merge for extraction
 
     ips = _extract_ips_from_messages(messages)
     if not ips and is_valid_ip(target):
         ips = [target]
 
     subdomains = (
-        _extract_subdomains_from_messages(messages, target)
-        if is_valid_domain(target)
-        else []
+        _extract_subdomains_from_messages(messages, target) if is_valid_domain(target) else []
     )
+
+    # ── IP infrastructure classification ──
+    classifications = _extract_ip_classifications_from_messages(messages, target)
+    if classifications:
+        class_lines = [
+            f"  {c['ip']}: {c['ip_class']} ({c.get('org', 'unknown')})" for c in classifications
+        ]
+        logger.info(
+            "osint: classified %d IP(s):\n%s",
+            len(classifications),
+            "\n".join(class_lines),
+        )
+
+    # ── HTTP tech fingerprints ──
+    fingerprints = _extract_tech_fingerprints_from_messages(messages)
+    if fingerprints:
+        tech_lines = [
+            f"  {fp['host']}: server={fp.get('server', '?')}, "
+            f"tech={fp.get('technologies', [])} cdn={fp.get('cdn', False)}"
+            for fp in fingerprints
+        ]
+        logger.info(
+            "osint: fingerprinted %d target(s):\n%s",
+            len(fingerprints),
+            "\n".join(tech_lines),
+        )
+
+    # ── TLS certificate SAN enrichment ──
+    if is_valid_domain(target):
+        san_subs = _extract_san_domains_from_messages(messages, target)
+        new_sans = [s for s in san_subs if s not in subdomains]
+        if new_sans:
+            subdomains = sorted(set(subdomains) | set(new_sans))
+            logger.info(
+                "osint: TLS SANs added %d new subdomain(s): %s",
+                len(new_sans),
+                ", ".join(new_sans),
+            )
+
+    # ── Historical DNS — direct-origin IP candidates ──
+    historical_ips = _extract_historical_ips_from_messages(messages, ips)
+    if historical_ips:
+        ips = list(dict.fromkeys(ips + historical_ips))  # preserve order, dedup
+        logger.info(
+            "osint: historical DNS revealed %d direct-origin candidate(s): %s",
+            len(historical_ips),
+            ", ".join(historical_ips),
+        )
 
     summary = _agent_summary(messages)
     _emit("osint", "summary", {"content": summary})
@@ -338,11 +686,14 @@ def osint_node(state: ScanState) -> dict:
     return {
         "discovered_ips": ips,
         "discovered_subdomains": subdomains,
+        "ip_classifications": classifications,
+        "tech_fingerprints": fingerprints,
         "findings": [_make_finding("osint", "OSINT Findings", summary)],
+        "phase_evaluations": [evaluation.model_dump()],
     }
 
 
-def port_scan_node(state: ScanState) -> dict:
+def port_scan_node(state: ScanState) -> dict[str, Any]:
     """Run the port-scan ReAct agent on discovered IPs and subdomains."""
     from fackel.agents.port_scan.agent import build
 
@@ -355,10 +706,16 @@ def port_scan_node(state: ScanState) -> dict:
     subdomains = state.get("discovered_subdomains", [])
 
     if not ips and not subdomains:
-        return {"findings": [_make_finding(
-            "port_scan", "Port Scan", "No IPv4 targets available.",
-            severity="info",
-        )]}
+        return {
+            "findings": [
+                _make_finding(
+                    "port_scan",
+                    "Port Scan",
+                    "No IPv4 targets available.",
+                    severity="info",
+                )
+            ]
+        }
 
     capped_subs = subdomains[:_SUBDOMAIN_CAP]
     skipped = len(subdomains) - len(capped_subs)
@@ -371,6 +728,32 @@ def port_scan_node(state: ScanState) -> dict:
         parts.append(f"Discovered subdomains ({len(capped_subs)}): {', '.join(capped_subs)}")
     if skipped:
         parts.append(f"({skipped} additional subdomains omitted — focus on the above.)")
+
+    # ── Include IP classification context when available ──
+    ip_classes = {c["ip"]: c for c in state.get("ip_classifications", []) if c.get("ip") in ips}
+    if ip_classes:
+        parts.append("\nIP infrastructure classification (from OSINT):")
+        for ip in ips:
+            c = ip_classes.get(ip)
+            if c:
+                label = c.get("ip_class", "unknown")
+                org = c.get("org", "")
+                hint = ""
+                if label == "cdn":
+                    hint = " → CDN proxy, skip deep scanning (ports are the CDN's, not the origin)"
+                elif label == "cloud":
+                    hint = " → cloud-hosted, scan normally"
+                elif label == "direct_host":
+                    hint = " → direct infrastructure, HIGH PRIORITY"
+                parts.append(f"  - {ip}: {label} ({org}){hint}")
+        cdn_ips = [ip for ip, c in ip_classes.items() if c.get("ip_class") == "cdn"]
+        if cdn_ips:
+            parts.append(
+                "\n⚠ CDN IPs detected. Scanning CDN proxy IPs (e.g. Cloudflare) "
+                "yields the CDN's ports/services, not the origin server. "
+                "Prioritise direct_host and cloud IPs instead."
+            )
+
     parts.append(
         "\nStrategy: scan the IPs first (naabu → nmap). Then scan only "
         "subdomains that might resolve to DIFFERENT IPs than those already "
@@ -387,11 +770,15 @@ def port_scan_node(state: ScanState) -> dict:
     # ── LLM-as-a-judge quality evaluation ──
     scan_targets = ips + capped_subs
     evaluation = evaluate_phase("port_scan", summary, scan_targets)
-    _emit("port_scan", "evaluation", {
-        "score": evaluation.score,
-        "completeness": evaluation.completeness,
-        "recommendation": evaluation.recommendation,
-    })
+    _emit(
+        "port_scan",
+        "evaluation",
+        {
+            "score": evaluation.score,
+            "completeness": evaluation.completeness,
+            "recommendation": evaluation.recommendation,
+        },
+    )
 
     _emit("port_scan", "done", {})
     return {
@@ -400,7 +787,7 @@ def port_scan_node(state: ScanState) -> dict:
     }
 
 
-def report_node(state: ScanState) -> dict:
+def report_node(state: ScanState) -> dict[str, Any]:
     """Generate the final pentest report via LLM."""
     from fackel.agents.report.agent import generate_report
 
@@ -411,6 +798,7 @@ def report_node(state: ScanState) -> dict:
         findings=state.get("findings", []),
         unassessed_areas=state.get("unassessed_areas", []),
         phase_evaluations=state.get("phase_evaluations", []),
+        risk_score=state.get("risk_score"),
     )
     _emit("report", "done", {})
     return {"report": report}
@@ -430,15 +818,25 @@ def approval_gate(state: ScanState) -> Command:
     _emit("approval", "start", {})
 
     summary_lines = [f"OSINT found {len(ips)} IP(s) for {target}: {', '.join(ips)}."]
+    ip_classes = {c["ip"]: c for c in state.get("ip_classifications", [])}
+    if ip_classes:
+        for ip in ips:
+            c = ip_classes.get(ip)
+            if c:
+                summary_lines.append(
+                    f"  {ip}: {c.get('ip_class', '?')} ({c.get('org', 'unknown')})"
+                )
     if subdomains:
         summary_lines.append(f"Subdomains ({len(subdomains)}): {', '.join(subdomains)}.")
     summary_lines.append("Proceed with active scanning (port scan + vuln scan)?")
 
-    approved = interrupt({
-        "question": "\n".join(summary_lines),
-        "targets": ips,
-        "subdomains": subdomains,
-    })
+    approved = interrupt(
+        {
+            "question": "\n".join(summary_lines),
+            "targets": ips,
+            "subdomains": subdomains,
+        }
+    )
 
     _emit("approval", "done", {"approved": approved})
 
@@ -447,7 +845,7 @@ def approval_gate(state: ScanState) -> Command:
     return Command(goto="report")
 
 
-def vuln_scan_node(state: ScanState) -> dict:
+def vuln_scan_node(state: ScanState) -> dict[str, Any]:
     """Run the vuln-scan ReAct agent on the target domain, subdomains, and IPs."""
     from fackel.agents.vuln_scan.agent import build
 
@@ -472,6 +870,32 @@ def vuln_scan_node(state: ScanState) -> dict:
         parts.append(f"Discovered IPv4 addresses: {', '.join(ips)}")
     else:
         parts.append("No IPv4 addresses were discovered.")
+
+    # ── Include technology fingerprints from OSINT httpx probing ──
+    tech_fps = state.get("tech_fingerprints", [])
+    if tech_fps:
+        parts.append("\nTechnology fingerprints (from OSINT httpx scan):")
+        for fp in tech_fps[:10]:  # cap to avoid prompt bloat
+            host = fp.get("host", fp.get("target", "?"))
+            server = fp.get("server", "")
+            techs = fp.get("technologies", [])
+            waf = fp.get("waf", "")
+            cdn = fp.get("cdn", False)
+            line = f"  - {host}: server={server or '?'}"
+            if techs:
+                line += f", tech=[{', '.join(techs[:8])}]"
+            if cdn:
+                line += ", CDN=yes"
+            if waf:
+                line += f", WAF={waf}"
+            parts.append(line)
+        all_techs = sorted({t for fp in tech_fps for t in fp.get("technologies", [])})
+        if all_techs:
+            parts.append(
+                f"\nDetected technologies: {', '.join(all_techs)}. "
+                "Prioritise nuclei templates targeting these specific "
+                "technologies for higher-value findings."
+            )
 
     # ── Adapt strategy from port_scan evaluation ──
     port_eval = _get_phase_evaluation(state, "port_scan")
@@ -517,13 +941,17 @@ def vuln_scan_node(state: ScanState) -> dict:
     _emit("vuln_scan", "summary", {"content": summary})
 
     # ── LLM-as-a-judge quality evaluation ──
-    scan_targets = [target] + capped_subs + ips
+    scan_targets = [target, *capped_subs, *ips]
     evaluation = evaluate_phase("vuln_scan", summary, scan_targets)
-    _emit("vuln_scan", "evaluation", {
-        "score": evaluation.score,
-        "completeness": evaluation.completeness,
-        "recommendation": evaluation.recommendation,
-    })
+    _emit(
+        "vuln_scan",
+        "evaluation",
+        {
+            "score": evaluation.score,
+            "completeness": evaluation.completeness,
+            "recommendation": evaluation.recommendation,
+        },
+    )
 
     _emit("vuln_scan", "done", {})
     return {
@@ -532,14 +960,24 @@ def vuln_scan_node(state: ScanState) -> dict:
     }
 
 
-def triage_node(state: ScanState) -> dict:
-    """Analyse findings and identify unassessed areas via structured LLM output."""
+def triage_node(state: ScanState) -> dict[str, Any]:
+    """Analyse findings and identify unassessed areas via structured LLM output.
+
+    Passes structured state context (IP classifications, tech fingerprints,
+    phase evaluations) alongside textual findings so the triage LLM can
+    produce evidence-backed risk scores from machine-readable data.
+    """
     from fackel.agents.triage.agent import run_triage
 
     _emit("triage", "start", {})
 
     findings = state.get("findings", [])
-    result = run_triage(findings)
+    result = run_triage(
+        findings,
+        ip_classifications=state.get("ip_classifications", []),
+        tech_fingerprints=state.get("tech_fingerprints", []),
+        phase_evaluations=state.get("phase_evaluations", []),
+    )
 
     unassessed = [
         {
@@ -551,7 +989,17 @@ def triage_node(state: ScanState) -> dict:
         for area in result.unassessed_areas
     ]
 
+    risk = result.risk_score
+    risk_dict = {
+        "score": risk.score,
+        "exposure_type": risk.exposure_type,
+        "factors": list(risk.factors),
+    }
+
     summary_parts = [f"## Triage Summary\n\n{result.summary}"]
+    summary_parts.append(f"\n**Risk Score:** {risk.score:.1f}/10 ({risk.exposure_type})")
+    if risk.factors:
+        summary_parts.append("\n**Risk Factors:**\n" + "\n".join(f"- {f}" for f in risk.factors))
     if result.technologies_detected:
         techs = ", ".join(result.technologies_detected)
         summary_parts.append(f"\n**Technologies detected:** {techs}")
@@ -562,14 +1010,21 @@ def triage_node(state: ScanState) -> dict:
     triage_detail = "\n".join(summary_parts)
 
     _emit("triage", "summary", {"content": triage_detail})
-    _emit("triage", "done", {
-        "technologies": result.technologies_detected,
-        "unassessed_count": len(unassessed),
-    })
+    _emit(
+        "triage",
+        "done",
+        {
+            "technologies": result.technologies_detected,
+            "unassessed_count": len(unassessed),
+            "risk_score": risk.score,
+            "risk_exposure_type": risk.exposure_type,
+        },
+    )
 
     return {
         "findings": [_make_finding("triage", "Triage Summary", triage_detail)],
         "unassessed_areas": unassessed,
+        "risk_score": risk_dict,
     }
 
 

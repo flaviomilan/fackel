@@ -8,7 +8,8 @@ this output preserves **all** raw detail for archival and audit purposes.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 
 def build_full_report(state: dict) -> str:
@@ -28,18 +29,18 @@ def build_full_report(state: dict) -> str:
     active_scan = state.get("active_scan", False)
     ips = state.get("discovered_ips", [])
     subdomains = state.get("discovered_subdomains", [])
-    findings: list[dict] = state.get("findings", [])
-    evaluations: list[dict] = state.get("phase_evaluations", [])
-    unassessed: list[dict] = state.get("unassessed_areas", [])
+    findings: list[dict[str, Any]] = state.get("findings", [])
+    evaluations: list[dict[str, Any]] = state.get("phase_evaluations", [])
+    unassessed: list[dict[str, Any]] = state.get("unassessed_areas", [])
     llm_report: str = state.get("report", "")
-    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     sections: list[str] = []
 
     # ── Header ─────────────────────────────────────────────────────────
     sections.append(f"# Penetration Test Report — {target}\n")
-    sections.append(f"| Field | Value |")
-    sections.append(f"|-------|-------|")
+    sections.append("| Field | Value |")
+    sections.append("|-------|-------|")
     sections.append(f"| **Target** | `{target}` |")
     sections.append(f"| **Date** | {now} |")
     sections.append(f"| **Active Scan** | {'Yes' if active_scan else 'No'} |")
@@ -68,7 +69,9 @@ def build_full_report(state: dict) -> str:
             sections.append(f"{toc_idx}. [{label}](#{anchor})")
             toc_idx += 1
     if evaluations:
-        sections.append(f"{toc_idx}. [Phase Quality Assessments](#{toc_idx}-phase-quality-assessments)")
+        sections.append(
+            f"{toc_idx}. [Phase Quality Assessments](#{toc_idx}-phase-quality-assessments)"
+        )
         toc_idx += 1
     if unassessed:
         sections.append(f"{toc_idx}. [Unassessed Areas](#{toc_idx}-unassessed-areas)")
@@ -153,9 +156,7 @@ def build_full_report(state: dict) -> str:
     if evaluations:
         sections.append("---\n")
         sections.append(f"## {section_idx}. Phase Quality Assessments\n")
-        sections.append(
-            "| Phase | Completeness | Score | Recommendation |"
-        )
+        sections.append("| Phase | Completeness | Score | Recommendation |")
         sections.append("|-------|-------------|-------|----------------|")
         for ev in evaluations:
             if not isinstance(ev, dict):
@@ -241,7 +242,7 @@ def _extract_section(markdown: str, heading: str) -> str | None:
     return text if text else None
 
 
-def _find_evaluation(evaluations: list[dict], phase: str) -> dict | None:
+def _find_evaluation(evaluations: list[dict[str, Any]], phase: str) -> dict[str, Any] | None:
     """Find the latest evaluation dict for a given phase."""
     for ev in reversed(evaluations):
         if isinstance(ev, dict) and ev.get("phase") == phase:
@@ -249,7 +250,7 @@ def _find_evaluation(evaluations: list[dict], phase: str) -> dict | None:
     return None
 
 
-def _format_evaluation(ev: dict) -> str:
+def _format_evaluation(ev: dict[str, Any]) -> str:
     """Render a single phase evaluation as Markdown."""
     parts: list[str] = []
     completeness = ev.get("completeness", "?")

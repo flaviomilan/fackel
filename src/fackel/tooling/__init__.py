@@ -21,7 +21,13 @@ from fackel.tooling.execution import (
     require_env,
     run_command,
 )
-from fackel.tooling.sanitizers import sanitize_ports, sanitize_severity, sanitize_tags, sanitize_top_ports
+from fackel.tooling.ip_classifier import IpClass, classify_ip
+from fackel.tooling.sanitizers import (
+    sanitize_ports,
+    sanitize_severity,
+    sanitize_tags,
+    sanitize_top_ports,
+)
 from fackel.tooling.validators import (
     TargetType,
     guard_target,
@@ -33,7 +39,9 @@ from fackel.tooling.validators import (
 
 __all__ = [
     "DDGS",
+    "IpClass",
     "TargetType",
+    "classify_ip",
     "format_tool_output",
     "guard_target",
     "is_reverse_ptr_subdomain",
