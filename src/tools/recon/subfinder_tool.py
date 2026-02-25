@@ -61,17 +61,19 @@ def subfinder_enum(
 
     cmd = [
         "subfinder",
-        "-d", domain,
+        "-d",
+        domain,
         "-json",
         "-silent",
-        "-timeout", str(timeout),
+        "-timeout",
+        str(timeout),
     ]
 
     if all_sources:
         cmd.append("-all")
 
     try:
-        code, out, stderr = run_command(cmd, timeout=timeout + 30)
+        _code, out, _stderr = run_command(cmd, timeout=timeout + 30)
     except Exception as exc:
         return format_tool_output(
             "subfinder_enum",

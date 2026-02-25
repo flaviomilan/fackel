@@ -28,30 +28,30 @@ phases, and streams events to the CLI.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                         CLI (typer + Rich)                        │
+│                         CLI (typer + Rich)                       │
 │  fackel <target> [--active-scan] [-v] [-o file]                  │
 │  Registers event callback → Rich console rendering               │
 └─────────────────────────────┬────────────────────────────────────┘
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                    orchestrator.run()                              │
+│                    orchestrator.run()                            │
 │  Creates ScanState, builds LangGraph, manages interrupt/resume   │
 └─────────────────────────────┬────────────────────────────────────┘
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                LangGraph StateGraph(ScanState)                    │
+│                LangGraph StateGraph(ScanState)                   │
 │                                                                  │
-│  ┌──────────┐     ┌──────────────┐     ┌────────────┐           │
-│  │  osint   │────▶│approval_gate │────▶│ port_scan  │           │
-│  │(11 tools)│     │  (HitL)      │     │ (2 tools)  │           │
-│  └──────────┘     └──────────────┘     └─────┬──────┘           │
+│  ┌──────────┐     ┌──────────────┐     ┌────────────┐            │
+│  │  osint   │────▶│approval_gate │────▶│ port_scan  │            │
+│  │(18 tools)│     │  (HitL)      │     │ (2 tools)  │            │
+│  └──────────┘     └──────────────┘     └─────┬──────┘            │
 │       │                                      │                   │
 │       │ (no active scan)         ┌───────────▼────────────┐      │
-│       │                          │ evaluate_phase (judge)  │      │
+│       │                          │ evaluate_phase (judge) │      │
 │       │                          └──┬──────────────────┬──┘      │
-│       │                             │                  │          │
+│       │                             │                  │         │
 │       │                    ┌────────▼───┐    ┌────────▼────┐     │
 │       │                    │ vuln_scan  │    │   triage    │     │
 │       │                    │ (8 tools)  │    │ (structured)│     │
@@ -63,8 +63,8 @@ phases, and streams events to the CLI.
 │                    │                │               │            │
 │                    ▼                ▼               ▼            │
 │              ┌──────────────────────────────────────────┐        │
-│              │             report_node                   │        │
-│              │           (LLM synthesis)                 │        │
+│              │             report_node                  │        │
+│              │           (LLM synthesis)                │        │
 │              └──────────────────┬───────────────────────┘        │
 │                                 │                                │
 │                                END                               │

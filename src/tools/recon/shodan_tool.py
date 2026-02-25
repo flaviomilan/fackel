@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import shodan
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target, is_valid_ip, require_env
+from fackel.tooling import format_tool_output, is_valid_ip, require_env
 
 
 class ShodanInput(BaseModel):
@@ -24,7 +26,7 @@ class ShodanInput(BaseModel):
 
 
 @tool(args_schema=ShodanInput)
-def shodan_lookup(query: str) -> dict:
+def shodan_lookup(query: str) -> dict[str, Any]:
     """Query Shodan for passive intelligence — no packets sent to the target.
 
     Uses the host API for IP lookups (services, banners, ports, org, ISP,
@@ -42,14 +44,16 @@ def shodan_lookup(query: str) -> dict:
             host = api.host(query.strip())
             services = []
             for item in host.get("data", []):
-                services.append({
-                    "port": item.get("port"),
-                    "transport": item.get("transport", "tcp"),
-                    "product": item.get("product", ""),
-                    "version": item.get("version", ""),
-                    "banner": (item.get("data", ""))[:300],
-                    "module": item.get("_shodan", {}).get("module", ""),
-                })
+                services.append(
+                    {
+                        "port": item.get("port"),
+                        "transport": item.get("transport", "tcp"),
+                        "product": item.get("product", ""),
+                        "version": item.get("version", ""),
+                        "banner": (item.get("data", ""))[:300],
+                        "module": item.get("_shodan", {}).get("module", ""),
+                    }
+                )
 
             return format_tool_output(
                 "shodan_lookup",
@@ -74,13 +78,15 @@ def shodan_lookup(query: str) -> dict:
             result = api.search(query)
             matches = []
             for match in result.get("matches", []):
-                matches.append({
-                    "ip": match.get("ip_str"),
-                    "port": match.get("port"),
-                    "org": match.get("org"),
-                    "data": (match.get("data", ""))[:300],
-                    "service": match.get("product"),
-                })
+                matches.append(
+                    {
+                        "ip": match.get("ip_str"),
+                        "port": match.get("port"),
+                        "org": match.get("org"),
+                        "data": (match.get("data", ""))[:300],
+                        "service": match.get("product"),
+                    }
+                )
 
             return format_tool_output(
                 "shodan_lookup",

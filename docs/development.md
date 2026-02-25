@@ -85,21 +85,34 @@ src/
 ├── fackel/
 │   ├── agents/
 │   │   ├── config.py           # get_model(), create_agent()
-│   │   ├── provider_keys.py    # API key gating, filter_tools()
-│   │   ├── evaluator.py        # LLM-as-a-judge (PhaseEvaluation)
-│   │   ├── report_writer.py    # Dual report generation
-│   │   └── orchestrator/       # LangGraph graph
-│   │       ├── graph.py        # build_graph() — node + edge wiring
-│   │       ├── nodes.py        # Node functions (run_osint, run_port_scan, ...)
-│   │       ├── state.py        # ScanState TypedDict + reducers
-│   │       ├── main.py         # run() entry point
-│   │       ├── config.py       # Orchestrator-level settings
-│   │       └── workspace/
-│   │           └── prompt.md   # Soul prompt (shared identity)
+│   │   ├── prompts/
+│   │   │   ├── __init__.py      # Prompt loader with caching
+│   │   │   ├── soul.md          # Shared agent identity + rules
+│   │   │   └── skills/          # Per-agent skill prompts
+│   │   ├── orchestrator/       # LangGraph graph
+│   │   │   ├── graph.py        # build_graph() — node + edge wiring
+│   │   │   ├── nodes.py        # Node functions (run_osint, run_port_scan, ...)
+│   │   │   ├── state.py        # ScanState TypedDict + reducers
+│   │   │   ├── main.py         # run() entry point
+│   │   │   └── evaluator.py    # LLM-as-a-judge (PhaseEvaluation)
+│   │   ├── osint/agent.py      # OSINT ReAct agent (18 tools)
+│   │   ├── port_scan/agent.py  # Port scan ReAct agent (2 tools)
+│   │   ├── vuln_scan/agent.py  # Vuln scan ReAct agent (8 tools)
+│   │   ├── triage/agent.py     # Triage structured output
+│   │   └── report/agent.py     # Report synthesis
+│   ├── tooling/
+│   │   ├── validators.py       # guard_target(), TargetType enum
+│   │   ├── execution.py        # run_command(), format_tool_output(), etc.
+│   │   ├── sanitizers.py       # Input sanitisation helpers
+│   │   ├── ip_classifier.py    # IP classification (CDN, cloud, hosting)
+│   │   └── ddgs.py             # DuckDuckGo search wrapper
+│   ├── provider_keys.py        # API key gating + tool filtering
+│   └── report_writer.py        # Full archival report builder
 ├── tools/
-│   ├── validators.py           # guard_target(), TargetType enum
-│   ├── utils.py                # run_command(), format_tool_output(), etc.
-│   └── *.py                    # One file per tool
+│   ├── recon/                  # 16 passive reconnaissance tools
+│   ├── osint/                  # 2 open-source intelligence tools
+│   ├── scanning/               # 7 active scanning tools
+│   └── vuln/                   # 3 vulnerability assessment tools
 ├── cli/
 │   └── main.py                 # Typer CLI entrypoint
 └── tests/
@@ -109,10 +122,10 @@ src/
 **Key conventions:**
 
 - One tool per file in `src/tools/{recon,osint,scanning,vuln}/`
-- One agent builder per file in `src/fackel/agents/`
+- One agent builder per file in `src/fackel/agents/{osint,port_scan,vuln_scan,triage,report}/`
 - Orchestrator graph logic isolated in `src/fackel/agents/orchestrator/`
-- Domain models in `src/fackel/domain/` — no infrastructure dependencies
-- Prompts in Markdown — `workspace/prompt.md` (soul) + `workspace/skills/*.md`
+- Tool infrastructure (validators, execution, sanitizers) in `src/fackel/tooling/`
+- Prompts in Markdown — `soul.md` (shared) + `skills/*.md` (per-agent)
 
 ---
 
@@ -284,9 +297,9 @@ ProviderKeySpec(
 ### 1. Create the agent builder
 
 ```python
-# src/fackel/agents/my_agent.py
+# src/fackel/agents/my_agent/agent.py
 from fackel.agents.config import create_agent, get_model
-from fackel.agents.provider_keys import filter_tools
+from fackel.provider_keys import filter_tools
 from tools.recon.tool_a import tool_a
 from tools.recon.tool_b import tool_b
 

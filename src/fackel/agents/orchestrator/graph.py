@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from .nodes import (
     approval_gate,
@@ -39,7 +40,7 @@ from .state import ScanState
 _checkpointer = MemorySaver()
 
 
-def build_graph():
+def build_graph() -> CompiledStateGraph:
     """Construct and compile the orchestrator StateGraph."""
     graph = StateGraph(ScanState)
 

@@ -8,6 +8,7 @@ name_value fields.  Free, no API key required.
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import requests
 from langchain_core.tools import tool
@@ -18,6 +19,7 @@ from fackel.tooling import TargetType, format_tool_output, guard_target
 _CRTSH_URL = "https://crt.sh/"
 _MAX_RETRIES = 2
 _RETRY_DELAY = 3  # seconds
+_TIMEOUT = 45  # seconds
 
 
 class CrtShInput(BaseModel):
@@ -42,7 +44,7 @@ def _fetch_crtsh(domain: str) -> requests.Response:
             resp = requests.get(
                 _CRTSH_URL,
                 params={"q": f"%.{domain}", "output": "json"},
-                timeout=45,
+                timeout=_TIMEOUT,
                 headers={"User-Agent": "Mozilla/5.0"},
             )
             resp.raise_for_status()
@@ -50,14 +52,17 @@ def _fetch_crtsh(domain: str) -> requests.Response:
         except requests.RequestException as exc:
             last_exc = exc
             # 404 from crt.sh means no certificates found — not transient.
-            if isinstance(exc, requests.HTTPError) and exc.response is not None:
-                if exc.response.status_code == 404:
-                    raise
+            if (
+                isinstance(exc, requests.HTTPError)
+                and exc.response is not None
+                and exc.response.status_code == 404
+            ):
+                raise
     raise last_exc  # type: ignore[misc]
 
 
 @tool(args_schema=CrtShInput)
-def crtsh_subdomain_enum(domain: str) -> dict:
+def crtsh_subdomain_enum(domain: str) -> dict[str, Any]:
     """Enumerate subdomains via Certificate Transparency logs (crt.sh).
 
     Searches Comodo's CT log aggregator for certificates matching
@@ -76,16 +81,22 @@ def crtsh_subdomain_enum(domain: str) -> dict:
         if exc.response is not None and exc.response.status_code == 404:
             # crt.sh returns 404 when no certificates exist for the domain.
             return format_tool_output(
-                "crtsh_subdomain_enum", domain, "ok",
+                "crtsh_subdomain_enum",
+                domain,
+                "ok",
                 data={"count": 0, "subdomains": []},
             )
         return format_tool_output(
-            "crtsh_subdomain_enum", domain, "error",
+            "crtsh_subdomain_enum",
+            domain,
+            "error",
             error=f"crt.sh request failed: {exc}",
         )
     except requests.RequestException as exc:
         return format_tool_output(
-            "crtsh_subdomain_enum", domain, "error",
+            "crtsh_subdomain_enum",
+            domain,
+            "error",
             error=f"crt.sh request failed: {exc}",
         )
 
@@ -93,7 +104,9 @@ def crtsh_subdomain_enum(domain: str) -> dict:
         entries = resp.json()
     except ValueError:
         return format_tool_output(
-            "crtsh_subdomain_enum", domain, "error",
+            "crtsh_subdomain_enum",
+            domain,
+            "error",
             error="crt.sh returned non-JSON response (service may be overloaded).",
         )
 

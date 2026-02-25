@@ -92,6 +92,8 @@ from agents (see [Provider key gating](#provider-key-gating)).
 | `VIRUSTOTAL_API_KEY` | VirusTotal | `virustotal_subdomain_enum` | No |
 | `CENSYS_API_ID` | Censys | `censys_lookup` | No |
 | `CENSYS_API_SECRET` | Censys | `censys_lookup` | No |
+| `SECURITYTRAILS_API_KEY` | SecurityTrails | `securitytrails_history` | No |
+| `OTX_API_KEY` | AlienVault OTX | `otx_passive_dns` | No |
 | `HIBP_API_KEY` | HaveIBeenPwned | `analyze_email` (breach data) | No |
 | `EMAILREP_API_KEY` | EmailRep | `analyze_email` (reputation) | No |
 
@@ -164,13 +166,15 @@ Prints a table showing which provider API keys are configured and which tools
 are disabled:
 
 ```
-Provider         Status    Tools
+Provider           Status    Tools
 ───────────────────────────────────────
-Shodan           ✓         shodan_lookup
-VirusTotal       ✗         virustotal_subdomain_enum
-Censys           ✗         censys_lookup
-HaveIBeenPwned   ✗         analyze_email (graceful)
-EmailRep         ✗         analyze_email (graceful)
+Shodan             ✓         shodan_lookup
+VirusTotal         ✗         virustotal_subdomain_enum
+Censys             ✗         censys_lookup
+SecurityTrails     ✗         securitytrails_history
+AlienVault OTX     ✗         otx_passive_dns
+HaveIBeenPwned     ✗         analyze_email (graceful)
+EmailRep           ✗         analyze_email (graceful)
 ```
 
 ---
@@ -192,6 +196,8 @@ and cannot attempt to call them.
 | Shodan | Yes | `shodan_lookup` removed entirely |
 | VirusTotal | Yes | `virustotal_subdomain_enum` removed |
 | Censys | Yes | `censys_lookup` removed |
+| SecurityTrails | Yes | `securitytrails_history` removed |
+| AlienVault OTX | Yes | `otx_passive_dns` removed |
 | HaveIBeenPwned | **No** | `analyze_email` stays; HIBP source silently skipped |
 | EmailRep | **No** | `analyze_email` stays; EmailRep source silently skipped |
 
@@ -266,6 +272,8 @@ SHODAN_API_KEY=...
 VIRUSTOTAL_API_KEY=...
 CENSYS_API_ID=...
 CENSYS_API_SECRET=...
+SECURITYTRAILS_API_KEY=...
+OTX_API_KEY=...
 SERPAPI_API_KEY=...
 HIBP_API_KEY=...
 EMAILREP_API_KEY=...

@@ -128,7 +128,7 @@ def my_tool(target: str) -> dict:
     # ... proceed safely with validated 'target' ...
 ```
 
-This is uniform across all 17 target-accepting tools.
+This is uniform across all 20 target-accepting tools.
 
 ---
 
@@ -200,12 +200,18 @@ passes validation — the `&` in the URL query is not part of the hostname.
 | `crtsh_subdomain_enum` | CT log search by domain |
 | `subfinder_enum` | Subfinder expects domain input |
 | `nuclei_scan` | Templates rely on DNS/SSL/SNI — bare IPs return nothing useful behind CDN |
+| `tlscert_lookup` | TLS certificate inspection requires a domain for SNI |
+| `securitytrails_history` | SecurityTrails API expects domain names |
+| `urlscan_search` | Urlscan.io search expects domain names |
+| `otx_passive_dns` | AlienVault OTX passive DNS expects domain names |
 
 ### IP (domains and URLs rejected)
 
 | Tool | Rationale |
 |------|-----------|
 | `reverse_dns_lookup` | PTR lookups require IP addresses |
+| `ipinfo_lookup` | IP geolocation/ASN lookup requires IP |
+| `bgp_lookup` | BGP prefix/ASN lookup requires IP |
 
 ### HOST (domain or IP, URLs rejected)
 
@@ -285,7 +291,7 @@ When creating a new tool, add validation in 3 steps:
 ### 2. Import and call `guard_target`
 
 ```python
-from .validators import TargetType, guard_target
+from fackel.tooling import TargetType, guard_target
 
 @tool(args_schema=MyInput)
 def my_tool(target: str) -> dict:

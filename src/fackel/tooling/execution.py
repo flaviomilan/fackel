@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 import subprocess
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ DEFAULT_TIMEOUT = 180
 
 def run_command(cmd: list[str], timeout: int = DEFAULT_TIMEOUT) -> tuple[int, str, str]:
     """Execute a subprocess command and return (returncode, stdout, stderr)."""
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # noqa: S603
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -28,9 +29,9 @@ def format_tool_output(
     tool: str,
     target: str,
     status: str,
-    data: dict | list | None = None,
+    data: dict[str, Any] | list | None = None,
     error: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Standardize tool output format."""
     return {
         "tool": tool,
@@ -44,12 +45,14 @@ def format_tool_output(
 # ── DRY helpers for subprocess-based tools ─────────────────────────────
 
 
-def require_binary(binary: str, tool_name: str, target: str) -> dict | None:
+def require_binary(binary: str, tool_name: str, target: str) -> dict[str, Any] | None:
     """Return an error dict if *binary* is not on PATH, else ``None``."""
     if shutil.which(binary):
         return None
     return format_tool_output(
-        tool_name, target, "error",
+        tool_name,
+        target,
+        "error",
         error=f"{binary} not found in PATH",
     )
 
@@ -60,14 +63,16 @@ def require_env(key: str, tool_name: str, target: str) -> tuple[str | None, dict
     if value:
         return value, None
     return None, format_tool_output(
-        tool_name, target, "error",
+        tool_name,
+        target,
+        "error",
         error=f"{key} environment variable not configured",
     )
 
 
-def parse_jsonl(output: str) -> list[dict]:
+def parse_jsonl(output: str) -> list[dict[str, Any]]:
     """Parse newline-delimited JSON, skipping malformed lines."""
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     for line in output.splitlines():
         line = line.strip()
         if not line:

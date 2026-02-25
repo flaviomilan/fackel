@@ -97,14 +97,16 @@ def graphql_scan(url: str) -> dict[str, Any]:
                     "mutations": mutations[:30],
                     "has_mutations": bool(mutations),
                 }
-                issues.append({
-                    "issue": "Introspection enabled",
-                    "severity": "medium",
-                    "detail": (
-                        f"Full schema exposed: {len(user_types)} types, "
-                        f"{len(queries)} queries, {len(mutations)} mutations"
-                    ),
-                })
+                issues.append(
+                    {
+                        "issue": "Introspection enabled",
+                        "severity": "medium",
+                        "detail": (
+                            f"Full schema exposed: {len(user_types)} types, "
+                            f"{len(queries)} queries, {len(mutations)} mutations"
+                        ),
+                    }
+                )
     except (requests.RequestException, json.JSONDecodeError, KeyError, TypeError):
         pass
 
@@ -121,14 +123,16 @@ def graphql_scan(url: str) -> dict[str, Any]:
             data = resp.json()
             d = data.get("data") or {}
             if d.get("a") and d.get("b"):
-                issues.append({
-                    "issue": "Alias-based batching allowed",
-                    "severity": "low",
-                    "detail": (
-                        "Multiple operations via aliases in a single request — "
-                        "enables brute-force or DoS attacks"
-                    ),
-                })
+                issues.append(
+                    {
+                        "issue": "Alias-based batching allowed",
+                        "severity": "low",
+                        "detail": (
+                            "Multiple operations via aliases in a single request — "
+                            "enables brute-force or DoS attacks"
+                        ),
+                    }
+                )
     except (requests.RequestException, json.JSONDecodeError):
         pass
 
@@ -144,14 +148,16 @@ def graphql_scan(url: str) -> dict[str, Any]:
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, list) and len(data) >= 2:
-                issues.append({
-                    "issue": "Array-based query batching allowed",
-                    "severity": "low",
-                    "detail": (
-                        "Multiple queries accepted in array format — "
-                        "enables batch brute-force attacks"
-                    ),
-                })
+                issues.append(
+                    {
+                        "issue": "Array-based query batching allowed",
+                        "severity": "low",
+                        "detail": (
+                            "Multiple queries accepted in array format — "
+                            "enables batch brute-force attacks"
+                        ),
+                    }
+                )
     except (requests.RequestException, json.JSONDecodeError):
         pass
 
@@ -167,14 +173,16 @@ def graphql_scan(url: str) -> dict[str, Any]:
         if resp.status_code == 200:
             data = resp.json()
             if (data.get("data") or {}).get("__typename"):
-                issues.append({
-                    "issue": "GET method queries allowed",
-                    "severity": "info",
-                    "detail": (
-                        "GraphQL queries via GET may be cached or "
-                        "logged in access logs, leaking query content"
-                    ),
-                })
+                issues.append(
+                    {
+                        "issue": "GET method queries allowed",
+                        "severity": "info",
+                        "detail": (
+                            "GraphQL queries via GET may be cached or "
+                            "logged in access logs, leaking query content"
+                        ),
+                    }
+                )
     except (requests.RequestException, json.JSONDecodeError):
         pass
 
@@ -190,20 +198,24 @@ def graphql_scan(url: str) -> dict[str, Any]:
         if resp.status_code in (200, 400):
             body = resp.text.lower()
             if "did you mean" in body or "suggestion" in body:
-                issues.append({
-                    "issue": "Field suggestions enabled",
-                    "severity": "info",
-                    "detail": (
-                        "Server suggests valid field names on typos — "
-                        "aids schema enumeration without introspection"
-                    ),
-                })
+                issues.append(
+                    {
+                        "issue": "Field suggestions enabled",
+                        "severity": "info",
+                        "detail": (
+                            "Server suggests valid field names on typos — "
+                            "aids schema enumeration without introspection"
+                        ),
+                    }
+                )
     except requests.RequestException:
         pass
 
     if not issues:
         return format_tool_output(
-            "graphql_scan", url, "ok",
+            "graphql_scan",
+            url,
+            "ok",
             data={
                 "issues": [],
                 "introspection_enabled": False,
@@ -212,7 +224,9 @@ def graphql_scan(url: str) -> dict[str, Any]:
         )
 
     return format_tool_output(
-        "graphql_scan", url, "ok",
+        "graphql_scan",
+        url,
+        "ok",
         data={
             "introspection_enabled": introspection_enabled,
             "schema_summary": schema_summary,

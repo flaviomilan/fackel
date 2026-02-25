@@ -93,10 +93,12 @@ def evaluate_phase(
             f"Agent output:\n{agent_summary}"
         )
 
-        result = structured_llm.invoke([
-            SystemMessage(content=load_prompt("judge")),
-            HumanMessage(content=context),
-        ])
+        result = structured_llm.invoke(
+            [
+                SystemMessage(content=load_prompt("judge")),
+                HumanMessage(content=context),
+            ]
+        )
         logger.info(
             "judge: %s → %s (score=%.1f, rec=%s)",
             phase,

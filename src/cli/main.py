@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +47,7 @@ def _approval_prompt(interrupt_data: dict) -> bool:
 # ── Event renderer ─────────────────────────────────────────────────────────
 
 
-def _make_event_callback(verbose: bool):
+def _make_event_callback(verbose: bool) -> Callable[[str, str, dict[str, Any]], None]:
     """Return a callback that prints agent ReAct events to the terminal."""
 
     def _callback(phase: str, event_type: str, data: dict[str, Any]) -> None:
@@ -59,16 +60,16 @@ def _make_event_callback(verbose: bool):
         elif event_type == "tool_call":
             tool = data.get("tool", "?")
             args = data.get("args", {})
-            args_str = ", ".join(
-                f"{k}={v}" for k, v in args.items() if v not in ("", None)
-            )
+            args_str = ", ".join(f"{k}={v}" for k, v in args.items() if v not in ("", None))
             console.print(f"  🔧 {tool}({args_str})", style="dim")
 
         elif event_type == "tool_error":
             tool = data.get("tool", "?")
             error = data.get("error", "unknown error")
             # Show a single clean line; strip tool banners / multi-line noise.
-            first_line = error.strip().splitlines()[-1].strip() if error.strip() else "unknown error"
+            first_line = (
+                error.strip().splitlines()[-1].strip() if error.strip() else "unknown error"
+            )
             console.print(f"  [red]✗ {tool}: {first_line}[/red]", style="dim")
 
         elif event_type == "tool_result":
@@ -88,20 +89,24 @@ def _make_event_callback(verbose: bool):
             content = data.get("content", "")
             if content:
                 console.print()
-                console.print(Panel(
-                    Markdown(content),
-                    title=f"📋 {label} Summary",
-                    border_style="cyan",
-                    padding=(1, 2),
-                ))
+                console.print(
+                    Panel(
+                        Markdown(content),
+                        title=f"📋 {label} Summary",
+                        border_style="cyan",
+                        padding=(1, 2),
+                    )
+                )
 
         elif event_type == "evaluation":
             score = data.get("score", 0)
             completeness = data.get("completeness", "?")
             recommendation = data.get("recommendation", "proceed")
             style = (
-                "green" if completeness == "complete"
-                else "yellow" if completeness == "partial"
+                "green"
+                if completeness == "complete"
+                else "yellow"
+                if completeness == "partial"
                 else "red"
             )
             console.print(
@@ -124,7 +129,10 @@ def scan(
         help="Enable active scanning phases",
     ),
     output: Path | None = typer.Option(
-        None, "--output", "-o", help="Write full report to this file (default: auto-named in ./reports/)"
+        None,
+        "--output",
+        "-o",
+        help="Write full report to this file (default: auto-named in ./reports/)",
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Show LLM reasoning and detailed logs"
@@ -180,10 +188,10 @@ def scan(
         )
     except KeyboardInterrupt:
         typer.echo("\nScan interrupted by user.", err=True)
-        raise typer.Exit(code=130)
+        raise typer.Exit(code=130) from None
     except Exception as exc:
         typer.echo(f"\nScan failed: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
     finally:
         set_event_callback(None)
 

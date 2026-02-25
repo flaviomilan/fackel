@@ -55,10 +55,10 @@ without sending any probe packets.
 
 **Model env var:** `FACKEL_MODEL_OSINT`
 
-### Tools (11)
+### Tools (18)
 
 | Tool | Purpose |
-|------|---------|
+|------|---------||
 | `dns_resolve` | Resolve domain to IPs (A + AAAA records) |
 | `whois_lookup` | Registration data — registrar, dates, nameservers |
 | `shodan_lookup` | Passive service/banner data from Shodan |
@@ -68,6 +68,13 @@ without sending any probe packets.
 | `crtsh_subdomain_enum` | Subdomain enum via Certificate Transparency |
 | `subfinder_enum` | Aggregate 40+ passive sources for subdomains |
 | `reverse_dns_lookup` | PTR records + reverse IP for shared hosting |
+| `ipinfo_lookup` | IP geolocation, ASN, organisation via ipinfo.io |
+| `bgp_lookup` | ASN/prefix lookup via RIPEstat for BGP context |
+| `httpx_scan` | HTTP probing + technology fingerprinting |
+| `tlscert_lookup` | TLS certificate inspection + SAN subdomain discovery |
+| `securitytrails_history` | Historical DNS records — reveals old IPs and hosting changes |
+| `urlscan_search` | Cached scan results from Urlscan.io community scans |
+| `otx_passive_dns` | Passive DNS records via AlienVault OTX |
 | `job_search` | Job posting search for tech stack discovery |
 | `analyze_email` | Email breach exposure and reputation scoring |
 
@@ -81,10 +88,17 @@ without sending any probe packets.
    - `dnsdumpster_lookup` — free, also returns DNS/MX/NS/TXT records
    - `virustotal_subdomain_enum` — if API key available
 4. **Reverse DNS** — `reverse_dns_lookup` per discovered IP for shared hosting detection
-5. **Shodan / Censys** — passive service data for each IP (if API keys available)
-6. **Job search** — `job_search` with company name for tech stack intelligence
-7. **Email analysis** — `analyze_email` if email addresses discovered
-8. **Structured summary** — emit findings with evidence citations
+5. **IP enrichment** — `ipinfo_lookup` per IP for geolocation, ASN, and anycast detection
+6. **BGP context** — `bgp_lookup` per IP for ASN holder, prefix, and RIR allocation
+7. **TLS certificates** — `tlscert_lookup` for certificate metadata and SAN-based subdomain discovery
+8. **Shodan / Censys** — passive service data for each IP (if API keys available)
+9. **Historical DNS** — `securitytrails_history` for old IPs that may bypass CDN (if API key available)
+10. **URLScan** — `urlscan_search` for cached scan results and technology fingerprints
+11. **Passive DNS** — `otx_passive_dns` for AlienVault OTX passive DNS records (if API key available)
+12. **HTTP probing** — `httpx_scan` for technology detection and HTTP surface mapping
+13. **Job search** — `job_search` with company name for tech stack intelligence
+14. **Email analysis** — `analyze_email` if email addresses discovered
+15. **Structured summary** — emit findings with evidence citations
 
 ### Node post-processing
 

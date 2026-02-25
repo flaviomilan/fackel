@@ -11,7 +11,7 @@
 
 <p align="center">
   <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12+-blue.svg" />
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg" />
+  <img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-green.svg" />
   <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-1.x-purple.svg" />
 </p>
 
@@ -27,7 +27,7 @@ choose which tools to call, interpret results, and decide next steps.
 ```
 Target → OSINT → Approval Gate → Port Scan → Vuln Scan → Triage → Report
            ↕          ↕              ↕            ↕          ↕        ↕
-       11 tools   Human-in-     2 tools      8 tools    LLM-as-   LLM
+       18 tools  Human-in-     2 tools      8 tools    LLM-as-   LLM
        (passive)  the-Loop      (active)     (active)   a-judge  synthesis
 ```
 
@@ -110,47 +110,47 @@ fackel example.com --check-providers --no-active-scan
 
 ```
                      ┌─────────────────┐
-                     │   osint_node    │ ← 11 passive tools
+                     │   osint_node    │ ← 18 passive tools
                      │  (ReAct agent)  │   dns, whois, subdomains, etc.
                      └────────┬────────┘
                               │
-                    ┌─────────▼─────────┐
+                    ┌─────────▼──────────┐
                     │  route_after_osint │
                     │  (conditional)     │
-                    └──┬─────────────┬──┘
+                    └──┬─────────────┬───┘
                        │             │
           active_scan  │             │  no active scan
           + IPs found  │             │  or no IPs
                        ▼             │
-              ┌────────────────┐     │
-              │ approval_gate  │     │
+              ┌─────────────────┐    │
+              │ approval_gate   │    │
               │ (HitL interrupt)│    │
-              └───┬────────┬───┘     │
+              └───┬────────┬────┘    │
           approve │        │ reject  │
                   ▼        └────┐    │
-           ┌────────────┐      │    │
+           ┌────────────┐       │    │
            │ port_scan   │      │    │
            │ (ReAct)     │      │    │
            └─────┬───────┘      │    │
                  │              │    │
-       ┌─────────▼──────────┐   │    │
+       ┌─────────▼───────────┐  │    │
        │route_after_port_scan│  │    │
-       │(LLM-as-a-judge)    │  │    │
-       └──┬──────────────┬──┘  │    │
-          │              │     │    │
-          ▼              ▼     │    │
-   ┌────────────┐  ┌─────────┐│    │
-   │ vuln_scan  │  │ triage  ││    │
-   │ (ReAct)    │  │(struct) │◄    │
-   └─────┬──────┘  └────┬────┘     │
-         │              │          │
-         ▼              │          │
-   ┌──────────┐         │          │
-   │  triage  │         │          │
-   │ (struct) │         │          │
-   └─────┬────┘         │          │
-         │              │          │
-         ▼              ▼          ▼
+       │(LLM-as-a-judge)     │  │    │
+       └──┬──────────────┬───┘  │    │
+          │              │      │    │
+          ▼              ▼      │    │
+   ┌────────────┐  ┌─────────┐  │    │
+   │ vuln_scan  │  │ triage  │  │    │
+   │ (ReAct)    │  │(struct) │◄      │
+   └─────┬──────┘  └────┬────┘       │
+         │              │            │
+         ▼              │            │
+   ┌──────────┐         │            │
+   │  triage  │         │            │
+   │ (struct) │         │            │
+   └─────┬────┘         │            │
+         │              │            │
+         ▼              ▼            ▼
    ┌──────────────────────────────────┐
    │           report_node            │
    │         (LLM synthesis)          │
@@ -186,7 +186,7 @@ Active scan: yes
 ──────────────────────────── ▶ Approval ────────────────────
 ╭──────────────── ⚠ Approval Required ─────────────────────╮
 │ OSINT found 4 IP(s) and 5 subdomain(s).                  │
-│ Proceed with active scanning?                             │
+│ Proceed with active scanning?                            │
 ╰──────────────────────────────────────────────────────────╯
 Approve? [Y/n]: y
 
@@ -229,7 +229,7 @@ With `-v` (verbose), LLM reasoning is also shown:
 
 | Agent | Type | Tools | Purpose |
 |-------|------|-------|---------|
-| **OSINT** | ReAct | 11 tools | Passive reconnaissance — DNS, WHOIS, subdomains, reverse DNS, Shodan/Censys, job search, email analysis |
+| **OSINT** | ReAct | 18 tools | Passive reconnaissance — DNS, WHOIS, subdomains, reverse DNS, Shodan/Censys, IP enrichment, TLS certs, historical DNS, job search, email analysis |
 | **Port Scan** | ReAct | 2 tools | Active scanning — discover open ports (`naabu`) and fingerprint services (`nmap`) |
 | **Vuln Scan** | ReAct | 8 tools | Vulnerability scanning — Nuclei templates, HTTP tech detection, WAF detection, web crawling, TLS analysis |
 | **Triage** | Structured LLM | *(none)* | Gap analysis — identify technologies found but not assessed, flag coverage gaps |
@@ -253,12 +253,18 @@ See [docs/agents.md](docs/agents.md) for detailed agent documentation.
 | `crtsh_subdomain_enum` | DOMAIN | — | OSINT |
 | `subfinder_enum` | DOMAIN | `subfinder` binary | OSINT |
 | `reverse_dns_lookup` | IP | — | OSINT |
+| `ipinfo_lookup` | IP | — | OSINT |
+| `bgp_lookup` | IP | — | OSINT |
+| `httpx_scan` | HOST_OR_URL | `httpx` binary | OSINT, Vuln Scan |
+| `tlscert_lookup` | DOMAIN | — | OSINT |
+| `securitytrails_history` | DOMAIN | `SECURITYTRAILS_API_KEY` | OSINT |
+| `urlscan_search` | DOMAIN | — | OSINT |
+| `otx_passive_dns` | DOMAIN | `OTX_API_KEY` | OSINT |
 | `job_search` | *(free text)* | — | OSINT |
 | `analyze_email` | *(email)* | `HIBP_API_KEY` / `EMAILREP_API_KEY` | OSINT |
 | `naabu_scan` | HOST | `naabu` binary | Port Scan |
 | `nmap_port_scan` | HOST | `nmap` binary | Port Scan |
 | `nuclei_scan` | DOMAIN | `nuclei` binary | Vuln Scan |
-| `httpx_scan` | HOST_OR_URL | `httpx` binary | Vuln Scan |
 | `wafw00f_detect` | HOST_OR_URL | `wafw00f` binary | Vuln Scan |
 | `graphql_scan` | URL | — | Vuln Scan |
 | `feroxbuster_scan` | HOST_OR_URL | `feroxbuster` binary | Vuln Scan |
@@ -299,6 +305,8 @@ export FACKEL_MODEL_REPORT=gpt-4o
 | `SHODAN_API_KEY` | No | `shodan_lookup` |
 | `VIRUSTOTAL_API_KEY` | No | `virustotal_subdomain_enum` |
 | `CENSYS_API_ID` / `CENSYS_API_SECRET` | No | `censys_lookup` |
+| `SECURITYTRAILS_API_KEY` | No | `securitytrails_history` |
+| `OTX_API_KEY` | No | `otx_passive_dns` |
 | `HIBP_API_KEY` | No | `analyze_email` (graceful degradation) |
 | `EMAILREP_API_KEY` | No | `analyze_email` (graceful degradation) |
 
@@ -342,12 +350,11 @@ print(result["report"])
    Pydantic input schema:
 
 ```python
-# src/tools/my_tool.py
+# src/tools/recon/my_tool.py
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from .utils import format_tool_output
-from .validators import TargetType, guard_target
+from fackel.tooling import TargetType, format_tool_output, guard_target
 
 
 class MyToolInput(BaseModel):
@@ -398,20 +405,24 @@ src/
 │   │   │   ├── graph.py             # StateGraph definition + routing
 │   │   │   ├── main.py              # Public API: run()
 │   │   │   └── evaluator.py         # LLM-as-a-judge quality scoring
-│   │   ├── osint/agent.py           # OSINT ReAct agent (11 tools)
+│   │   ├── osint/agent.py           # OSINT ReAct agent (18 tools)
 │   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
 │   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (8 tools)
 │   │   ├── triage/agent.py          # Triage structured output
 │   │   └── report/agent.py          # Report synthesis
+│   ├── tooling/
+│   │   ├── validators.py            # guard_target(), TargetType enum
+│   │   ├── execution.py             # run_command, format_tool_output, etc.
+│   │   ├── sanitizers.py            # Input sanitisation helpers
+│   │   ├── ip_classifier.py         # IP classification (CDN, cloud, hosting)
+│   │   └── ddgs.py                  # DuckDuckGo search wrapper
 │   ├── provider_keys.py             # API key gating + tool filtering
-│   ├── report_writer.py             # Full archival report builder
-│   └── utils/
-│       ├── network.py               # is_valid_ip, is_valid_domain
-│       └── target.py                # extract_host, sanitize_target
+│   └── report_writer.py             # Full archival report builder
 └── tools/
-    ├── validators.py                # TargetType enum + guard_target()
-    ├── utils.py                     # run_command, format_tool_output, etc.
-    └── *.py                         # 25 tool wrappers
+    ├── recon/                       # 16 passive reconnaissance tools
+    ├── osint/                       # 2 open-source intelligence tools
+    ├── scanning/                    # 7 active scanning tools
+    └── vuln/                        # 3 vulnerability assessment tools
 ```
 
 ---
@@ -452,4 +463,4 @@ uv run ruff format src/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE).

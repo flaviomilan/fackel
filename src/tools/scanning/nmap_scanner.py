@@ -21,95 +21,105 @@ from fackel.tooling import (
 
 def _is_root() -> bool:
     """Check if running with root/sudo privileges."""
-    return os.geteuid() == 0 if hasattr(os, 'geteuid') else False
+    return os.geteuid() == 0 if hasattr(os, "geteuid") else False
 
 
-def _parse_os_info(nm, host: str) -> dict:
+def _parse_os_info(nm, host: str) -> dict[str, Any]:
     """Extract OS detection information."""
     os_info = {
         "os_matches": [],
         "os_classes": [],
     }
-    
+
     try:
-        if 'osmatch' in nm[host]:
-            for osmatch in nm[host]['osmatch']:
-                os_info['os_matches'].append({
-                    'name': osmatch.get('name', ''),
-                    'accuracy': int(osmatch.get('accuracy', 0)),
-                })
-        
-        if 'osclass' in nm[host]:
-            for osclass in nm[host]['osclass']:
-                os_info['os_classes'].append({
-                    'type': osclass.get('type', ''),
-                    'vendor': osclass.get('vendor', ''),
-                    'osfamily': osclass.get('osfamily', ''),
-                    'osgen': osclass.get('osgen', ''),
-                    'accuracy': int(osclass.get('accuracy', 0)),
-                })
+        if "osmatch" in nm[host]:
+            for osmatch in nm[host]["osmatch"]:
+                os_info["os_matches"].append(
+                    {
+                        "name": osmatch.get("name", ""),
+                        "accuracy": int(osmatch.get("accuracy", 0)),
+                    }
+                )
+
+        if "osclass" in nm[host]:
+            for osclass in nm[host]["osclass"]:
+                os_info["os_classes"].append(
+                    {
+                        "type": osclass.get("type", ""),
+                        "vendor": osclass.get("vendor", ""),
+                        "osfamily": osclass.get("osfamily", ""),
+                        "osgen": osclass.get("osgen", ""),
+                        "accuracy": int(osclass.get("accuracy", 0)),
+                    }
+                )
     except (KeyError, ValueError):
         pass
-    
+
     return os_info
 
 
-def _parse_hostscript(nm, host: str) -> dict:
+def _parse_hostscript(nm, host: str) -> dict[str, Any]:
     """Extract host-level script results."""
     scripts = {}
-    
+
     try:
-        if 'hostscript' in nm[host]:
-            for script in nm[host]['hostscript']:
-                script_id = script.get('id', 'unknown')
-                scripts[script_id] = script.get('output', '')
+        if "hostscript" in nm[host]:
+            for script in nm[host]["hostscript"]:
+                script_id = script.get("id", "unknown")
+                scripts[script_id] = script.get("output", "")
     except KeyError:
         pass
-    
+
     return scripts
 
 
-def _extract_vulnerabilities(service: dict) -> list:
+def _extract_vulnerabilities(service: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract CVEs and vulnerabilities from service scripts."""
     vulnerabilities = []
-    
-    if 'script' not in service:
+
+    if "script" not in service:
         return vulnerabilities
-    
+
     # Parse vulners output
-    if 'vulners' in service['script']:
-        vulners_output = service['script']['vulners']
+    if "vulners" in service["script"]:
+        vulners_output = service["script"]["vulners"]
         for match in re.finditer(r"(CVE-\d{4}-\d{4,7})\s*(\d+\.\d+)", vulners_output):
-            vulnerabilities.append({
-                'id': match.group(1),
-                'cvss': float(match.group(2)),
-                'source': 'vulners',
-            })
-    
+            vulnerabilities.append(
+                {
+                    "id": match.group(1),
+                    "cvss": float(match.group(2)),
+                    "source": "vulners",
+                }
+            )
+
     # Parse vulscan output (if present)
-    if 'vulscan' in service['script']:
-        vulscan_output = service['script']['vulscan']
+    if "vulscan" in service["script"]:
+        vulscan_output = service["script"]["vulscan"]
         for match in re.finditer(r"(CVE-\d{4}-\d{4,7})", vulscan_output):
             cve_id = match.group(1)
             # Avoid duplicates
-            if not any(v['id'] == cve_id for v in vulnerabilities):
-                vulnerabilities.append({
-                    'id': cve_id,
-                    'source': 'vulscan',
-                })
-    
+            if not any(v["id"] == cve_id for v in vulnerabilities):
+                vulnerabilities.append(
+                    {
+                        "id": cve_id,
+                        "source": "vulscan",
+                    }
+                )
+
     # Parse vuln script results
-    vuln_scripts = ['http-vuln-', 'ssl-', 'ssh-', 'smb-vuln-', 'smtp-vuln-']
-    for script_name, script_output in service.get('script', {}).items():
-        if any(script_name.startswith(prefix) for prefix in vuln_scripts):
-            # Check if vulnerable
-            if 'VULNERABLE' in script_output or 'vulnerable' in script_output.lower():
-                vulnerabilities.append({
-                    'type': script_name.replace('http-vuln-', '').replace('smb-vuln-', ''),
-                    'description': script_output[:200],  # First 200 chars
-                    'source': 'nse_script',
-                })
-    
+    vuln_scripts = ["http-vuln-", "ssl-", "ssh-", "smb-vuln-", "smtp-vuln-"]
+    for script_name, script_output in service.get("script", {}).items():
+        if any(script_name.startswith(prefix) for prefix in vuln_scripts) and (
+            "VULNERABLE" in script_output or "vulnerable" in script_output.lower()
+        ):
+            vulnerabilities.append(
+                {
+                    "type": script_name.replace("http-vuln-", "").replace("smb-vuln-", ""),
+                    "description": script_output[:200],  # First 200 chars
+                    "source": "nse_script",
+                }
+            )
+
     return vulnerabilities
 
 
@@ -143,6 +153,8 @@ class NmapInput(BaseModel):
             "or is behind a firewall that blocks ping probes."
         ),
     )
+
+
 _VALID_SCAN_TYPES = frozenset({"default", "quick", "deep"})
 
 
@@ -168,7 +180,9 @@ def nmap_port_scan(
 
     if scan_type not in _VALID_SCAN_TYPES:
         return format_tool_output(
-            "nmap_port_scan", host, "error",
+            "nmap_port_scan",
+            host,
+            "error",
             error=f"invalid scan_type {scan_type!r} — allowed: {', '.join(sorted(_VALID_SCAN_TYPES))}",
         )
 
@@ -183,32 +197,43 @@ def nmap_port_scan(
         if scan_type == "quick":
             args = [
                 "-sV",
-                "--version-intensity", "5",
+                "--version-intensity",
+                "5",
                 "-T4",
-                "--max-retries", "2",
-                "--host-timeout", "5m",
+                "--max-retries",
+                "2",
+                "--host-timeout",
+                "5m",
             ]
         elif scan_type == "deep":
             args = [
                 "-sV",
-                "--version-intensity", "9",
+                "--version-intensity",
+                "9",
                 "-sC",
-                "--script", "vulners,vuln",
+                "--script",
+                "vulners,vuln",
                 "-T3",
-                "--max-retries", "3",
-                "--host-timeout", "20m",
+                "--max-retries",
+                "3",
+                "--host-timeout",
+                "20m",
             ]
             if not ports.strip():
                 args.extend(["-p-"])  # all 65535 ports
         else:  # default
             args = [
                 "-sV",
-                "--version-intensity", "7",
+                "--version-intensity",
+                "7",
                 "-sC",
-                "--script", "vulners,vuln",
+                "--script",
+                "vulners,vuln",
                 "-T4",
-                "--max-retries", "2",
-                "--host-timeout", "10m",
+                "--max-retries",
+                "2",
+                "--host-timeout",
+                "10m",
             ]
 
         # Add custom port range if specified (overrides deep -p-)
@@ -245,45 +270,47 @@ def nmap_port_scan(
             "services": [],
             "summary": {},
         }
-        
+
         # Extract hostnames
-        if 'hostnames' in nm[target]:
-            for hostname_entry in nm[target]['hostnames']:
-                if hostname_entry.get('name'):
-                    scan_result['hostnames'].append({
-                        'name': hostname_entry['name'],
-                        'type': hostname_entry.get('type', 'unknown'),
-                    })
-        
+        if "hostnames" in nm[target]:
+            for hostname_entry in nm[target]["hostnames"]:
+                if hostname_entry.get("name"):
+                    scan_result["hostnames"].append(
+                        {
+                            "name": hostname_entry["name"],
+                            "type": hostname_entry.get("type", "unknown"),
+                        }
+                    )
+
         # Extract addresses
-        if 'addresses' in nm[target]:
-            scan_result['addresses'] = nm[target]['addresses']
-        
+        if "addresses" in nm[target]:
+            scan_result["addresses"] = nm[target]["addresses"]
+
         # Extract OS information (if available)
-        scan_result['os_info'] = _parse_os_info(nm, target)
-        
+        scan_result["os_info"] = _parse_os_info(nm, target)
+
         # Extract host-level scripts
-        scan_result['host_scripts'] = _parse_hostscript(nm, target)
-        
+        scan_result["host_scripts"] = _parse_hostscript(nm, target)
+
         # Extract service information
         open_ports = 0
         filtered_ports = 0
         total_vulns = 0
-        
+
         for proto in nm[target].all_protocols():
             for port in sorted(nm[target][proto].keys()):
                 service = nm[target][proto][port]
                 state = service.get("state", "unknown")
-                
+
                 if state == "open":
                     open_ports += 1
                 elif state == "filtered":
                     filtered_ports += 1
-                
+
                 # Extract vulnerabilities
                 vulnerabilities = _extract_vulnerabilities(service)
                 total_vulns += len(vulnerabilities)
-                
+
                 entry = {
                     "port": port,
                     "protocol": proto,
@@ -296,23 +323,25 @@ def nmap_port_scan(
                     "vulnerabilities": vulnerabilities,
                     "scripts": {},
                 }
-                
+
                 # Extract non-vulnerability script results
-                if 'script' in service:
-                    for script_name, script_output in service['script'].items():
+                if "script" in service:
+                    for script_name, script_output in service["script"].items():
                         # Skip vuln scripts (already processed)
-                        if script_name not in ['vulners', 'vulscan']:
-                            entry['scripts'][script_name] = script_output[:500]  # Truncate to 500 chars
-                
-                scan_result['services'].append(entry)
-        
+                        if script_name not in ["vulners", "vulscan"]:
+                            entry["scripts"][script_name] = script_output[
+                                :500
+                            ]  # Truncate to 500 chars
+
+                scan_result["services"].append(entry)
+
         # Add summary statistics
-        scan_result['summary'] = {
-            'total_ports_scanned': len(scan_result['services']),
-            'open_ports': open_ports,
-            'filtered_ports': filtered_ports,
-            'total_vulnerabilities': total_vulns,
-            'os_detected': len(scan_result['os_info'].get('os_matches', [])) > 0,
+        scan_result["summary"] = {
+            "total_ports_scanned": len(scan_result["services"]),
+            "open_ports": open_ports,
+            "filtered_ports": filtered_ports,
+            "total_vulnerabilities": total_vulns,
+            "os_detected": len(scan_result["os_info"].get("os_matches", [])) > 0,
         }
 
         return format_tool_output(
@@ -329,7 +358,7 @@ def nmap_port_scan(
             "error",
             error=f"Nmap execution error: {e}. Ensure Nmap is installed and accessible.",
         )
-    except KeyError as e:
+    except KeyError:
         return format_tool_output(
             "nmap_port_scan",
             host,

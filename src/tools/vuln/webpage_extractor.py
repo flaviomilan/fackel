@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import requests
 from bs4 import BeautifulSoup
 from langchain_core.tools import tool
@@ -10,6 +12,7 @@ from pydantic import BaseModel, Field
 from fackel.tooling import TargetType, format_tool_output, guard_target
 
 _MAX_CONTENT_LENGTH = 2000
+_TIMEOUT = 10  # seconds
 
 _SESSION_HEADERS = {
     "User-Agent": (
@@ -41,7 +44,7 @@ class WebpageExtractorInput(BaseModel):
 
 
 @tool(args_schema=WebpageExtractorInput)
-def extract_webpage_content(url: str) -> dict:
+def extract_webpage_content(url: str) -> dict[str, Any]:
     """Extract relevant text content from a web page, stripping HTML boilerplate.
 
     Useful for reading page content to identify technologies, organisation info,
@@ -52,13 +55,15 @@ def extract_webpage_content(url: str) -> dict:
         return err
 
     try:
-        resp = requests.get(url, headers=_SESSION_HEADERS, timeout=10)
+        resp = requests.get(url, headers=_SESSION_HEADERS, timeout=_TIMEOUT)
         resp.raise_for_status()
 
         content_type = resp.headers.get("content-type", "").lower()
         if "text/html" not in content_type:
             return format_tool_output(
-                "extract_webpage_content", url, "error",
+                "extract_webpage_content",
+                url,
+                "error",
                 error=f"content is not HTML: {content_type}",
             )
 

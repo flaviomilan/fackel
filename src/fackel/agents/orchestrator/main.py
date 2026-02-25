@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
 from fackel.tooling import sanitize_target
@@ -24,15 +26,15 @@ logger = logging.getLogger(__name__)
 _graph = None
 
 
-def _get_graph():
+def _get_graph() -> CompiledStateGraph:
     """Lazy-build the compiled graph (cached at module level)."""
-    global _graph  # noqa: PLW0603
+    global _graph
     if _graph is None:
         _graph = build_graph()
     return _graph
 
 
-def _initial_state(target: str, active_scan: bool) -> dict:
+def _initial_state(target: str, active_scan: bool) -> dict[str, Any]:
     clean_target = sanitize_target(target)
     return {
         "target": clean_target,
@@ -46,7 +48,7 @@ def _initial_state(target: str, active_scan: bool) -> dict:
     }
 
 
-def _config() -> dict:
+def _config() -> dict[str, Any]:
     """Generate a unique thread config for checkpointing."""
     return {"configurable": {"thread_id": str(uuid.uuid4())}}
 
@@ -84,10 +86,7 @@ def run(
         interrupt_values = snapshot.tasks[0].interrupts
         if interrupt_values:
             interrupt_data = interrupt_values[0].value
-            if approval_callback is not None:
-                approved = approval_callback(interrupt_data)
-            else:
-                approved = True  # Auto-approve when no callback
+            approved = approval_callback(interrupt_data) if approval_callback is not None else True
         else:
             approved = True
 

@@ -7,6 +7,7 @@ Current MVP tools: naabu_scan (fast discovery), nmap_port_scan (deep analysis).
 from __future__ import annotations
 
 from langchain_openai import ChatOpenAI
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
 
 from fackel.agents.config import get_model
@@ -17,7 +18,7 @@ from tools.scanning.nmap_scanner import nmap_port_scan
 TOOLS = [naabu_scan, nmap_port_scan]
 
 
-def build(model_name: str | None = None):
+def build(model_name: str | None = None) -> CompiledStateGraph:
     """Return a compiled ReAct port-scan agent."""
     llm = ChatOpenAI(model=model_name or get_model("port_scan"))
     return create_react_agent(llm, TOOLS, prompt=load_prompt("port_scan"))

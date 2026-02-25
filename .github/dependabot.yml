@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # Python dependencies (pip ecosystem)
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    reviewers:
+      - flaviomilan
+    labels:
+      - dependencies
+      - automated
+    commit-message:
+      prefix: "deps"
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    reviewers:
+      - flaviomilan
+    labels:
+      - ci
+      - automated
+    commit-message:
+      prefix: "ci"

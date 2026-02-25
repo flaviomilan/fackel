@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -23,7 +24,7 @@ class DnsResolveInput(BaseModel):
 
 
 @tool(args_schema=DnsResolveInput)
-def dns_resolve(target: str) -> dict:
+def dns_resolve(target: str) -> dict[str, Any]:
     """Resolve a domain to its IP addresses (A + AAAA records), or validate an IP.
 
     Use as the **first tool** in OSINT to discover the target's IP infrastructure.
@@ -37,7 +38,9 @@ def dns_resolve(target: str) -> dict:
     try:
         ipaddress.ip_address(target)
         return format_tool_output(
-            "dns_resolve", target, "ok",
+            "dns_resolve",
+            target,
+            "ok",
             data={"target": target, "ips": [target], "type": "ip"},
         )
     except ValueError:
@@ -48,11 +51,15 @@ def dns_resolve(target: str) -> dict:
         for result in socket.getaddrinfo(target, None):
             resolved.add(result[4][0])
         return format_tool_output(
-            "dns_resolve", target, "ok",
+            "dns_resolve",
+            target,
+            "ok",
             data={"target": target, "ips": sorted(resolved), "type": "domain"},
         )
     except Exception as exc:
         return format_tool_output(
-            "dns_resolve", target, "error",
+            "dns_resolve",
+            target,
+            "error",
             error=str(exc),
         )

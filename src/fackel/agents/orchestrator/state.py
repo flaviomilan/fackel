@@ -7,7 +7,7 @@ Findings are structured dicts (not free-text) so downstream consumers
 from __future__ import annotations
 
 from operator import add
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from typing_extensions import TypedDict
 
@@ -35,7 +35,7 @@ class Finding(TypedDict, total=False):
     """Primary tool that produced the data (e.g. "nuclei_scan")."""
 
     confidence: float
-    """0.0 – 1.0.  How confident the agent is in this finding."""
+    """0.0 - 1.0.  How confident the agent is in this finding."""
 
 
 class ScanState(TypedDict):
@@ -54,11 +54,20 @@ class ScanState(TypedDict):
     findings: Annotated[list[Finding], add]
     """Structured findings accumulated across phases (append-only reducer)."""
 
-    unassessed_areas: Annotated[list[dict], add]
+    unassessed_areas: Annotated[list[dict[str, Any]], add]
     """Technologies/opportunities detected but not covered by any specialist."""
 
-    phase_evaluations: Annotated[list[dict], add]
+    phase_evaluations: Annotated[list[dict[str, Any]], add]
     """LLM-as-a-judge quality assessments accumulated after each active phase."""
+
+    ip_classifications: Annotated[list[dict[str, Any]], add]
+    """Per-IP infrastructure classification (cdn / cloud / direct_host / isp)."""
+
+    tech_fingerprints: Annotated[list[dict[str, Any]], add]
+    """HTTP tech fingerprints per target (server, technologies, CDN, WAF)."""
+
+    risk_score: dict
+    """Exposure risk score: {score, exposure_type, factors}."""
 
     report: str
     """Final rendered Markdown report."""
