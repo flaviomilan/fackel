@@ -23,9 +23,6 @@ console = Console()
 _VERSION = "0.1.0"
 
 
-# ── Banner & header ───────────────────────────────────────────────────────
-
-
 def _print_banner() -> None:
     """Display the Fackel startup banner."""
     console.print()
@@ -68,9 +65,6 @@ def _print_provider_status(
         table.add_row(spec.provider, vars_str, status)
     console.print(table)
     console.print()
-
-
-# ── HIL approval handlers ─────────────────────────────────────────────────
 
 
 def _make_approval_prompt(
@@ -182,7 +176,6 @@ def scan(
 
     configure_logging(verbose=verbose)
 
-    # ── Banner & header ────────────────────────────────────────────────
     _print_banner()
 
     if check_providers:
@@ -190,7 +183,6 @@ def scan(
 
     _print_scan_header(target, active_scan=active_scan, approve_tools=approve_tools)
 
-    # Show tools that will be skipped due to missing API keys.
     from fackel.provider_keys import get_unavailable_tool_names
 
     unavailable = get_unavailable_tool_names()
@@ -201,7 +193,6 @@ def scan(
             console.print(f"  [dim]• {tool_name} — {provider} ({vars_str})[/dim]")
         console.print()
 
-    # ── Event callbacks ────────────────────────────────────────────────
     renderer = EventRenderer(console, verbose=verbose)
     set_event_callback(renderer.handle)
     approval_prompt, tool_approval_prompt = _make_approval_prompt(renderer)

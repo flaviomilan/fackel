@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 from tools.scanning.graphql_scanner import (
@@ -13,7 +12,6 @@ from tools.scanning.graphql_scanner import (
     _probe_introspection,
     graphql_scan,
 )
-
 
 # ── Introspection probe ───────────────────────────────────────────────────
 
@@ -53,7 +51,7 @@ class TestProbeIntrospection:
         mock_resp.status_code = 403
         mock_session.return_value.post.return_value = mock_resp
 
-        enabled, issues, summary = _probe_introspection("https://example.com/graphql", {})
+        enabled, issues, _summary = _probe_introspection("https://example.com/graphql", {})
         assert enabled is False
         assert issues == []
 
@@ -63,7 +61,7 @@ class TestProbeIntrospection:
 
         mock_session.return_value.post.side_effect = requests.RequestException("timeout")
 
-        enabled, issues, summary = _probe_introspection("https://example.com/graphql", {})
+        enabled, issues, _summary = _probe_introspection("https://example.com/graphql", {})
         assert enabled is False
         assert issues == []
 

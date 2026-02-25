@@ -17,7 +17,7 @@ from fackel.tooling import (
 from tools.circuit_breaker import circuit_breaker
 from tools.http_client import get_session
 
-_TIMEOUT = 20  # seconds
+_TIMEOUT = 20
 
 
 class VirusTotalSubdomainInput(BaseModel):

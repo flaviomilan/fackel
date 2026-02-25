@@ -17,7 +17,7 @@ from fackel.tooling import (
     run_command,
 )
 
-_TIMEOUT = 300  # seconds
+_TIMEOUT = 300
 
 
 class FeroxbusterInput(BaseModel):
@@ -43,7 +43,6 @@ def feroxbuster_scan(target: str) -> dict[str, Any]:
 
     target = guard_target(target, "feroxbuster_scan", TargetType.HOST_OR_URL)
 
-    # feroxbuster needs a URL; if guard_target returned a bare host, add scheme
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
 

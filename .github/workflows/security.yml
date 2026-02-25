@@ -26,6 +26,10 @@ jobs:
         with:
           languages: python
           queries: +security-extended
+          config: |
+            paths-ignore:
+              - tests
+              - "**/*test*.py"
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4

@@ -23,7 +23,7 @@ from fackel.tooling import (
     sanitize_tags,
 )
 
-_TIMEOUT = 3000  # seconds
+_TIMEOUT = 3000
 
 
 class NucleiInput(BaseModel):

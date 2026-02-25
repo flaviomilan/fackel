@@ -19,8 +19,6 @@ from fackel.tooling.ip_classifier import classify_ip
 
 logger = logging.getLogger(__name__)
 
-# ── Shared iteration helper ───────────────────────────────────────────────
-
 
 def iter_tool_payloads(
     messages: list[Any],
@@ -65,9 +63,6 @@ def iter_tool_payloads(
             continue
 
 
-# ── Internal helpers ───────────────────────────────────────────────────────
-
-
 def _add_unique_ip(ips: list[str], value: object) -> None:
     """Append a validated, unique IP to *ips*."""
     ip_str = str(value).strip()
@@ -85,7 +80,6 @@ def _subdomain_collector(base_domain: str) -> tuple[list[str], Callable[[object]
 
     def _add(value: object) -> None:
         host = str(value).strip().lower().rstrip(".")
-        # Strip wildcard prefix so *.example.com → example.com
         if host.startswith("*."):
             host = host[2:]
         if (
@@ -99,9 +93,6 @@ def _subdomain_collector(base_domain: str) -> tuple[list[str], Callable[[object]
             subs.append(host)
 
     return subs, _add
-
-
-# ── IP extraction ──────────────────────────────────────────────────────────
 
 
 def extract_ips(messages: list[Any]) -> list[str]:
@@ -129,9 +120,6 @@ def extract_ips(messages: list[Any]) -> list[str]:
     return ips
 
 
-# ── Subdomain extraction ──────────────────────────────────────────────────
-
-
 def extract_subdomains(messages: list[Any], base_domain: str) -> list[str]:
     """Pull subdomain hostnames from ToolMessage payloads.
 
@@ -149,9 +137,6 @@ def extract_subdomains(messages: list[Any], base_domain: str) -> list[str]:
             if isinstance(detail, dict) and "subdomain" in detail:
                 add(detail["subdomain"])
     return sorted(subs)
-
-
-# ── IP classification ─────────────────────────────────────────────────────
 
 
 def _collect_ip_data(messages: list[Any]) -> dict[str, dict[str, Any]]:
@@ -221,9 +206,6 @@ def extract_ip_classifications(
     return classifications
 
 
-# ── Tech fingerprints ──────────────────────────────────────────────────────
-
-
 def _parse_httpx_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
     """Normalise a single httpx result entry into a fingerprint dict."""
     url = entry.get("url", entry.get("input", ""))
@@ -271,9 +253,6 @@ def extract_tech_fingerprints(messages: list[Any]) -> list[dict[str, Any]]:
     return fingerprints
 
 
-# ── Historical IPs ─────────────────────────────────────────────────────────
-
-
 def extract_historical_ips(
     messages: list[Any],
     current_ips: list[str],
@@ -300,9 +279,6 @@ def extract_historical_ips(
             ):
                 historical.append(ip_str)
     return historical
-
-
-# ── TLS SAN domains ────────────────────────────────────────────────────────
 
 
 def extract_san_domains(messages: list[Any], base_domain: str) -> list[str]:

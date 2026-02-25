@@ -105,10 +105,8 @@ def run_triage(
     """
     agent = build(model_name)
 
-    # Serialise structured findings into text for the LLM.
     context = _serialize_findings(findings)
 
-    # Append structured state context for evidence-backed risk scoring.
     structured_sections = _serialize_structured_context(
         ip_classifications=ip_classifications or [],
         tech_fingerprints=tech_fingerprints or [],

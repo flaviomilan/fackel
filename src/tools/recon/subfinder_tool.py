@@ -85,7 +85,6 @@ def subfinder_enum(
                 details.append({"subdomain": host, "source": source})
                 sources_seen.add(source)
         except (json.JSONDecodeError, TypeError):
-            # Fallback: plain text line (one subdomain per line)
             host = line.strip().lower().rstrip(".")
             if host and host not in subdomains:
                 subdomains.append(host)

@@ -3,19 +3,15 @@ reverse_dns, shodan, subfinder, virustotal, censys."""
 
 from __future__ import annotations
 
-import json
 import socket
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
-from langchain_core.tools import ToolException
 
-from tools.recon.dns_resolver import dns_resolve
 from tools.recon.crtsh_tool import crtsh_subdomain_enum
+from tools.recon.dns_resolver import dns_resolve
 from tools.recon.reverse_dns_tool import reverse_dns_lookup
 from tools.recon.subfinder_tool import subfinder_enum
-
 
 # ── DNS Resolver ───────────────────────────────────────────────────────────
 

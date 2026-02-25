@@ -60,7 +60,6 @@ def ipinfo_lookup(ip: str) -> dict[str, Any]:
         except ValueError:
             raise ToolException("ipinfo_lookup: returned non-JSON response") from None
 
-    # The "org" field from ipinfo has the format "AS13335 Cloudflare, Inc."
     raw_org = data.get("org", "")
     asn = ""
     org_name = raw_org

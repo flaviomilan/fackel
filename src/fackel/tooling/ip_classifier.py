@@ -14,53 +14,49 @@ from typing import Literal
 IpClass = Literal["cdn", "cloud", "direct_host", "isp"]
 
 
-# ── Known CDN providers by ASN number ──────────────────────────────────
-
 _CDN_ASNS: frozenset[int] = frozenset(
     {
-        13335,  # Cloudflare
-        20940,  # Akamai
-        16625,  # Akamai
-        54113,  # Fastly
-        16509,  # Amazon CloudFront (shared ASN with AWS)
-        13249,  # Incapsula / Imperva
-        209242,  # Cloudflare (secondary)
-        395747,  # Cloudflare (additional)
-        14789,  # Limelight Networks
-        30148,  # Sucuri
-        19551,  # Incapsula
-        22207,  # EdgeCast / Verizon Digital Media
-        15169,  # Google (also cloud, but fronts as CDN often)
+        13335,
+        20940,
+        16625,
+        54113,
+        16509,
+        13249,
+        209242,
+        395747,
+        14789,
+        30148,
+        19551,
+        22207,
+        15169,
     }
 )
 
-# ── Known cloud providers by ASN number ────────────────────────────────
 
 _CLOUD_ASNS: frozenset[int] = frozenset(
     {
-        16509,  # Amazon AWS
-        14618,  # Amazon AWS
-        8075,  # Microsoft Azure
-        15169,  # Google Cloud
-        396982,  # Google Cloud
-        63949,  # Linode / Akamai Cloud
-        20473,  # Vultr / Choopa
-        24940,  # Hetzner
-        16276,  # OVH
-        14061,  # DigitalOcean
-        201011,  # Oracle Cloud
-        13414,  # Twitter / X data centres
-        36351,  # SoftLayer / IBM Cloud
-        19871,  # Network Solutions
-        46606,  # Unified Layer
-        22612,  # Namecheap
-        132203,  # Tencent Cloud
-        45090,  # Tencent Cloud
-        37963,  # Alibaba Cloud
+        16509,
+        14618,
+        8075,
+        15169,
+        396982,
+        63949,
+        20473,
+        24940,
+        16276,
+        14061,
+        201011,
+        13414,
+        36351,
+        19871,
+        46606,
+        22612,
+        132203,
+        45090,
+        37963,
     }
 )
 
-# ── Org-name substrings for CDN detection (lowercased) ─────────────────
 
 _CDN_ORG_KEYWORDS: tuple[str, ...] = (
     "cloudflare",
@@ -79,7 +75,6 @@ _CDN_ORG_KEYWORDS: tuple[str, ...] = (
     "maxcdn",
 )
 
-# ── Org-name substrings for cloud detection (lowercased) ───────────────
 
 _CLOUD_ORG_KEYWORDS: tuple[str, ...] = (
     "amazon",
@@ -155,34 +150,27 @@ def classify_ip(
     asn_name_lower = (asn_name or "").lower()
     combined_text = f"{org_lower} {asn_name_lower}"
 
-    # ── Anycast is almost always CDN ───────────────────────────────
     if anycast:
         return "cdn"
 
-    # ── Check CDN by ASN ───────────────────────────────────────────
     if asn_int and asn_int in _CDN_ASNS:
         return "cdn"
 
-    # ── Check CDN by org/ASN name keywords ─────────────────────────
     for kw in _CDN_ORG_KEYWORDS:
         if kw in combined_text:
             return "cdn"
 
-    # ── Direct-host: PTR hostname contains the target domain ───────
     if target_domain and hostname:
         target_lower = target_domain.lower().rstrip(".")
         hostname_lower = hostname.lower().rstrip(".")
         if hostname_lower == target_lower or hostname_lower.endswith(f".{target_lower}"):
             return "direct_host"
 
-    # ── Check cloud by ASN ─────────────────────────────────────────
     if asn_int and asn_int in _CLOUD_ASNS:
         return "cloud"
 
-    # ── Check cloud by org/ASN name keywords ───────────────────────
     for kw in _CLOUD_ORG_KEYWORDS:
         if kw in combined_text:
             return "cloud"
 
-    # ── Default: ISP / unknown ─────────────────────────────────────
     return "isp"

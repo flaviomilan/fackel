@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.http_client import get_session, _session
+from tools.http_client import get_session
 
 
 class TestGetSession:

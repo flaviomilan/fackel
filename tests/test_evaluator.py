@@ -45,8 +45,9 @@ class TestPhaseEvaluation:
 
     def test_score_bounds(self):
         import pytest
+        from pydantic import ValidationError
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PhaseEvaluation(
                 phase="x",
                 completeness="complete",

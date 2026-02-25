@@ -53,9 +53,8 @@ class EventRenderer:
         self._current_label = ""
         self._spinner_msg = ""
         self._live: Live | None = None
-        self._live_kind: str | None = None  # "tools" | "thinking" | None
+        self._live_kind: str | None = None
 
-    # ── Composite renderable ──────────────────────────────────────────
 
     def _build_display(self) -> Group:
         """Build the renderable shown inside the Live area."""
@@ -66,7 +65,6 @@ class EventRenderer:
             return Group(self._build_thinking_panel(), "", spinner)
         return Group("", spinner)
 
-    # ── Live management ───────────────────────────────────────────────
 
     def _refresh_live(self) -> None:
         """Start or update the single Live area."""
@@ -112,7 +110,6 @@ class EventRenderer:
         """Clean up all live displays."""
         self._stop_live()
 
-    # ── Main dispatcher ────────────────────────────────────────────────
 
     def handle(self, phase: str, event_type: str, data: dict[str, Any]) -> None:
         """Route an agent event to the appropriate renderer."""
@@ -126,7 +123,6 @@ class EventRenderer:
         if handler is not None:
             handler(self, label=label, icon=icon, data=data)
 
-    # ── Event handlers ─────────────────────────────────────────────────
 
     def _on_start(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
         self._persist_content()
@@ -143,7 +139,6 @@ class EventRenderer:
         self._live_kind = None
         self._refresh_live()
 
-    # ── Tool batch display ────────────────────────────────────────────
 
     def _build_tool_table(self) -> Table:
         """Build a table showing the current tool batch with live status."""
@@ -247,7 +242,6 @@ class EventRenderer:
             self._refresh_live()
         self._check_batch_complete()
 
-    # ── Live thinking panel ────────────────────────────────────────────
 
     def _build_thinking_panel(self) -> Panel:
         """Build a Panel renderable from the current thinking text."""
@@ -325,7 +319,6 @@ class EventRenderer:
         self._tool_batch.clear()
         self._thinking_text = ""
         self._stop_live()
-        # Approval phase feedback is handled inline by the prompt itself.
         if self._current_label and self._current_label.lower() == "approval":
             return
         elapsed = time.perf_counter() - self._phase_start
@@ -338,7 +331,6 @@ class EventRenderer:
         meta_str = f" [dim]({', '.join(meta)})[/dim]" if meta else ""
         self._console.print(f"  [green]✓ {label} complete[/green]{meta_str}")
 
-    # ── Dispatch table (replaces if/elif chain for KISS) ──────────────
 
     _EVENT_HANDLERS: ClassVar[dict[str, Any]] = {
         "start": _on_start,

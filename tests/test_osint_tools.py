@@ -4,16 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-from langchain_core.tools import ToolException
-
 from tools.osint.email_analyzer import (
     _check_breaches,
     _check_reputation,
     analyze_email,
 )
 from tools.osint.job_search import job_search
-
 
 # ── Email analyzer ─────────────────────────────────────────────────────────
 

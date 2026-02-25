@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 from fackel.agents.orchestrator.nodes._helpers import (
-    IP_CLASS_HINTS,
-    make_finding,
     get_phase_evaluation,
+    make_finding,
     prepare_scan_targets,
 )
 from fackel.agents.orchestrator.nodes.report_and_gates import (
     route_after_osint,
     route_after_port_scan,
 )
-
 
 # ── make_finding ──────────────────────────────────────────────────────────
 
@@ -81,7 +79,7 @@ class TestPrepareScanTargets:
             "discovered_subdomains": [],
             "target": "example.com",
         }
-        ips, subs = prepare_scan_targets(state)
+        ips, _subs = prepare_scan_targets(state)
         assert ips == ["1.2.3.4"]
 
     def test_empty_state(self):

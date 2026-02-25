@@ -20,7 +20,7 @@ from tools.http_client import get_session
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT = 15  # seconds
+_TIMEOUT = 15
 
 
 class ReverseDnsInput(BaseModel):
@@ -51,7 +51,6 @@ def reverse_dns_lookup(ip: str) -> dict[str, Any]:
     ptr_aliases: list[str] = []
     shared_domains: list[str] = []
 
-    # --- PTR record via system resolver ---
     try:
         result = socket.gethostbyaddr(ip)
         ptr_hostname = result[0]
@@ -61,7 +60,6 @@ def reverse_dns_lookup(ip: str) -> dict[str, Any]:
     except Exception:
         logger.debug("PTR lookup failed for %s", ip)
 
-    # --- HackerTarget reverse IP (free, no key) ---
     try:
         resp = get_session().get(
             f"https://api.hackertarget.com/reverseiplookup/?q={ip}",

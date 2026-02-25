@@ -37,20 +37,15 @@ class WhoisInput(BaseModel):
     )
 
 
-# ── Traditional WHOIS (python-whois) ──────────────────────────────────
-
-
 def _whois_query(domain: str) -> whois.WhoisEntry:
     """Try the built-in NICClient first, fall back to the system ``whois`` binary."""
     try:
         record = whois.whois(domain)
-        # NICClient may succeed but return an empty/unparsed result for some TLDs.
         if record and (record.registrar or record.name_servers or record.creation_date):
             return record
     except Exception:
         logger.debug("NICClient WHOIS failed for %s", domain)
 
-    # Fallback: shell out to system whois (handles more TLDs).
     if shutil.which("whois"):
         try:
             return whois.whois(domain, command=True)
@@ -103,9 +98,6 @@ def _build_whois_data(record: whois.WhoisEntry) -> dict[str, Any]:
     }
 
 
-# ── RDAP fallback (RFC 9082 / 9083) ──────────────────────────────────
-
-
 def _rdap_server_for_tld(tld: str) -> str | None:
     """Look up the RDAP base URL for *tld* via the IANA bootstrap file."""
     try:
@@ -153,13 +145,11 @@ def _extract_rdap_registrar(data: dict[str, Any]) -> str | None:
     """Extract registrar name from RDAP entities list."""
     for entity in data.get("entities", []):
         if "registrar" in entity.get("roles", []):
-            # vCard is [[type, props, datatype, value], ...]
             vcard = entity.get("vcardArray", [None, []])
             if len(vcard) >= 2:
                 for prop in vcard[1]:
                     if len(prop) >= 4 and prop[0] == "fn":
                         return str(prop[3])
-            # Some registries use publicIds or handle instead of vCard.
             handle = entity.get("handle")
             if handle:
                 return handle
@@ -201,9 +191,6 @@ def _build_rdap_data(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-# ── Public tool ───────────────────────────────────────────────────────
-
-
 @tool(args_schema=WhoisInput)
 def whois_lookup(domain: str) -> dict[str, Any]:
     """Query WHOIS registration data for a domain.
@@ -215,7 +202,6 @@ def whois_lookup(domain: str) -> dict[str, Any]:
     """
     domain = guard_target(domain, "whois_lookup", TargetType.DOMAIN)
 
-    # ── Attempt 1: traditional WHOIS ──────────────────────────────────
     try:
         record = _whois_query(domain)
         data = _build_whois_data(record)
@@ -224,7 +210,6 @@ def whois_lookup(domain: str) -> dict[str, Any]:
     except Exception:
         logger.debug("WHOIS query failed for %s", domain)
 
-    # ── Attempt 2: RDAP fallback ──────────────────────────────────────
     try:
         rdap_data = _rdap_query(domain)
         if rdap_data:

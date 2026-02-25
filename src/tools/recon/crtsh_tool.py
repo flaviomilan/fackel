@@ -20,8 +20,8 @@ from tools.http_client import get_session
 
 _CRTSH_URL = "https://crt.sh/"
 _MAX_RETRIES = 2
-_RETRY_DELAY = 3  # seconds
-_TIMEOUT = 45  # seconds
+_RETRY_DELAY = 3
+_TIMEOUT = 45
 
 
 class CrtShInput(BaseModel):
@@ -53,7 +53,6 @@ def _fetch_crtsh(domain: str) -> requests.Response:
             return resp
         except requests.RequestException as exc:
             last_exc = exc
-            # 404 from crt.sh means no certificates found — not transient.
             if (
                 isinstance(exc, requests.HTTPError)
                 and exc.response is not None
@@ -80,7 +79,6 @@ def crtsh_subdomain_enum(domain: str) -> dict[str, Any]:
             resp = _fetch_crtsh(domain)
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 404:
-                # crt.sh returns 404 when no certificates exist for the domain.
                 return format_tool_output(
                     "crtsh_subdomain_enum",
                     domain,

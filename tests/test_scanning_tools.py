@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-from langchain_core.tools import ToolException
-
 from tools.scanning.feroxbuster_tool import feroxbuster_scan
 from tools.scanning.katana_tool import katana_crawl
 from tools.scanning.naabu_tool import naabu_scan
 from tools.scanning.wafw00f_tool import wafw00f_detect
-
 
 # ── Feroxbuster ────────────────────────────────────────────────────────────
 

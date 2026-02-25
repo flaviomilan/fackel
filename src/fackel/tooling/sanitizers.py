@@ -11,9 +11,6 @@ from __future__ import annotations
 
 import re
 
-# ── Ports ──────────────────────────────────────────────────────────────
-
-# Valid forms: "80", "80,443", "80-443", "80,443,8000-9000"
 _PORTS_RE = re.compile(r"^\d+(-\d+)?(,\d+(-\d+)?)*$")
 
 
@@ -34,7 +31,6 @@ def sanitize_ports(value: str) -> tuple[str, str | None]:
     if not stripped:
         return "", None
 
-    # Remove spaces around commas/hyphens
     normalised = re.sub(r"\s*,\s*", ",", stripped)
     normalised = re.sub(r"\s*-\s*", "-", normalised)
 
@@ -47,7 +43,6 @@ def sanitize_ports(value: str) -> tuple[str, str | None]:
     return normalised, None
 
 
-# Valid top-N thresholds accepted by naabu/nmap.
 _VALID_TOP_PORTS = frozenset({100, 1000})
 
 
@@ -81,8 +76,6 @@ def sanitize_top_ports(value: str) -> tuple[str, str | None]:
     return stripped, None
 
 
-# ── Severity ───────────────────────────────────────────────────────────
-
 _VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low", "info"})
 
 
@@ -113,9 +106,6 @@ def sanitize_severity(value: str) -> tuple[str, str | None]:
     return ",".join(parts), None
 
 
-# ── Tags ───────────────────────────────────────────────────────────────
-
-# Tags must be simple alphanumeric + hyphen/underscore tokens.
 _TAG_TOKEN_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 

@@ -14,7 +14,7 @@ from tools.circuit_breaker import circuit_breaker
 from tools.http_client import get_session
 
 _MAX_CONTENT_LENGTH = 2000
-_TIMEOUT = 10  # seconds
+_TIMEOUT = 10
 
 _SESSION_HEADERS = {
     "User-Agent": (

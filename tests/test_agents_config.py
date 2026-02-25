@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from fackel.agents.config import (
     ACTIVE_SCAN_TOOLS,
     ParallelToolCalls,
-    get_model,
     default_middleware,
+    get_model,
 )
 
 

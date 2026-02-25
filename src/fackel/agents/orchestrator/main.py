@@ -79,12 +79,10 @@ def run(
     graph = _get_graph()
     config = _config()
 
-    # First invocation — may pause at approval_gate interrupt().
     result = graph.invoke(_initial_state(target, active_scan), config=config)
 
-    # Check if the graph is paused at an interrupt.
     snapshot = graph.get_state(config)
-    while snapshot.next:  # There are pending nodes → interrupt occurred
+    while snapshot.next:
         interrupt_values = snapshot.tasks[0].interrupts
         if interrupt_values:
             interrupt_data = interrupt_values[0].value
@@ -92,7 +90,6 @@ def run(
         else:
             approved = True
 
-        # Resume with the user's decision.
         result = graph.invoke(Command(resume=approved), config=config)
         snapshot = graph.get_state(config)
 

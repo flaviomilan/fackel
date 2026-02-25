@@ -101,9 +101,6 @@ def graphql_scan(url: str) -> dict[str, Any]:
 graphql_scan.handle_tool_error = True
 
 
-# ── Individual probes ──────────────────────────────────────────────────────
-
-
 def _probe_introspection(
     url: str,
     headers: dict[str, str],

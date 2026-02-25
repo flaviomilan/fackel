@@ -22,10 +22,8 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# Shared identity header used across all tools.
 _USER_AGENT = "fackel-scanner/0.1"
 
-# Retry policy for transient HTTP errors and connection failures.
 _RETRY_STRATEGY = Retry(
     total=2,
     backoff_factor=1.0,

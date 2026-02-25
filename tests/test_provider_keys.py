@@ -104,7 +104,7 @@ class TestFilterTools:
     def test_unknown_tool_passes_through(self, monkeypatch):
         tool = MagicMock()
         tool.name = "custom_tool"
-        available, skipped = filter_tools([tool])
+        available, _skipped = filter_tools([tool])
         assert tool in available
 
     def test_mixed_tools_partitioned(self, monkeypatch):

@@ -20,8 +20,8 @@ from tools.http_client import get_session
 
 _API_URL = "https://api.dnsdumpster.com/htmld/"
 _PAGE_URL = "https://dnsdumpster.com/"
-_JWT_TIMEOUT = 15  # seconds - page fetch for JWT
-_API_TIMEOUT = 30  # seconds - API query
+_JWT_TIMEOUT = 15
+_API_TIMEOUT = 30
 
 
 class DnsDumpsterInput(BaseModel):
@@ -60,7 +60,6 @@ def _parse_host_table(table: BeautifulSoup) -> list[dict[str, Any]]:
         ip_text = cols[1].get_text(strip=True)
         asn_info = cols[2].get_text(strip=True) if len(cols) > 2 else ""
         provider = cols[3].get_text(strip=True) if len(cols) > 3 else ""
-        # Extract clean IP (first token before any hostname appended)
         ip_match = re.match(r"(\d{1,3}(?:\.\d{1,3}){3})", ip_text)
         ip_addr = ip_match.group(1) if ip_match else ip_text
         hosts.append(
@@ -133,12 +132,6 @@ def dnsdumpster_lookup(domain: str) -> dict[str, Any]:
                     data={"hosts": [], "dns_servers": [], "mx_records": [], "txt_records": []},
                 )
 
-            # Table layout (observed Feb 2026):
-            #   0 — summary/stats (skip)
-            #   1 — Host Records (A) — subdomains
-            #   2 — MX Records
-            #   3 — DNS Servers (NS)
-            #   4 — TXT Records
             hosts = _parse_host_table(tables[1]) if len(tables) > 1 else []
             mx_records = _parse_simple_table(tables[2]) if len(tables) > 2 else []
             dns_servers = _parse_simple_table(tables[3]) if len(tables) > 3 else []

@@ -79,7 +79,6 @@ def otx_passive_dns(domain: str) -> dict[str, Any]:
         record_type = entry.get("record_type", "")
         hostname = str(entry.get("hostname", "")).strip().rstrip(".")
 
-        # Deduplicate by (address, record_type, hostname)
         dedup_key = f"{address}|{record_type}|{hostname}"
         if dedup_key in seen:
             continue

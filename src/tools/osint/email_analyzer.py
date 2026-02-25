@@ -16,7 +16,7 @@ from tools.http_client import get_session
 logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_TIMEOUT = 10  # seconds
+_TIMEOUT = 10
 
 
 class EmailAnalyzerInput(BaseModel):

@@ -5,13 +5,9 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-from langchain_core.tools import ToolException
-
 from tools.vuln.nuclei_tool import nuclei_scan
 from tools.vuln.testssl_tool import _parse_severity, testssl_scan
 from tools.vuln.webpage_extractor import _extract_text, extract_webpage_content
-
 
 # ── Nuclei ─────────────────────────────────────────────────────────────────
 

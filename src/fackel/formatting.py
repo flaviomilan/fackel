@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-# ── Phase metadata ─────────────────────────────────────────────────────────
-
 PHASE_LABELS: dict[str, str] = {
     "osint": "OSINT",
     "approval": "Approval",
@@ -31,9 +29,6 @@ PHASE_ICONS: dict[str, str] = {
 
 PHASE_ORDER: tuple[str, ...] = ("osint", "port_scan", "vuln_scan", "triage")
 """Canonical ordering of scan phases (excluding report)."""
-
-
-# ── Findings serialization ─────────────────────────────────────────────────
 
 
 def serialize_findings(
@@ -67,9 +62,6 @@ def serialize_findings(
     return "\n\n---\n\n".join(sections) if sections else "No findings collected."
 
 
-# ── Tech fingerprint formatting ───────────────────────────────────────────
-
-
 def format_tech_fingerprint(fp: dict[str, Any], *, bold_host: bool = False) -> str:
     """Format a single tech fingerprint dict into a one-line summary.
 
@@ -97,9 +89,6 @@ def format_tech_fingerprint(fp: dict[str, Any], *, bold_host: bool = False) -> s
     return line
 
 
-# ── Evaluation lookup ──────────────────────────────────────────────────────
-
-
 def find_evaluation(
     evaluations: list[dict[str, Any]],
     phase: str,
@@ -109,9 +98,6 @@ def find_evaluation(
         if isinstance(ev, dict) and ev.get("phase") == phase:
             return ev
     return None
-
-
-# ── IPv6 detection ─────────────────────────────────────────────────────────
 
 
 def is_ipv6(ip: str) -> bool:

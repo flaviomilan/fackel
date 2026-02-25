@@ -17,7 +17,7 @@ from fackel.tooling import (
     run_command,
 )
 
-_TIMEOUT = 120  # seconds
+_TIMEOUT = 120
 
 
 class Wafw00fInput(BaseModel):
@@ -54,7 +54,6 @@ def wafw00f_detect(
 
     target = guard_target(target, "wafw00f_detect", TargetType.HOST_OR_URL)
 
-    # wafw00f needs a URL; add scheme if bare host
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
 

@@ -31,8 +31,6 @@ from urllib.parse import urlparse
 
 from langchain_core.tools import ToolException
 
-# ── Low-level validation helpers ───────────────────────────────────────
-
 _DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$")
 
 _OCTET_QUAD_RE = re.compile(r"^\d{1,3}(?:-\d{1,3}){3}$")
@@ -63,7 +61,6 @@ def is_reverse_ptr_subdomain(label: str) -> bool:
     return bool(_OCTET_QUAD_RE.match(first_label))
 
 
-# Characters that must never reach a subprocess argument.
 _SHELL_META_RE = re.compile(r"[;&|`$(){}!\[\]<>'\"\\\n\r]")
 
 
@@ -72,10 +69,10 @@ class TargetType(Enum):
 
     DOMAIN = "domain"
     IP = "ip"
-    HOST = "host"  # domain or IP
-    HOST_PORT = "host_port"  # domain or IP, optionally with :port
-    URL = "url"  # requires scheme
-    HOST_OR_URL = "host_or_url"  # domain, IP, or full URL
+    HOST = "host"
+    HOST_PORT = "host_port"
+    URL = "url"
+    HOST_OR_URL = "host_or_url"
 
 
 def _extract_host(value: str) -> str:
@@ -105,13 +102,11 @@ def guard_target(
     def _err(msg: str) -> ToolException:
         return ToolException(f"{tool_name}: {msg}")
 
-    # ── basic sanity ────────────────────────────────────────────────
     if not value or not value.strip():
         raise _err("target is empty")
 
     raw = value.strip()
 
-    # ── URL type: require scheme, validate netloc ───────────────────
     if accept is TargetType.URL:
         parsed = urlparse(raw)
         if parsed.scheme not in ("http", "https"):
@@ -123,18 +118,15 @@ def guard_target(
             raise _err(f"target contains forbidden characters: {host!r}")
         return raw
 
-    # ── HOST_OR_URL: accept either scheme-based URL or bare host ────
     if accept is TargetType.HOST_OR_URL:
         parsed = urlparse(raw)
         if parsed.scheme in ("http", "https") and parsed.hostname:
             host = parsed.hostname
             if _SHELL_META_RE.search(host):
                 raise _err(f"target contains forbidden characters: {host!r}")
-            return raw  # keep full URL
-        # fall through → treat as HOST
+            return raw
         return guard_target(raw, tool_name, TargetType.HOST)
 
-    # ── extract host for DOMAIN / IP / HOST checks ─────────────────
     host = _extract_host(raw)
 
     if _SHELL_META_RE.search(host):
@@ -161,11 +153,9 @@ def guard_target(
         return host
 
     if accept is TargetType.HOST_PORT:
-        # Accept "host", "host:port", "ip:port"
         candidate = raw
         port_part = ""
         if ":" in candidate and not candidate.startswith("["):
-            # Simple host:port (not IPv6).  Split on the *last* colon.
             last_colon = candidate.rfind(":")
             maybe_port = candidate[last_colon + 1 :]
             if maybe_port.isdigit():
@@ -179,9 +169,6 @@ def guard_target(
         return f"{bare}{port_part}"
 
     raise _err(f"unknown target type: {accept}")  # pragma: no cover
-
-
-# ── Orchestrator-facing helper ─────────────────────────────────────────
 
 
 def sanitize_target(raw: str) -> str:

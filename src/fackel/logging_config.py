@@ -68,7 +68,6 @@ def configure_logging(*, verbose: bool = False) -> None:
     root = logging.getLogger()
     root.setLevel(logging.WARNING)
 
-    # Remove any existing handlers to avoid duplicate output.
     root.handlers.clear()
 
     handler = logging.StreamHandler(sys.stderr)
