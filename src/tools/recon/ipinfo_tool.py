@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from tools.circuit_breaker import circuit_breaker
+from tools.http_client import get_session
 
 _IPINFO_URL = "https://ipinfo.io"
 _TIMEOUT = 15
@@ -39,34 +40,25 @@ def ipinfo_lookup(ip: str) -> dict[str, Any]:
     IP is an anycast address (common for CDNs like Cloudflare).
     Use this to classify IPs as CDN, cloud, ISP, or direct-host.
     """
-    ip, err = guard_target(ip, "ipinfo_lookup", TargetType.IP)
-    if err:
-        return err
+    ip = guard_target(ip, "ipinfo_lookup", TargetType.IP)
 
-    try:
-        resp = requests.get(
-            f"{_IPINFO_URL}/{ip}/json",
-            timeout=_TIMEOUT,
-            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        return format_tool_output(
-            "ipinfo_lookup",
-            ip,
-            "error",
-            error=f"ipinfo.io request failed: {exc}",
-        )
+    import requests
 
-    try:
-        data = resp.json()
-    except ValueError:
-        return format_tool_output(
-            "ipinfo_lookup",
-            ip,
-            "error",
-            error="ipinfo.io returned non-JSON response.",
-        )
+    with circuit_breaker("ipinfo"):
+        try:
+            resp = get_session().get(
+                f"{_IPINFO_URL}/{ip}/json",
+                timeout=get_tool_timeout("ipinfo_lookup", _TIMEOUT),
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            )
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise ToolException(f"ipinfo_lookup: request failed: {exc}") from exc
+
+        try:
+            data = resp.json()
+        except ValueError:
+            raise ToolException("ipinfo_lookup: returned non-JSON response") from None
 
     # The "org" field from ipinfo has the format "AS13335 Cloudflare, Inc."
     raw_org = data.get("org", "")
@@ -92,3 +84,6 @@ def ipinfo_lookup(ip: str) -> dict[str, Any]:
             "anycast": data.get("anycast", False),
         },
     )
+
+
+ipinfo_lookup.handle_tool_error = True

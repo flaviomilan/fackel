@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from tools.circuit_breaker import circuit_breaker
+from tools.http_client import get_session
 
 _BASE_URL = "https://urlscan.io/api/v1"
 _TIMEOUT = 20
@@ -43,38 +44,29 @@ def urlscan_search(domain: str) -> dict[str, Any]:
     key required.  Useful for discovering JS endpoints, third-party resources,
     page structure, and technology stack from historical scans.
     """
-    domain, err = guard_target(domain, "urlscan_search", TargetType.DOMAIN)
-    if err:
-        return err
+    domain = guard_target(domain, "urlscan_search", TargetType.DOMAIN)
 
-    try:
-        resp = requests.get(
-            f"{_BASE_URL}/search/",
-            params={"q": f"domain:{domain}", "size": _MAX_RESULTS},
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json",
-            },
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        return format_tool_output(
-            "urlscan_search",
-            domain,
-            "error",
-            error=f"urlscan.io request failed: {exc}",
-        )
+    import requests
 
-    try:
-        data = resp.json()
-    except ValueError:
-        return format_tool_output(
-            "urlscan_search",
-            domain,
-            "error",
-            error="urlscan.io returned non-JSON response.",
-        )
+    with circuit_breaker("urlscan"):
+        try:
+            resp = get_session().get(
+                f"{_BASE_URL}/search/",
+                params={"q": f"domain:{domain}", "size": _MAX_RESULTS},
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "application/json",
+                },
+                timeout=get_tool_timeout("urlscan_search", _TIMEOUT),
+            )
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise ToolException(f"urlscan_search: request failed: {exc}") from exc
+
+        try:
+            data = resp.json()
+        except ValueError:
+            raise ToolException("urlscan_search: returned non-JSON response") from None
 
     results: list[dict[str, Any]] = []
     for entry in data.get("results", [])[:_MAX_RESULTS]:
@@ -109,6 +101,9 @@ def urlscan_search(domain: str) -> dict[str, Any]:
             "results": results,
         },
     )
+
+
+urlscan_search.handle_tool_error = True
 
 
 def _extract_technologies(stats: dict[str, Any]) -> list[str]:

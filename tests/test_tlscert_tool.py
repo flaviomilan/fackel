@@ -106,19 +106,17 @@ class TestDecodeDerCert:
     ) -> None:
         pem_text = "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n"
         mock_to_pem.return_value = pem_text
-        mock_decode.return_value = {"subject": ((('commonName', 'x.com'),),)}
+        mock_decode.return_value = {"subject": ((("commonName", "x.com"),),)}
 
         result = _decode_der_cert(b"\x00\x01")
 
-        assert result["subject"] == ((('commonName', 'x.com'),),)
+        assert result["subject"] == ((("commonName", "x.com"),),)
         mock_to_pem.assert_called_once_with(b"\x00\x01")
         mock_decode.assert_called_once()  # temp file path passed
 
     @patch("tools.recon.tlscert_tool.ssl._ssl._test_decode_cert")
     @patch("tools.recon.tlscert_tool.ssl.DER_cert_to_PEM_cert")
-    def test_cleans_up_temp_file(
-        self, mock_to_pem: MagicMock, mock_decode: MagicMock
-    ) -> None:
+    def test_cleans_up_temp_file(self, mock_to_pem: MagicMock, mock_decode: MagicMock) -> None:
         """Temp PEM file is removed even when _test_decode_cert raises."""
         mock_to_pem.return_value = "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n"
         mock_decode.side_effect = ssl.SSLError("decode failed")
@@ -295,8 +293,8 @@ class TestTlscertLookupErrors:
     def test_connection_refused(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         mock_conn.side_effect = OSError("Connection refused")
         result = tlscert_lookup.invoke({"hostname": "example.com"})
-        assert result["status"] == "error"
-        assert "Connection refused" in result["error"]
+        assert isinstance(result, str)
+        assert "Connection refused" in result
 
     @patch("tools.recon.tlscert_tool.ssl.create_default_context")
     @patch("tools.recon.tlscert_tool.socket.create_connection")
@@ -308,8 +306,8 @@ class TestTlscertLookupErrors:
         ctx.wrap_socket.side_effect = ssl.SSLError("tlsv1 alert protocol version")
         mock_ctx.return_value = ctx
         result = tlscert_lookup.invoke({"hostname": "example.com"})
-        assert result["status"] == "error"
-        assert "tlsv1 alert protocol version" in result["error"]
+        assert isinstance(result, str)
+        assert "tlsv1 alert protocol version" in result
 
     @patch("tools.recon.tlscert_tool.ssl.create_default_context")
     @patch("tools.recon.tlscert_tool.socket.create_connection")
@@ -328,8 +326,8 @@ class TestTlscertLookupErrors:
         mock_ctx.side_effect = [ctx_verified, ctx_unverified]
 
         result = tlscert_lookup.invoke({"hostname": "example.com"})
-        assert result["status"] == "error"
-        assert "unexpected EOF" in result["error"]
+        assert isinstance(result, str)
+        assert "unexpected EOF" in result
 
     @patch("tools.recon.tlscert_tool.ssl.create_default_context")
     @patch("tools.recon.tlscert_tool.socket.create_connection")
@@ -346,8 +344,8 @@ class TestTlscertLookupErrors:
         mock_ctx.return_value = ctx
 
         result = tlscert_lookup.invoke({"hostname": "example.com"})
-        assert result["status"] == "error"
-        assert "No certificate" in result["error"]
+        assert isinstance(result, str)
+        assert "No certificate" in result
 
 
 class TestTlscertLookupValidation:
@@ -355,12 +353,12 @@ class TestTlscertLookupValidation:
 
     def test_rejects_ip_address(self) -> None:
         result = tlscert_lookup.invoke({"hostname": "1.2.3.4"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     def test_rejects_empty_hostname(self) -> None:
         result = tlscert_lookup.invoke({"hostname": ""})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     def test_rejects_shell_metacharacters(self) -> None:
         result = tlscert_lookup.invoke({"hostname": "example.com; rm -rf /"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)

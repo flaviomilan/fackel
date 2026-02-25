@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     format_tool_output,
+    get_tool_timeout,
     guard_target,
     parse_jsonl,
     require_binary,
@@ -69,22 +70,19 @@ def naabu_scan(
     Use for breadth-first port enumeration — fast sweep to find open ports
     before deeper nmap analysis.  Feed discovered ports into nmap_port_scan.
     """
-    if err := require_binary("naabu", "naabu_scan", host):
-        return err
+    require_binary("naabu", "naabu_scan")
 
-    target, verr = guard_target(host, "naabu_scan", TargetType.HOST)
-    if verr:
-        return verr
+    target = guard_target(host, "naabu_scan", TargetType.HOST)
 
     cmd = ["naabu", "-host", target, "-json"]
 
     ports, ports_err = sanitize_ports(ports)
     if ports_err:
-        return format_tool_output("naabu_scan", host, "error", error=ports_err)
+        raise ToolException(f"naabu_scan: {ports_err}")
 
     top_ports, tp_err = sanitize_top_ports(top_ports)
     if tp_err:
-        return format_tool_output("naabu_scan", host, "error", error=tp_err)
+        raise ToolException(f"naabu_scan: {tp_err}")
 
     if ports:
         cmd.extend(["-p", ports])
@@ -98,18 +96,23 @@ def naabu_scan(
         cmd.append("-cdn")
 
     try:
-        code, out, stderr = run_command(cmd)
+        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("naabu_scan", 180))
     except Exception as exc:
-        return format_tool_output("naabu_scan", host, "error", error=str(exc))
+        raise ToolException(f"naabu_scan: {exc}") from exc
 
     results = parse_jsonl(out)
 
     if not results:
+        if code:
+            raise ToolException(f"naabu_scan: {stderr or 'scan failed'}")
         return format_tool_output(
             "naabu_scan",
             host,
-            "error" if code else "ok",
-            error=stderr or "no open ports found",
+            "ok",
+            data={"results": [], "message": stderr or "no open ports found"},
         )
 
     return format_tool_output("naabu_scan", host, "ok", data={"results": results})
+
+
+naabu_scan.handle_tool_error = True

@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import logging
 
-from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.prebuilt import create_react_agent
 
-from fackel.agents.config import get_model
+from fackel.agents.config import build_llm, default_middleware
 from fackel.agents.prompts import load_prompt
 from fackel.provider_keys import filter_tools
 from tools.osint.email_analyzer import analyze_email
@@ -59,7 +58,7 @@ TOOLS = [
 ]
 
 
-def build(model_name: str | None = None) -> CompiledStateGraph:
+def build(model_name: str | None = None) -> CompiledStateGraph:  # type: ignore[type-arg]
     """Return a compiled ReAct OSINT agent.
 
     Tools whose provider API key is missing are silently removed so the
@@ -68,5 +67,11 @@ def build(model_name: str | None = None) -> CompiledStateGraph:
     available, skipped = filter_tools(TOOLS)
     for name, provider, _vars in skipped:
         logger.info("osint: skipping tool %s (%s key not configured)", name, provider)
-    llm = ChatOpenAI(model=model_name or get_model("osint"))
-    return create_react_agent(llm, available, prompt=load_prompt("osint"))
+    llm = build_llm("osint", model_name=model_name)
+    return create_agent(
+        llm,
+        available,
+        system_prompt=load_prompt("osint"),
+        middleware=default_middleware(),
+        name="osint",
+    )

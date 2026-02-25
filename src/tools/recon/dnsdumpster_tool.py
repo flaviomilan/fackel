@@ -11,10 +11,12 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from tools.circuit_breaker import circuit_breaker
+from tools.http_client import get_session
 
 _API_URL = "https://api.dnsdumpster.com/htmld/"
 _PAGE_URL = "https://dnsdumpster.com/"
@@ -35,7 +37,7 @@ class DnsDumpsterInput(BaseModel):
 
 def _fetch_jwt() -> str:
     """Fetch a short-lived JWT from the DNSDumpster landing page."""
-    resp = requests.get(
+    resp = get_session().get(
         _PAGE_URL,
         headers={"User-Agent": "Mozilla/5.0"},
         timeout=_JWT_TIMEOUT,
@@ -92,78 +94,71 @@ def dnsdumpster_lookup(domain: str) -> dict[str, Any]:
     IPs and hosting providers — plus NS, MX, and TXT records.
     No API key required.
     """
-    domain, err = guard_target(domain, "dnsdumpster_lookup", TargetType.DOMAIN)
-    if err:
-        return err
+    domain = guard_target(domain, "dnsdumpster_lookup", TargetType.DOMAIN)
 
-    try:
-        jwt = _fetch_jwt()
-    except Exception as exc:
-        return format_tool_output(
-            "dnsdumpster_lookup",
-            domain,
-            "error",
-            error=f"Failed to obtain DNSDumpster auth token: {exc}",
-        )
+    with circuit_breaker("dnsdumpster"):
+        try:
+            jwt = _fetch_jwt()
+        except Exception as exc:
+            raise ToolException(
+                f"dnsdumpster_lookup: failed to obtain auth token: {exc}",
+            ) from exc
 
-    try:
-        resp = requests.post(
-            _API_URL,
-            headers={
-                "Authorization": jwt,
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Mozilla/5.0",
-            },
-            data={"target": domain},
-            timeout=_API_TIMEOUT,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        return format_tool_output(
-            "dnsdumpster_lookup",
-            domain,
-            "error",
-            error=f"DNSDumpster API request failed: {exc}",
-        )
+        try:
+            resp = get_session().post(
+                _API_URL,
+                headers={
+                    "Authorization": jwt,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": "Mozilla/5.0",
+                },
+                data={"target": domain},
+                timeout=get_tool_timeout("dnsdumpster_lookup", _API_TIMEOUT),
+            )
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise ToolException(
+                f"dnsdumpster_lookup: request failed: {exc}",
+            ) from exc
 
-    try:
-        soup = BeautifulSoup(resp.text, "html.parser")
-        tables = soup.find_all("table")
+        try:
+            soup = BeautifulSoup(resp.text, "html.parser")
+            tables = soup.find_all("table")
 
-        if not tables:
+            if not tables:
+                return format_tool_output(
+                    "dnsdumpster_lookup",
+                    domain,
+                    "ok",
+                    data={"hosts": [], "dns_servers": [], "mx_records": [], "txt_records": []},
+                )
+
+            # Table layout (observed Feb 2026):
+            #   0 — summary/stats (skip)
+            #   1 — Host Records (A) — subdomains
+            #   2 — MX Records
+            #   3 — DNS Servers (NS)
+            #   4 — TXT Records
+            hosts = _parse_host_table(tables[1]) if len(tables) > 1 else []
+            mx_records = _parse_simple_table(tables[2]) if len(tables) > 2 else []
+            dns_servers = _parse_simple_table(tables[3]) if len(tables) > 3 else []
+            txt_records = _parse_simple_table(tables[4]) if len(tables) > 4 else []
+
             return format_tool_output(
                 "dnsdumpster_lookup",
                 domain,
                 "ok",
-                data={"hosts": [], "dns_servers": [], "mx_records": [], "txt_records": []},
+                data={
+                    "hosts": hosts,
+                    "dns_servers": dns_servers,
+                    "mx_records": mx_records,
+                    "txt_records": txt_records,
+                },
             )
+        except Exception as exc:
+            raise ToolException(
+                f"dnsdumpster_lookup: failed to parse response: {exc}",
+            ) from exc
 
-        # Table layout (observed Feb 2026):
-        #   0 — summary/stats (skip)
-        #   1 — Host Records (A) — subdomains
-        #   2 — MX Records
-        #   3 — DNS Servers (NS)
-        #   4 — TXT Records
-        hosts = _parse_host_table(tables[1]) if len(tables) > 1 else []
-        mx_records = _parse_simple_table(tables[2]) if len(tables) > 2 else []
-        dns_servers = _parse_simple_table(tables[3]) if len(tables) > 3 else []
-        txt_records = _parse_simple_table(tables[4]) if len(tables) > 4 else []
 
-        return format_tool_output(
-            "dnsdumpster_lookup",
-            domain,
-            "ok",
-            data={
-                "hosts": hosts,
-                "dns_servers": dns_servers,
-                "mx_records": mx_records,
-                "txt_records": txt_records,
-            },
-        )
-    except Exception as exc:
-        return format_tool_output(
-            "dnsdumpster_lookup",
-            domain,
-            "error",
-            error=f"Failed to parse DNSDumpster response: {exc}",
-        )
+dnsdumpster_lookup.handle_tool_error = True

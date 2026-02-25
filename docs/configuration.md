@@ -11,13 +11,13 @@ model selection, API keys, CLI options, and infrastructure setup.
   - [Required](#required)
   - [Model selection](#model-selection)
   - [Provider API keys](#provider-api-keys)
-  - [Infrastructure](#infrastructure)
+  - [Tool timeouts](#tool-timeouts)
+  - [Checkpointer](#checkpointer)
+  - [Infrastructure (MongoDB)](#infrastructure-mongodb)
+  - [Observability — LangSmith tracing](#observability--langsmith-tracing)
 - [CLI options](#cli-options)
 - [Provider key gating](#provider-key-gating)
-- [Infrastructure — Docker Compose](#infrastructure--docker-compose)
-  - [Services](#services)
-  - [Volumes](#volumes)
-  - [Customisation](#customisation)
+- [Infrastructure — Docker Compose (optional)](#infrastructure--docker-compose-optional)
 - [.env file](#env-file)
 - [Python API configuration](#python-api-configuration)
 
@@ -103,27 +103,78 @@ missing, the tool is removed.
 **HIBP and EmailRep** use graceful degradation — the `analyze_email` tool stays
 available even without keys, but some data sources are skipped.
 
-### Infrastructure
+### Tool timeouts
 
-These are used by `docker-compose.yml` for the optional infrastructure stack:
+Subprocess tools (nmap, nuclei, subfinder, etc.) honour per-tool timeout
+overrides via `FACKEL_TIMEOUT_{TOOL_NAME}` (value in seconds). If no override
+is set, the default from `get_tool_timeout()` (typically 180 s) is used.
 
-| Variable | Default | Service |
-|----------|---------|---------|
-| `MONGO_USERNAME` | `fackel` | MongoDB |
-| `MONGO_PASSWORD` | `fackelpass` | MongoDB |
-| `MONGO_DB_NAME` | `fackel` | MongoDB |
-| `DATABASE_URL` | `postgresql://...` | Langfuse (PostgreSQL) |
-| `SALT` | `mysalt` | Langfuse |
-| `ENCRYPTION_KEY` | *(zero-filled)* | Langfuse |
-| `NEXTAUTH_SECRET` | `mysecret` | Langfuse |
-| `REDIS_AUTH` | `myredissecret` | Redis |
-| `CLICKHOUSE_USER` | `clickhouse` | ClickHouse |
-| `CLICKHOUSE_PASSWORD` | `clickhouse` | ClickHouse |
-| `MINIO_ROOT_USER` | `minio` | MinIO |
-| `MINIO_ROOT_PASSWORD` | `miniosecret` | MinIO |
+| Variable | Tool | Default |
+|----------|------|---------|
+| `FACKEL_TIMEOUT_NMAP_PORT_SCAN` | nmap | 180 s |
+| `FACKEL_TIMEOUT_NUCLEI_SCAN` | nuclei | 180 s |
+| `FACKEL_TIMEOUT_SUBFINDER_ENUM` | subfinder | 180 s |
+| `FACKEL_TIMEOUT_FEROXBUSTER_SCAN` | feroxbuster | 180 s |
+| `FACKEL_TIMEOUT_KATANA_CRAWL` | katana | 180 s |
+| `FACKEL_TIMEOUT_HTTPX_PROBE` | httpx | 180 s |
+| `FACKEL_TIMEOUT_NAABU_SCAN` | naabu | 180 s |
+| `FACKEL_TIMEOUT_WAFW00F` | wafw00f | 180 s |
 
-> **Security note:** All defaults above are marked `# CHANGEME` in the compose
-> file. Replace them with strong secrets in production.
+### Checkpointer
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_CHECKPOINT_DB` | `~/.fackel/checkpoints.db` | SQLite path for graph state persistence. Used by `SqliteSaver` to enable interrupt/resume. |
+
+### Infrastructure (MongoDB)
+
+Optional — for scan persistence when MongoDB is available:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MONGO_URI` | `mongodb://fackel:fackelpass@localhost:27017/fackel?authSource=admin` | MongoDB connection URI |
+| `MONGO_DB_NAME` | `fackel` | Database name |
+| `MONGO_USERNAME` | `fackel` | MongoDB user |
+| `MONGO_PASSWORD` | `fackelpass` | MongoDB password |
+
+> **Security note:** Replace default credentials with strong secrets in
+> production.
+
+### Observability — LangSmith tracing
+
+LangChain auto-instruments all LLM calls, tool invocations, and agent steps when
+these environment variables are set. No code changes required.
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `LANGSMITH_TRACING` | Set to `true` to enable tracing | Yes |
+| `LANGSMITH_API_KEY` | LangSmith API key from [smith.langchain.com](https://smith.langchain.com) | Yes |
+| `LANGSMITH_PROJECT` | Project name for trace grouping | No (defaults to `default`) |
+| `LANGSMITH_ENDPOINT` | Custom LangSmith endpoint URL | No |
+
+#### Quick start
+
+```bash
+export LANGSMITH_TRACING=true
+export LANGSMITH_API_KEY=lsv2_pt_...
+export LANGSMITH_PROJECT=fackel-prod
+
+fackel example.com
+```
+
+All agent phases (OSINT, Port Scan, Vuln Scan, Triage, Report) appear as
+hierarchical traces in the LangSmith dashboard, including:
+
+- Token usage and latency per LLM call
+- Tool inputs/outputs and execution time
+- Middleware activity (retries, approval interrupts)
+- Full message history per agent session
+
+#### Self-hosted alternative
+
+For self-hosted observability, LangSmith can be deployed on-premise via
+the [LangSmith Self-Hosted](https://docs.smith.langchain.com/self_hosting)
+guide.  Point ``LANGSMITH_ENDPOINT`` at your instance.
 
 ---
 
@@ -140,6 +191,7 @@ fackel <target> [OPTIONS]
 | `--output / -o` | `Path` | `reports/<target>_<timestamp>.md` | Report output file path |
 | `--verbose / -v` | `bool` | `False` | Show LLM reasoning and detailed tool results |
 | `--check-providers` | `bool` | `False` | Print provider API key status table before starting the scan |
+| `--approve-tools` | `bool` | `False` | Require per-tool-call approval for active scanning tools (nmap, nuclei, etc.) |
 
 ### Active scan vs passive
 
@@ -206,52 +258,22 @@ return "API key not configured" errors.
 
 ---
 
-## Infrastructure — Docker Compose
+## Infrastructure — Docker Compose (optional)
 
-The `docker-compose.yml` provides an optional infrastructure stack for
-observability and persistence.
-
-### Services
-
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| `mongodb` | `mongo:7` | `127.0.0.1:27017` | Scan persistence, query system |
-| `langfuse-web` | `langfuse/langfuse:3` | `3000` | LLM observability UI |
-| `langfuse-worker` | `langfuse/langfuse-worker:3` | `127.0.0.1:3030` | Langfuse background processing |
-| `clickhouse` | `clickhouse-server` | `127.0.0.1:8123`, `127.0.0.1:9000` | Langfuse analytics backend |
-| `postgres` | `postgres:17` | `127.0.0.1:5432` | Langfuse metadata storage |
-| `redis` | `redis:7` | `127.0.0.1:6379` | Langfuse queue |
-| `minio` | `minio` | `9090` (S3), `127.0.0.1:9091` (console) | Langfuse blob storage |
-
-> **Network security:** All internal services bind to `127.0.0.1` except
-> Langfuse web (port 3000) and MinIO S3 (port 9090). External machines cannot
-> reach internal services directly.
-
-### Volumes
-
-| Volume | Service | Data |
-|--------|---------|------|
-| `fackel_mongo_data` | MongoDB | Scan data |
-| `langfuse_postgres_data` | PostgreSQL | Langfuse metadata |
-| `langfuse_clickhouse_data` | ClickHouse | Langfuse analytics |
-| `langfuse_clickhouse_logs` | ClickHouse | Logs |
-| `langfuse_minio_data` | MinIO | Blobs |
-
-### Customisation
+A `docker-compose.yml` can be added to provide MongoDB for scan persistence.
 
 ```bash
-# Start only MongoDB (no Langfuse)
+# Start MongoDB
 docker compose up -d mongodb
-
-# Start full stack
-docker compose up -d
 
 # Override credentials
 MONGO_PASSWORD=secure_password docker compose up -d
-
-# View Langfuse UI
-open http://localhost:3000
 ```
+
+All containers should bind to `127.0.0.1` to prevent external access.
+
+> **Observability** is handled by LangSmith (SaaS or self-hosted) — see
+> [Observability — LangSmith tracing](#observability--langsmith-tracing) above.
 
 ---
 
@@ -267,6 +289,15 @@ OPENAI_API_KEY=sk-...
 FACKEL_MODEL_REPORT=gpt-4o
 FACKEL_MODEL_JUDGE=gpt-4o
 
+# LangSmith tracing (optional)
+# LANGSMITH_TRACING=true
+# LANGSMITH_API_KEY=lsv2_pt_...
+# LANGSMITH_PROJECT=fackel
+
+# Per-tool timeout overrides (optional, seconds)
+# FACKEL_TIMEOUT_NMAP_PORT_SCAN=300
+# FACKEL_TIMEOUT_NUCLEI_SCAN=600
+
 # Provider API keys (optional)
 SHODAN_API_KEY=...
 VIRUSTOTAL_API_KEY=...
@@ -274,12 +305,14 @@ CENSYS_API_ID=...
 CENSYS_API_SECRET=...
 SECURITYTRAILS_API_KEY=...
 OTX_API_KEY=...
-SERPAPI_API_KEY=...
 HIBP_API_KEY=...
 EMAILREP_API_KEY=...
 
-# Infrastructure (optional, for docker-compose)
-MONGO_PASSWORD=your_secure_password
+# Checkpointer (optional)
+# FACKEL_CHECKPOINT_DB=~/.fackel/checkpoints.db
+
+# Infrastructure (optional)
+# MONGO_URI=mongodb://fackel:fackelpass@localhost:27017/fackel?authSource=admin
 ```
 
 ---

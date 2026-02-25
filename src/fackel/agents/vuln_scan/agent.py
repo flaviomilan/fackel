@@ -7,11 +7,11 @@ configurations, and identify WAF protections.
 
 from __future__ import annotations
 
-from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.prebuilt import create_react_agent
 
-from fackel.agents.config import get_model
+from fackel.agents.config import build_llm, default_middleware
 from fackel.agents.prompts import load_prompt
 from tools.scanning.feroxbuster_tool import feroxbuster_scan
 from tools.scanning.graphql_scanner import graphql_scan
@@ -34,7 +34,26 @@ TOOLS = [
 ]
 
 
-def build(model_name: str | None = None) -> CompiledStateGraph:
-    """Return a compiled ReAct vulnerability scan agent."""
-    llm = ChatOpenAI(model=model_name or get_model("vuln_scan"))
-    return create_react_agent(llm, TOOLS, prompt=load_prompt("vuln_scan"))
+def build(
+    model_name: str | None = None,
+    *,
+    approve_tools: bool = False,
+) -> CompiledStateGraph:  # type: ignore[type-arg]
+    """Return a compiled ReAct vulnerability scan agent.
+
+    Parameters
+    ----------
+    approve_tools:
+        When ``True``, wraps active scanning tools with
+        ``HumanInTheLoopMiddleware`` so each tool call requires explicit
+        human approval before execution.
+    """
+    llm = build_llm("vuln_scan", model_name=model_name)
+    return create_agent(
+        llm,
+        TOOLS,
+        system_prompt=load_prompt("vuln_scan"),
+        middleware=default_middleware(approve_tools=approve_tools),
+        checkpointer=MemorySaver() if approve_tools else None,
+        name="vuln_scan",
+    )

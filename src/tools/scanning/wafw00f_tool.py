@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     format_tool_output,
+    get_tool_timeout,
     guard_target,
     require_binary,
     run_command,
@@ -49,12 +50,9 @@ def wafw00f_detect(
     Run before Nuclei to understand whether scan probes may be blocked or
     rate-limited by a WAF.  Uses the domain name for correct SSL/SNI.
     """
-    if err := require_binary("wafw00f", "wafw00f_detect", target):
-        return err
+    require_binary("wafw00f", "wafw00f_detect")
 
-    target, verr = guard_target(target, "wafw00f_detect", TargetType.HOST_OR_URL)
-    if verr:
-        return verr
+    target = guard_target(target, "wafw00f_detect", TargetType.HOST_OR_URL)
 
     # wafw00f needs a URL; add scheme if bare host
     if not target.startswith(("http://", "https://")):
@@ -65,9 +63,9 @@ def wafw00f_detect(
         cmd.append("-a")
 
     try:
-        code, out, stderr = run_command(cmd, timeout=_TIMEOUT)
+        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("wafw00f_detect", _TIMEOUT))
     except Exception as exc:
-        return format_tool_output("wafw00f_detect", target, "error", error=str(exc))
+        raise ToolException(f"wafw00f_detect: {exc}") from exc
 
     try:
         data = json.loads(out)
@@ -75,11 +73,13 @@ def wafw00f_detect(
         data = None
 
     if not data:
+        if code:
+            raise ToolException(f"wafw00f_detect: {stderr or 'scan failed'}")
         return format_tool_output(
             "wafw00f_detect",
             target,
-            "error" if code else "ok",
-            error=stderr or "no results",
+            "ok",
+            data={"identified": [], "message": stderr or "no results"},
         )
 
     return format_tool_output(
@@ -92,3 +92,6 @@ def wafw00f_detect(
             "manufacturer": data.get("manufacturer"),
         },
     )
+
+
+wafw00f_detect.handle_tool_error = True

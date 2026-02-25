@@ -6,11 +6,11 @@ Current MVP tools: naabu_scan (fast discovery), nmap_port_scan (deep analysis).
 
 from __future__ import annotations
 
-from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.prebuilt import create_react_agent
 
-from fackel.agents.config import get_model
+from fackel.agents.config import build_llm, default_middleware
 from fackel.agents.prompts import load_prompt
 from tools.scanning.naabu_tool import naabu_scan
 from tools.scanning.nmap_scanner import nmap_port_scan
@@ -18,7 +18,26 @@ from tools.scanning.nmap_scanner import nmap_port_scan
 TOOLS = [naabu_scan, nmap_port_scan]
 
 
-def build(model_name: str | None = None) -> CompiledStateGraph:
-    """Return a compiled ReAct port-scan agent."""
-    llm = ChatOpenAI(model=model_name or get_model("port_scan"))
-    return create_react_agent(llm, TOOLS, prompt=load_prompt("port_scan"))
+def build(
+    model_name: str | None = None,
+    *,
+    approve_tools: bool = False,
+) -> CompiledStateGraph:  # type: ignore[type-arg]
+    """Return a compiled ReAct port-scan agent.
+
+    Parameters
+    ----------
+    approve_tools:
+        When ``True``, wraps active scanning tools with
+        ``HumanInTheLoopMiddleware`` so each tool call requires explicit
+        human approval before execution.
+    """
+    llm = build_llm("port_scan", model_name=model_name)
+    return create_agent(
+        llm,
+        TOOLS,
+        system_prompt=load_prompt("port_scan"),
+        middleware=default_middleware(approve_tools=approve_tools),
+        checkpointer=MemorySaver() if approve_tools else None,
+        name="port_scan",
+    )

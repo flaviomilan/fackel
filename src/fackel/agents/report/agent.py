@@ -7,13 +7,14 @@ professional Markdown report in a single call.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.runnables import RunnableConfig
 
-from fackel.agents.config import get_model
+from fackel.agents.config import build_llm
 from fackel.agents.prompts import load_prompt
+from fackel.formatting import serialize_findings
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,9 @@ def generate_report(
     findings: list[dict[str, Any]],
     unassessed_areas: list[dict[str, Any]] | None = None,
     phase_evaluations: list[dict[str, Any]] | None = None,
-    risk_score: dict | None = None,
+    risk_score: dict[str, Any] | None = None,
     model_name: str | None = None,
+    config: RunnableConfig | None = None,
 ) -> str:
     """Render a Markdown pentest report from accumulated agent findings.
 
@@ -39,21 +41,12 @@ def generate_report(
         Each dict has: phase, completeness, score, key_findings, gaps, reasoning.
     risk_score:
         Exposure risk assessment: {score, exposure_type, factors}.
+    config:
+        Optional ``RunnableConfig`` for observability trace nesting.
     """
-    llm = ChatOpenAI(model=model_name or get_model("report"))
+    llm = build_llm("report", model_name=model_name)
 
-    # Serialise structured findings into Markdown sections for the LLM.
-    sections: list[str] = []
-    for f in findings:
-        if isinstance(f, dict):
-            header = f.get("title", f.get("phase", ""))
-            detail = f.get("detail", "")
-            sev = f.get("severity", "")
-            sev_tag = f" [severity: {sev}]" if sev else ""
-            sections.append(f"## {header}{sev_tag}\n\n{detail}")
-        else:
-            sections.append(str(f))
-    context = "\n\n---\n\n".join(sections) if sections else "No findings collected."
+    context = serialize_findings(findings, include_severity=True)
 
     parts = [
         f"Target: {target}",
@@ -73,10 +66,13 @@ def generate_report(
         eval_lines = []
         for ev in phase_evaluations:
             if not isinstance(ev, dict):
-                continue
+                continue  # type: ignore[unreachable]
             phase = ev.get("phase", "?")
             completeness = ev.get("completeness", "?")
-            score = ev.get("score", 0)
+            try:
+                score = float(ev.get("score", 0))
+            except (TypeError, ValueError):
+                score = 0.0
             reasoning = ev.get("reasoning", "")
             gaps = ev.get("gaps", [])
             line = f"- **{phase}**: {completeness} (score: {score:.1f})"
@@ -108,9 +104,10 @@ def generate_report(
             [
                 SystemMessage(content=load_prompt("report")),
                 HumanMessage(content="\n".join(parts)),
-            ]
+            ],
+            config=config,
         )
-        return response.content
+        return cast(str, response.content)
     except Exception:
         logger.exception("Report LLM call failed — returning raw findings as fallback")
         return (

@@ -9,10 +9,13 @@ at the approval gate, callers must resume with ``Command(resume=value)``.
 
 from __future__ import annotations
 
+import functools
 import logging
 import uuid
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
@@ -23,15 +26,11 @@ from .state import ScanState
 
 logger = logging.getLogger(__name__)
 
-_graph = None
 
-
-def _get_graph() -> CompiledStateGraph:
-    """Lazy-build the compiled graph (cached at module level)."""
-    global _graph
-    if _graph is None:
-        _graph = build_graph()
-    return _graph
+@functools.lru_cache(maxsize=1)
+def _get_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
+    """Lazy-build the compiled graph (cached after first call)."""
+    return build_graph()
 
 
 def _initial_state(target: str, active_scan: bool) -> dict[str, Any]:
@@ -44,20 +43,23 @@ def _initial_state(target: str, active_scan: bool) -> dict[str, Any]:
         "findings": [],
         "unassessed_areas": [],
         "phase_evaluations": [],
+        "ip_classifications": [],
+        "tech_fingerprints": [],
+        "risk_score": {},
         "report": "",
     }
 
 
-def _config() -> dict[str, Any]:
+def _config() -> RunnableConfig:
     """Generate a unique thread config for checkpointing."""
-    return {"configurable": {"thread_id": str(uuid.uuid4())}}
+    return cast(RunnableConfig, {"configurable": {"thread_id": str(uuid.uuid4())}})
 
 
 def run(
     target: str,
     *,
     active_scan: bool = True,
-    approval_callback=None,
+    approval_callback: Callable[[dict[str, Any]], bool] | None = None,
 ) -> ScanState:
     """Execute the full scan workflow and return final state.
 
@@ -94,4 +96,4 @@ def run(
         result = graph.invoke(Command(resume=approved), config=config)
         snapshot = graph.get_state(config)
 
-    return result
+    return cast(ScanState, result)

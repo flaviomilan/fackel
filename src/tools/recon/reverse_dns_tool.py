@@ -15,7 +15,8 @@ import requests
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from tools.http_client import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +45,7 @@ def reverse_dns_lookup(ip: str) -> dict[str, Any]:
     environments where one compromised neighbour affects all tenants.
     No API key required.
     """
-    ip, err = guard_target(ip, "reverse_dns_lookup", TargetType.IP)
-    if err:
-        return err
+    ip = guard_target(ip, "reverse_dns_lookup", TargetType.IP)
 
     ptr_hostname: str | None = None
     ptr_aliases: list[str] = []
@@ -64,9 +63,9 @@ def reverse_dns_lookup(ip: str) -> dict[str, Any]:
 
     # --- HackerTarget reverse IP (free, no key) ---
     try:
-        resp = requests.get(
+        resp = get_session().get(
             f"https://api.hackertarget.com/reverseiplookup/?q={ip}",
-            timeout=_TIMEOUT,
+            timeout=get_tool_timeout("reverse_dns_lookup", _TIMEOUT),
             headers={"User-Agent": "Mozilla/5.0"},
         )
         if resp.status_code == 200:
@@ -74,7 +73,7 @@ def reverse_dns_lookup(ip: str) -> dict[str, Any]:
             if not text.startswith("error") and not text.startswith("API count"):
                 shared_domains = [line.strip() for line in text.split("\n") if line.strip()]
     except requests.RequestException:
-        pass  # Best-effort — continue with PTR data alone
+        logger.debug("HackerTarget reverse-IP lookup failed for %s", ip)
 
     return format_tool_output(
         "reverse_dns_lookup",
@@ -87,3 +86,6 @@ def reverse_dns_lookup(ip: str) -> dict[str, Any]:
             "shared_domain_count": len(shared_domains),
         },
     )
+
+
+reverse_dns_lookup.handle_tool_error = True

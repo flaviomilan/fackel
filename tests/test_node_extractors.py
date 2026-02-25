@@ -10,12 +10,12 @@ import json
 
 from langchain_core.messages import ToolMessage
 
-from fackel.agents.orchestrator.nodes import (
-    _extract_historical_ips_from_messages,
-    _extract_ip_classifications_from_messages,
-    _extract_ips_from_messages,
-    _extract_san_domains_from_messages,
-    _extract_tech_fingerprints_from_messages,
+from fackel.agents.orchestrator.extractors import (
+    extract_historical_ips,
+    extract_ip_classifications,
+    extract_ips,
+    extract_san_domains,
+    extract_tech_fingerprints,
 )
 
 
@@ -32,7 +32,7 @@ def _tool_msg(name: str, payload: dict) -> ToolMessage:
 
 
 class TestExtractTechFingerprints:
-    """_extract_tech_fingerprints_from_messages from httpx_scan results."""
+    """extract_tech_fingerprints from httpx_scan results."""
 
     def test_extracts_single_result(self) -> None:
         msg = _tool_msg(
@@ -59,7 +59,7 @@ class TestExtractTechFingerprints:
                 },
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg])
+        fps = extract_tech_fingerprints([msg])
         assert len(fps) == 1
         fp = fps[0]
         assert fp["target"] == "https://example.com"
@@ -96,7 +96,7 @@ class TestExtractTechFingerprints:
                 },
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg])
+        fps = extract_tech_fingerprints([msg])
         assert len(fps) == 2
         hosts = {fp["host"] for fp in fps}
         assert hosts == {"example.com", "api.example.com"}
@@ -127,7 +127,7 @@ class TestExtractTechFingerprints:
                 },
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg1, msg2])
+        fps = extract_tech_fingerprints([msg1, msg2])
         assert len(fps) == 1
 
     def test_ignores_error_results(self) -> None:
@@ -139,7 +139,7 @@ class TestExtractTechFingerprints:
                 "error": "httpx binary not found",
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg])
+        fps = extract_tech_fingerprints([msg])
         assert fps == []
 
     def test_ignores_non_httpx_tools(self) -> None:
@@ -151,7 +151,7 @@ class TestExtractTechFingerprints:
                 "data": {"ips": ["1.2.3.4"]},
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg])
+        fps = extract_tech_fingerprints([msg])
         assert fps == []
 
     def test_handles_empty_results(self) -> None:
@@ -163,7 +163,7 @@ class TestExtractTechFingerprints:
                 "data": {"results": []},
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg])
+        fps = extract_tech_fingerprints([msg])
         assert fps == []
 
     def test_handles_missing_optional_fields(self) -> None:
@@ -180,7 +180,7 @@ class TestExtractTechFingerprints:
                 },
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg])
+        fps = extract_tech_fingerprints([msg])
         assert len(fps) == 1
         fp = fps[0]
         assert fp["server"] == ""
@@ -201,18 +201,18 @@ class TestExtractTechFingerprints:
                 },
             },
         )
-        fps = _extract_tech_fingerprints_from_messages([msg])
+        fps = extract_tech_fingerprints([msg])
         assert fps[0]["technologies"] == ["WordPress"]
 
     def test_empty_messages(self) -> None:
-        assert _extract_tech_fingerprints_from_messages([]) == []
+        assert extract_tech_fingerprints([]) == []
 
 
 # ── IP classification extraction ──────────────────────────────────────────
 
 
 class TestExtractIpClassifications:
-    """_extract_ip_classifications_from_messages from ipinfo/bgp."""
+    """extract_ip_classifications from ipinfo/bgp."""
 
     def test_ipinfo_cloudflare(self) -> None:
         msg = _tool_msg(
@@ -231,7 +231,7 @@ class TestExtractIpClassifications:
                 },
             },
         )
-        classes = _extract_ip_classifications_from_messages([msg], "example.com")
+        classes = extract_ip_classifications([msg], "example.com")
         assert len(classes) == 1
         assert classes[0]["ip"] == "104.21.36.250"
         assert classes[0]["ip_class"] == "cdn"
@@ -259,19 +259,19 @@ class TestExtractIpClassifications:
                 },
             },
         )
-        classes = _extract_ip_classifications_from_messages([msg_ipinfo, msg_bgp], "example.com")
+        classes = extract_ip_classifications([msg_ipinfo, msg_bgp], "example.com")
         assert len(classes) == 1
         assert classes[0]["asn_name"] == "AMAZON-AES"
 
     def test_empty_messages(self) -> None:
-        assert _extract_ip_classifications_from_messages([], "example.com") == []
+        assert extract_ip_classifications([], "example.com") == []
 
 
 # ── IP extraction ─────────────────────────────────────────────────────────
 
 
 class TestExtractIps:
-    """_extract_ips_from_messages — basic happy path."""
+    """extract_ips — basic happy path."""
 
     def test_extracts_from_dns_resolve(self) -> None:
         msg = _tool_msg(
@@ -282,7 +282,7 @@ class TestExtractIps:
                 "data": {"ips": ["1.2.3.4", "5.6.7.8"]},
             },
         )
-        ips = _extract_ips_from_messages([msg])
+        ips = extract_ips([msg])
         assert ips == ["1.2.3.4", "5.6.7.8"]
 
     def test_deduplicates(self) -> None:
@@ -302,18 +302,18 @@ class TestExtractIps:
                 "data": {"ip": "1.2.3.4"},
             },
         )
-        ips = _extract_ips_from_messages([msg1, msg2])
+        ips = extract_ips([msg1, msg2])
         assert ips == ["1.2.3.4"]
 
     def test_empty_messages(self) -> None:
-        assert _extract_ips_from_messages([]) == []
+        assert extract_ips([]) == []
 
 
 # ── SAN domain extraction from tlscert ─────────────────────────────────────
 
 
 class TestExtractSanDomains:
-    """_extract_san_domains_from_messages from tlscert_lookup results."""
+    """extract_san_domains from tlscert_lookup results."""
 
     def test_extracts_sans_matching_base_domain(self) -> None:
         msg = _tool_msg(
@@ -332,7 +332,7 @@ class TestExtractSanDomains:
                 },
             },
         )
-        subs = _extract_san_domains_from_messages([msg], "example.com")
+        subs = extract_san_domains([msg], "example.com")
         assert "www.example.com" in subs
         assert "api.example.com" in subs
         assert "staging.example.com" in subs
@@ -355,7 +355,7 @@ class TestExtractSanDomains:
                 },
             },
         )
-        subs = _extract_san_domains_from_messages([msg], "example.com")
+        subs = extract_san_domains([msg], "example.com")
         assert "other-domain.net" not in subs
         assert "cdn.cloudflare.com" not in subs
         assert "www.example.com" in subs
@@ -377,7 +377,7 @@ class TestExtractSanDomains:
                 "data": {"san_domains": ["www.example.com", "mail.example.com"]},
             },
         )
-        subs = _extract_san_domains_from_messages([msg1, msg2], "example.com")
+        subs = extract_san_domains([msg1, msg2], "example.com")
         assert subs.count("www.example.com") == 1
         assert "api.example.com" in subs
         assert "mail.example.com" in subs
@@ -391,7 +391,7 @@ class TestExtractSanDomains:
                 "error": "Connection refused",
             },
         )
-        assert _extract_san_domains_from_messages([msg], "example.com") == []
+        assert extract_san_domains([msg], "example.com") == []
 
     def test_skips_non_tlscert_tools(self) -> None:
         msg = _tool_msg(
@@ -402,7 +402,7 @@ class TestExtractSanDomains:
                 "data": {"san_domains": ["sneaky.example.com"]},
             },
         )
-        assert _extract_san_domains_from_messages([msg], "example.com") == []
+        assert extract_san_domains([msg], "example.com") == []
 
     def test_filters_reverse_ptr_subdomains(self) -> None:
         msg = _tool_msg(
@@ -418,12 +418,12 @@ class TestExtractSanDomains:
                 },
             },
         )
-        subs = _extract_san_domains_from_messages([msg], "example.com")
+        subs = extract_san_domains([msg], "example.com")
         assert "www.example.com" in subs
         assert "200-210-75-128.example.com" not in subs
 
     def test_empty_messages(self) -> None:
-        assert _extract_san_domains_from_messages([], "example.com") == []
+        assert extract_san_domains([], "example.com") == []
 
     def test_returns_sorted(self) -> None:
         msg = _tool_msg(
@@ -436,7 +436,7 @@ class TestExtractSanDomains:
                 },
             },
         )
-        subs = _extract_san_domains_from_messages([msg], "example.com")
+        subs = extract_san_domains([msg], "example.com")
         assert subs == sorted(subs)
 
 
@@ -444,7 +444,7 @@ class TestExtractSanDomains:
 
 
 class TestExtractHistoricalIps:
-    """_extract_historical_ips_from_messages from securitytrails_history results."""
+    """extract_historical_ips from securitytrails_history results."""
 
     def test_extracts_ips_not_in_current(self) -> None:
         msg = _tool_msg(
@@ -473,7 +473,7 @@ class TestExtractHistoricalIps:
             },
         )
         current_ips = ["104.21.36.250", "172.67.201.157"]
-        historical = _extract_historical_ips_from_messages([msg], current_ips)
+        historical = extract_historical_ips([msg], current_ips)
         assert historical == ["93.184.216.34"]
 
     def test_excludes_current_ips(self) -> None:
@@ -496,7 +496,7 @@ class TestExtractHistoricalIps:
                 },
             },
         )
-        historical = _extract_historical_ips_from_messages([msg], ["104.21.36.250"])
+        historical = extract_historical_ips([msg], ["104.21.36.250"])
         assert historical == []
 
     def test_deduplicates(self) -> None:
@@ -525,7 +525,7 @@ class TestExtractHistoricalIps:
                 },
             },
         )
-        historical = _extract_historical_ips_from_messages([msg], [])
+        historical = extract_historical_ips([msg], [])
         assert historical == ["93.184.216.34"]
 
     def test_ignores_mx_and_ns_records(self) -> None:
@@ -546,7 +546,7 @@ class TestExtractHistoricalIps:
                 },
             },
         )
-        historical = _extract_historical_ips_from_messages([msg], [])
+        historical = extract_historical_ips([msg], [])
         assert historical == []
 
     def test_skips_error_status(self) -> None:
@@ -558,7 +558,7 @@ class TestExtractHistoricalIps:
                 "error": "API key missing",
             },
         )
-        assert _extract_historical_ips_from_messages([msg], []) == []
+        assert extract_historical_ips([msg], []) == []
 
     def test_skips_non_securitytrails_tools(self) -> None:
         msg = _tool_msg(
@@ -569,7 +569,7 @@ class TestExtractHistoricalIps:
                 "data": {"a_records": [{"value": "93.184.216.34"}]},
             },
         )
-        assert _extract_historical_ips_from_messages([msg], []) == []
+        assert extract_historical_ips([msg], []) == []
 
     def test_validates_ip_format(self) -> None:
         """Invalid IPs in records are silently skipped."""
@@ -588,11 +588,11 @@ class TestExtractHistoricalIps:
                 },
             },
         )
-        historical = _extract_historical_ips_from_messages([msg], [])
+        historical = extract_historical_ips([msg], [])
         assert historical == ["93.184.216.34"]
 
     def test_empty_messages(self) -> None:
-        assert _extract_historical_ips_from_messages([], []) == []
+        assert extract_historical_ips([], []) == []
 
     def test_empty_a_records(self) -> None:
         msg = _tool_msg(
@@ -603,4 +603,4 @@ class TestExtractHistoricalIps:
                 "data": {"a_records": [], "mx_records": [], "ns_records": []},
             },
         )
-        assert _extract_historical_ips_from_messages([msg], []) == []
+        assert extract_historical_ips([msg], []) == []

@@ -18,7 +18,11 @@ Flow::
 
 from __future__ import annotations
 
-from langgraph.checkpoint.memory import MemorySaver
+import os
+import sqlite3
+from pathlib import Path
+
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -34,13 +38,22 @@ from .nodes import (
 )
 from .state import ScanState
 
-# In-memory checkpointer — enables state persistence across nodes,
-# resume-after-failure, and replay.  Swap for a persistent store
-# (e.g. SqliteSaver) when needed.
-_checkpointer = MemorySaver()
+# Persistent checkpointer — enables state persistence, resume-after-failure,
+# and replay across graph nodes.  Path is configurable via FACKEL_CHECKPOINT_DB
+# env-var; defaults to ~/.fackel/checkpoints.db.
+_DEFAULT_CHECKPOINT_DIR = Path.home() / ".fackel"
+_CHECKPOINT_DB = os.getenv(
+    "FACKEL_CHECKPOINT_DB",
+    str(_DEFAULT_CHECKPOINT_DIR / "checkpoints.db"),
+)
+
+# Ensure the checkpoint directory exists.
+Path(_CHECKPOINT_DB).parent.mkdir(parents=True, exist_ok=True)
+
+_checkpointer = SqliteSaver(sqlite3.connect(_CHECKPOINT_DB, check_same_thread=False))
 
 
-def build_graph() -> CompiledStateGraph:
+def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
     """Construct and compile the orchestrator StateGraph."""
     graph = StateGraph(ScanState)
 

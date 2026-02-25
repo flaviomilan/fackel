@@ -7,11 +7,11 @@ import os
 import re
 from typing import Any
 
-import requests
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import format_tool_output
+from tools.http_client import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def _check_breaches(email: str) -> list[dict[str, Any]]:
     if not api_key:
         return []
     try:
-        resp = requests.get(
+        resp = get_session().get(
             f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}",
             headers={"hibp-api-key": api_key, "user-agent": "OSINT-Tool"},
             timeout=_TIMEOUT,
@@ -51,7 +51,7 @@ def _check_reputation(email: str) -> dict[str, Any] | None:
     if not api_key:
         return None
     try:
-        resp = requests.get(
+        resp = get_session().get(
             f"https://emailrep.io/{email}",
             headers={"Key": api_key},
             timeout=_TIMEOUT,
@@ -72,12 +72,7 @@ def analyze_email(email: str) -> dict[str, Any]:
     """
     email = email.strip()
     if not _EMAIL_RE.match(email):
-        return format_tool_output(
-            "analyze_email",
-            email,
-            "error",
-            error="invalid email format",
-        )
+        raise ToolException("analyze_email: invalid email format")
 
     breaches = _check_breaches(email)
     reputation = _check_reputation(email)
@@ -91,3 +86,6 @@ def analyze_email(email: str) -> dict[str, Any]:
             "reputation": reputation,
         },
     )
+
+
+analyze_email.handle_tool_error = True

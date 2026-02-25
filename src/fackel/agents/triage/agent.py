@@ -1,7 +1,9 @@
 """Triage specialist — analyses scan findings to identify coverage gaps.
 
-Uses structured output to produce a typed assessment of detected technologies
-and areas that could not be evaluated due to missing specialist agents.
+Uses ``create_agent`` with ``response_format`` to produce a typed assessment
+of detected technologies and areas that could not be evaluated due to
+missing specialist agents.  The structured output is returned via the
+agent's ``structured_response`` state key.
 """
 
 from __future__ import annotations
@@ -9,12 +11,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
-from fackel.agents.config import get_model
+from fackel.agents.config import build_llm
 from fackel.agents.prompts import load_prompt
+from fackel.formatting import format_tech_fingerprint, serialize_findings
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +62,22 @@ class TriageResult(BaseModel):
     summary: str = Field(description="Brief overall assessment of scan coverage")
 
 
+def build(model_name: str | None = None) -> CompiledStateGraph:  # type: ignore[type-arg]
+    """Return a compiled triage agent with ``response_format=TriageResult``.
+
+    The agent has no tools — it performs a single structured LLM call to
+    analyse accumulated findings and produce a typed assessment.
+    """
+    llm = build_llm("triage", model_name=model_name)
+    return create_agent(
+        llm,
+        [],
+        system_prompt=load_prompt("triage"),
+        response_format=TriageResult,
+        name="triage",
+    )
+
+
 def run_triage(
     findings: list[dict[str, Any]],
     *,
@@ -64,6 +85,7 @@ def run_triage(
     tech_fingerprints: list[dict[str, Any]] | None = None,
     phase_evaluations: list[dict[str, Any]] | None = None,
     model_name: str | None = None,
+    config: RunnableConfig | None = None,
 ) -> TriageResult:
     """Analyse accumulated findings and return a structured triage result.
 
@@ -78,9 +100,10 @@ def run_triage(
         HTTP tech fingerprints per target (server, technologies, CDN, WAF).
     phase_evaluations:
         LLM-as-a-judge quality assessments from prior phases.
+    config:
+        Optional ``RunnableConfig`` for observability trace nesting.
     """
-    llm = ChatOpenAI(model=model_name or get_model("triage"))
-    structured_llm = llm.with_structured_output(TriageResult)
+    agent = build(model_name)
 
     # Serialise structured findings into text for the LLM.
     context = _serialize_findings(findings)
@@ -95,38 +118,40 @@ def run_triage(
         context = f"{context}\n\n---\n\n{structured_sections}"
 
     try:
-        return structured_llm.invoke(
-            [
-                SystemMessage(content=load_prompt("triage")),
-                HumanMessage(content=f"Analyse these scan findings:\n\n{context}"),
-            ]
+        result = agent.invoke(
+            {"messages": [HumanMessage(content=f"Analyse these scan findings:\n\n{context}")]},
+            config=config,
         )
+        structured: TriageResult | None = result.get("structured_response")
+        if structured is None:
+            logger.warning("Triage agent returned no structured_response — using fallback")
+            return _fallback_result("No structured response returned by agent.")
+        return structured
     except Exception:
         logger.exception("Triage LLM call failed — returning fallback result")
-        return TriageResult(
-            technologies_detected=[],
-            unassessed_areas=[],
-            risk_score=RiskScore(
-                score=0.0,
-                exposure_type="minimal",
-                factors=["Triage analysis failed — score unavailable"],
-            ),
-            summary="Triage analysis could not be completed due to an LLM error. "
+        return _fallback_result(
+            "Triage analysis could not be completed due to an LLM error. "
             "Review the raw findings manually.",
         )
 
 
+def _fallback_result(summary: str) -> TriageResult:
+    """Build a minimal TriageResult when the LLM call fails."""
+    return TriageResult(
+        technologies_detected=[],
+        unassessed_areas=[],
+        risk_score=RiskScore(
+            score=0.0,
+            exposure_type="minimal",
+            factors=["Triage analysis failed — score unavailable"],
+        ),
+        summary=summary,
+    )
+
+
 def _serialize_findings(findings: list[dict[str, Any]]) -> str:
     """Convert a list of Finding dicts into Markdown sections for the LLM."""
-    sections: list[str] = []
-    for f in findings:
-        if isinstance(f, dict):
-            header = f.get("title", f.get("phase", "Finding"))
-            detail = f.get("detail", "")
-            sections.append(f"## {header}\n\n{detail}")
-        else:
-            sections.append(str(f))
-    return "\n\n---\n\n".join(sections) if sections else "No findings collected."
+    return serialize_findings(findings)
 
 
 def _serialize_structured_context(
@@ -159,29 +184,20 @@ def _serialize_structured_context(
     if tech_fingerprints:
         lines = ["## Technology Fingerprints\n"]
         for fp in tech_fingerprints[:10]:
-            host = fp.get("host", fp.get("target", "?"))
-            server = fp.get("server", "")
-            techs = fp.get("technologies", [])
-            cdn = fp.get("cdn", False)
-            waf = fp.get("waf", "")
-            line = f"- **{host}**: server={server or '?'}"
-            if techs:
-                line += f", tech=[{', '.join(str(t) for t in techs[:8])}]"
-            if cdn:
-                line += ", CDN=yes"
-            if waf:
-                line += f", WAF={waf}"
-            lines.append(line)
+            lines.append(format_tech_fingerprint(fp, bold_host=True))
         parts.append("\n".join(lines))
 
     if phase_evaluations:
         lines = ["## Phase Quality Evaluations\n"]
         for ev in phase_evaluations:
             if not isinstance(ev, dict):
-                continue
+                continue  # type: ignore[unreachable]
             phase = ev.get("phase", "?")
             completeness = ev.get("completeness", "?")
-            score = ev.get("score", 0)
+            try:
+                score = float(ev.get("score", 0))
+            except (TypeError, ValueError):
+                score = 0.0
             gaps = ev.get("gaps", [])
             line = f"- **{phase}**: {completeness} (score: {score:.1f})"
             if gaps:

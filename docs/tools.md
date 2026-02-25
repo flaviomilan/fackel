@@ -1,15 +1,17 @@
 # Tools Reference
 
 Complete reference for all 27 tool wrappers in Fackel. Each tool is a
-LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema
-and standardised output envelope.
+LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema,
+`ToolException`-based error handling, and standardised output envelope.
 
 ---
 
 ## Table of contents
 
+- [Error handling](#error-handling)
 - [Output envelope](#output-envelope)
 - [Input validation](#input-validation)
+- [Circuit breaker](#circuit-breaker)
 - [OSINT tools](#osint-tools)
   - [dns_resolve](#dns_resolve)
   - [whois_lookup](#whois_lookup)
@@ -45,6 +47,35 @@ and standardised output envelope.
 
 ---
 
+## Error handling
+
+All tools use **`ToolException`** for error propagation and **`handle_tool_error`**
+for LLM-visible error messages:
+
+```python
+from langchain_core.tools import ToolException, tool
+
+@tool(args_schema=MyInput)
+def my_tool(target: str) -> dict:
+    """Tool docstring."""
+    target = guard_target(target, "my_tool", TargetType.DOMAIN)  # raises ToolException
+    require_binary("my-bin", "my_tool")  # raises ToolException
+    # ... implementation ...
+
+my_tool.handle_tool_error = True  # type: ignore[attr-defined]
+```
+
+When a `ToolException` is raised and `handle_tool_error = True`, LangChain
+converts the exception message into a `ToolMessage` with `status="error"`.
+The LLM sees the error as a tool result and can self-correct (retry with
+different arguments, try a different tool, or skip).
+
+**Why `handle_tool_error` is set as an attribute (not a decorator parameter):**
+`langchain_core` 1.2.9 does not support `@tool(handle_tool_error=True)` as a
+decorator argument. The attribute must be set after function definition.
+
+---
+
 ## Output envelope
 
 All tools return a standardised dict via `format_tool_output()`:
@@ -59,8 +90,34 @@ All tools return a standardised dict via `format_tool_output()`:
 }
 ```
 
-The orchestrator's `_validate_tool_output()` checks for this envelope and logs
-warnings for malformed outputs.
+The orchestrator's `validate_tool_output()` in `streaming.py` detects both
+`ToolException`-based errors (`msg.status == "error"`) and legacy envelope errors.
+
+---
+
+## Circuit breaker
+
+HTTP-based tools (crt.sh, dnsdumpster, virustotal, urlscan, ipinfo, otx,
+censys, securitytrails, shodan, webpage extractor) are wrapped in a
+**per-service circuit breaker** (`src/tools/circuit_breaker.py`).
+
+```python
+from tools.circuit_breaker import circuit_breaker
+
+with circuit_breaker("crtsh"):
+    resp = get_session().get(url, timeout=30)
+    resp.raise_for_status()
+```
+
+| Parameter | Value |
+|-----------|-------|
+| Failure threshold | 3 consecutive failures |
+| Reset timeout | 60 seconds |
+| States | closed → open → half-open → closed |
+
+When a service’s circuit is **open**, subsequent calls raise `ToolException`
+immediately with a clear message (“service temporarily disabled”), preventing
+cascading timeouts.
 
 ---
 
@@ -632,8 +689,12 @@ Fackel wraps several security tools via subprocess. Install the ones you need:
 | `whois` | `whois_lookup` | `apt install whois` / `brew install whois` |
 
 **Missing binary handling:** Tools use `require_binary()` — if the binary is not
-found in `$PATH`, the tool returns a clean error dict instead of crashing.
-The LLM sees the error and can try alternative tools.
+found in `$PATH`, the tool raises `ToolException`. With `handle_tool_error = True`,
+the LLM sees the error and can try alternative tools.
+
+**Configurable timeouts:** Each tool's subprocess timeout can be overridden via
+`FACKEL_TIMEOUT_{TOOL_NAME}` environment variable (value in seconds). The
+`get_tool_timeout(tool_name, default)` helper reads these env vars.
 
 ---
 
@@ -642,10 +703,11 @@ The LLM sees the error and can try alternative tools.
 Defined in `src/fackel/tooling/execution.py`:
 
 | Function | Signature | Purpose |
-|----------|-----------|---------|
+|----------|-----------|----------|
 | `run_command` | `(cmd, timeout=180) → (returncode, stdout, stderr)` | Execute subprocess with timeout |
 | `format_tool_output` | `(tool, target, status, data, error) → dict` | Standard output envelope |
-| `require_binary` | `(binary, tool_name, target) → dict \| None` | Check binary in PATH, return error if missing |
-| `require_env` | `(key, tool_name, target) → (value, None) \| (None, error)` | Check env var, return error if missing |
+| `require_binary` | `(binary, tool_name) → None` | Raises `ToolException` if binary missing from PATH |
+| `require_env` | `(key, tool_name) → str` | Returns env var value or raises `ToolException` |
+| `get_tool_timeout` | `(tool_name, default) → int` | Reads `FACKEL_TIMEOUT_{TOOL}` env var or returns default |
 | `parse_jsonl` | `(output) → list[dict]` | Parse newline-delimited JSON safely |
 | `DEFAULT_TIMEOUT` | `180` | Default subprocess timeout in seconds |

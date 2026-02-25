@@ -1,8 +1,8 @@
 """Tool execution helpers — subprocess runner, output envelope, and guards.
 
 Functions here are infrastructure-level: subprocess execution, output
-envelope formatting, binary / env-var precondition checks, and JSONL
-parsing.
+envelope formatting, binary / env-var precondition checks, configurable
+per-tool timeouts, and JSONL parsing.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import os
 import shutil
 import subprocess
 from typing import Any
+
+from langchain_core.tools import ToolException
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,7 @@ def format_tool_output(
     tool: str,
     target: str,
     status: str,
-    data: dict[str, Any] | list | None = None,
+    data: dict[str, Any] | list[Any] | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
     """Standardize tool output format."""
@@ -45,29 +47,59 @@ def format_tool_output(
 # ── DRY helpers for subprocess-based tools ─────────────────────────────
 
 
-def require_binary(binary: str, tool_name: str, target: str) -> dict[str, Any] | None:
-    """Return an error dict if *binary* is not on PATH, else ``None``."""
+def require_binary(binary: str, tool_name: str) -> None:
+    """Raise ``ToolException`` if *binary* is not on ``PATH``.
+
+    Raises
+    ------
+    ToolException
+        When the required binary cannot be found.
+    """
     if shutil.which(binary):
-        return None
-    return format_tool_output(
-        tool_name,
-        target,
-        "error",
-        error=f"{binary} not found in PATH",
-    )
+        return
+    raise ToolException(f"{tool_name}: {binary} not found in PATH")
 
 
-def require_env(key: str, tool_name: str, target: str) -> tuple[str | None, dict | None]:
-    """Return ``(value, None)`` if env var is set, or ``(None, error_dict)``."""
+def require_env(key: str, tool_name: str) -> str:
+    """Return the value of env-var *key*, or raise ``ToolException``.
+
+    Raises
+    ------
+    ToolException
+        When the environment variable is empty or unset.
+    """
     value = os.getenv(key, "").strip()
     if value:
-        return value, None
-    return None, format_tool_output(
-        tool_name,
-        target,
-        "error",
-        error=f"{key} environment variable not configured",
-    )
+        return value
+    raise ToolException(f"{tool_name}: {key} environment variable not configured")
+
+
+def get_tool_timeout(tool_name: str, default: int) -> int:
+    """Return the timeout for *tool_name* from env or *default*.
+
+    Reads ``FACKEL_TIMEOUT_{TOOL_NAME}`` (upper-cased).  This lets
+    operators override per-tool timeouts at deploy time without code
+    changes.
+
+    Examples
+    --------
+    >>> os.environ["FACKEL_TIMEOUT_CRTSH"] = "60"
+    >>> get_tool_timeout("crtsh", 45)
+    60
+    """
+    env_var = f"FACKEL_TIMEOUT_{tool_name.upper()}"
+    raw = os.getenv(env_var, "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            logger.warning(
+                "%s=%r is not a valid integer — using default %d",
+                env_var,
+                raw,
+                default,
+            )
+    return default
 
 
 def parse_jsonl(output: str) -> list[dict[str, Any]]:

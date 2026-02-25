@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from censys.search import CensysHosts
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, guard_target, require_env
@@ -25,16 +25,10 @@ class CensysInput(BaseModel):
 @tool(args_schema=CensysInput)
 def censys_lookup(domain: str) -> dict[str, Any]:
     """Search host and service data via the Censys REST API."""
-    domain, err = guard_target(domain, "censys_lookup", TargetType.HOST)
-    if err:
-        return err
+    domain = guard_target(domain, "censys_lookup", TargetType.HOST)
 
-    api_id, id_err = require_env("CENSYS_API_ID", "censys_lookup", domain)
-    if id_err:
-        return id_err
-    api_secret, sec_err = require_env("CENSYS_API_SECRET", "censys_lookup", domain)
-    if sec_err:
-        return sec_err
+    api_id = require_env("CENSYS_API_ID", "censys_lookup")
+    api_secret = require_env("CENSYS_API_SECRET", "censys_lookup")
 
     try:
         client = CensysHosts(api_id=api_id, api_secret=api_secret)
@@ -67,9 +61,7 @@ def censys_lookup(domain: str) -> dict[str, Any]:
         )
 
     except Exception as e:
-        return format_tool_output(
-            "censys_lookup",
-            domain,
-            "error",
-            error=f"Censys query failed: {e}",
-        )
+        raise ToolException(f"censys_lookup: Censys query failed: {e}") from e
+
+
+censys_lookup.handle_tool_error = True

@@ -78,16 +78,17 @@ phases, and streams events to the CLI.
 | Package | Responsibility |
 |---------|---------------|
 | `src/cli/` | Typer CLI entry point, event rendering with Rich |
-| `src/fackel/agents/orchestrator/` | LangGraph state machine, nodes, routing, evaluator |
+| `src/fackel/agents/orchestrator/` | LangGraph state machine, node package, streaming, routing, evaluator |
 | `src/fackel/agents/osint/` | OSINT ReAct agent construction |
 | `src/fackel/agents/port_scan/` | Port scan ReAct agent construction |
 | `src/fackel/agents/vuln_scan/` | Vulnerability scan ReAct agent construction |
 | `src/fackel/agents/triage/` | Triage structured output (no tools) |
 | `src/fackel/agents/report/` | Report synthesis (no tools) |
 | `src/fackel/agents/prompts/` | Two-tier prompt loading and caching |
-| `src/fackel/domain/` | Domain models, enumerations (infrastructure-agnostic) |
-| `src/fackel/tooling/` | Tool infrastructure: subprocess runner, validators, sanitizers, env/binary guards |
+| `src/fackel/agents/config.py` | `build_llm()` factory, `get_model()`, `default_middleware()` |
+| `src/fackel/tooling/` | Tool infrastructure: subprocess runner, validators (`ToolException`), sanitizers, env/binary guards, configurable timeouts |
 | `src/fackel/` | Provider key management, report writer |
+| `src/tools/circuit_breaker.py` | Per-service circuit breaker for HTTP APIs |
 | `src/tools/recon/` | Passive reconnaissance (DNS, subdomains, WHOIS, Shodan, Censys, VirusTotal) |
 | `src/tools/osint/` | Open-source intelligence (web search, email, LinkedIn, profiles, jobs) |
 | `src/tools/scanning/` | Active scanning (port scanning, HTTP probing, crawling, WAF, GraphQL) |
@@ -102,19 +103,20 @@ phases, and streams events to the CLI.
 Defined in `src/fackel/agents/orchestrator/graph.py`.
 
 The orchestrator is a **LangGraph `StateGraph`** with `ScanState` as its state
-schema. Each node is a Python function that receives the current state and
+schema. Each node is a Python function that receives `(state, config)` — the
+state dict and a `RunnableConfig` for observability trace propagation — and
 returns a partial update.
 
 **Nodes:**
 
-| Node | Function | Type |
-|------|----------|------|
-| `osint` | `osint_node` | ReAct agent (streaming) |
-| `approval_gate` | `approval_gate` | HitL interrupt |
-| `port_scan` | `port_scan_node` | ReAct agent (streaming) + judge |
-| `vuln_scan` | `vuln_scan_node` | ReAct agent (streaming) + judge |
-| `triage` | `triage_node` | Structured LLM output |
-| `report` | `report_node` | Single LLM call |
+| Node | Function | File | Type |
+|------|----------|------|------|
+| `osint` | `osint_node` | `nodes/osint.py` | ReAct agent (streaming) |
+| `approval_gate` | `approval_gate` | `nodes/report_and_gates.py` | HitL interrupt |
+| `port_scan` | `port_scan_node` | `nodes/port_scan.py` | ReAct agent (streaming) + judge |
+| `vuln_scan` | `vuln_scan_node` | `nodes/vuln_scan.py` | ReAct agent (streaming) + judge |
+| `triage` | `triage_node` | `nodes/triage.py` | Structured LLM output |
+| `report` | `report_node` | `nodes/report_and_gates.py` | Single LLM call |
 
 **Edges:**
 
@@ -155,10 +157,11 @@ meaningful, the expensive vuln scan phase is skipped.
 
 ### Checkpointing
 
-The graph uses LangGraph's `MemorySaver` for in-memory checkpointing. Each
-invocation gets a unique `thread_id` (UUID). This enables:
+The orchestrator graph uses **`SqliteSaver`** for persistent checkpointing.
+The database path is configurable via `FACKEL_CHECKPOINT_DB` (default:
+`~/.fackel/checkpoints.db`). This enables:
 
-- **State persistence** across graph nodes
+- **State persistence** across graph nodes (survives process restarts)
 - **Interrupt/resume** for the approval gate (Human-in-the-Loop)
 - **Failure recovery** (replay from last checkpoint)
 
@@ -250,11 +253,11 @@ Located in `src/fackel/agents/prompts/skills/`.
 ### Event flow
 
 ```
-Graph node → _emit(phase, event_type, data) → _event_callback → CLI renderer
+Graph node → streaming.emit(phase, event_type, data) → _event_callback → CLI renderer
 ```
 
-Nodes emit events via the `_emit()` function in `nodes.py`, which delegates to a
-module-level `_event_callback`. The CLI sets this callback via
+Nodes emit events via the `emit()` function in `streaming.py`, which delegates
+to a module-level `_event_callback`. The CLI sets this callback via
 `set_event_callback()` before invoking the graph.
 
 ### Event types
@@ -268,18 +271,42 @@ module-level `_event_callback`. The CLI sets this callback via
 | `reasoning` | `{text}` | `💭 line` (verbose only, italic) |
 | `summary` | `{content}` | Rich panel with Markdown |
 | `evaluation` | `{completeness, score, recommendation}` | `📊 Quality: completeness (score: X.X) → recommendation` |
+| `tool_approval` | `{data}` | `⏸ Tool execution pending approval` |
 | `done` | `{phase}` | `✓ Phase complete` (green) |
 
 ### Agent streaming
 
-Each ReAct agent is streamed via LangGraph's `agent.stream()` with
-`stream_mode="updates"`. The `_run_and_stream_agent()` helper in `nodes.py`:
+Each ReAct agent is streamed via `_AgentStreamer` in `streaming.py` with
+dual `stream_mode=["updates", "messages"]`. The
+`run_and_stream_agent()` helper:
 
-1. Iterates over stream events
-2. Validates tool outputs against the standard envelope format
-3. Emits appropriate events for each message (AI reasoning, tool calls, results, errors)
-4. Enforces the max iteration guard (40 tool calls)
-5. Returns collected messages for post-processing (IP/subdomain extraction)
+1. **`updates`** events deliver complete, properly-parsed `AIMessage`
+   and `ToolMessage` objects per node execution — used for reliable
+   tool-call / tool-result tracking and message collection
+2. **`messages`** events deliver token-level `AIMessageChunk` objects
+   as the LLM generates them — emitted as `token` events for real-time
+   streaming display in the CLI
+3. Inspects `content_blocks` to separate extended-thinking traces
+   (Claude / o-series) from regular text
+4. Validates tool outputs — detects `ToolException` errors via
+   `msg.status == "error"` and legacy envelope errors via JSON status
+5. Enforces the max iteration guard (40 tool calls)
+6. Handles inner agent interrupts for `HumanInTheLoopMiddleware` — resuming
+   with the operator's decision when a tool call requires approval
+7. Returns collected messages for post-processing (IP/subdomain extraction)
+8. Propagates `RunnableConfig` — callbacks, metadata, and tags from the
+   orchestrator config are merged into the inner agent config so
+   LangSmith traces nest correctly
+
+### Middleware stack
+
+All ReAct agents share a standard middleware stack via `default_middleware()`:
+
+| Middleware | Purpose | Default |
+|-----------|---------|---------|
+| `ParallelToolCalls` | Batches independent tool calls for concurrent execution | Always on |
+| `ToolRetryMiddleware` | Retries transient network errors with exponential backoff (max 2, 1 s initial, 2× factor) | Always on |
+| `HumanInTheLoopMiddleware` | Interrupts before active scanning tools for per-call approval | Opt-in via `--approve-tools` |
 
 ---
 
@@ -314,12 +341,17 @@ Generated by `build_full_report(state)` in `src/fackel/report_writer.py`:
 
 | Guard | Location | Behaviour |
 |-------|----------|-----------|
-| **MAX_AGENT_ITERATIONS = 40** | `nodes.py` | Stops ReAct loop after 40 tool calls per phase |
-| **_SUBDOMAIN_CAP = 30** | `nodes.py` | Limits subdomains passed to downstream agents |
-| **Tool output validation** | `nodes.py` | Checks for standard envelope (`tool`, `status`), logs warnings for malformed outputs |
-| **Reverse-PTR filtering** | `nodes.py` | Removes auto-generated PTR hostnames (e.g. `200-210-75-128.example.com`) from subdomain lists |
-| **Input validation rails** | `fackel/tooling/validators.py` | `guard_target()` validates target type and blocks shell metacharacters |
+| **MAX_AGENT_ITERATIONS = 40** | `streaming.py` | Stops ReAct loop after 40 tool calls per phase |
+| **_SUBDOMAIN_CAP = 30** | `nodes/port_scan.py` | Limits subdomains passed to downstream agents |
+| **Tool output validation** | `streaming.py` | Detects `ToolException` errors (`msg.status == "error"`) and legacy envelope errors, logs warnings |
+| **ToolException + handle_tool_error** | All 27 tools | Raises `ToolException` on errors; LangChain converts to a tool message the LLM can read |
+| **Circuit breaker** | `tools/circuit_breaker.py` | Per-service (crtsh, dnsdumpster, virustotal, etc.) — disables flaky HTTP APIs after 3 consecutive failures for 60 s |
+| **Reverse-PTR filtering** | `nodes/osint.py` | Removes auto-generated PTR hostnames (e.g. `200-210-75-128.example.com`) from subdomain lists |
+| **Input validation rails** | `fackel/tooling/validators.py` | `guard_target()` validates target type and blocks shell metacharacters — raises `ToolException` |
+| **Binary & env guards** | `fackel/tooling/execution.py` | `require_binary()` and `require_env()` raise `ToolException` when prerequisites are missing |
+| **Configurable timeouts** | `fackel/tooling/execution.py` | `get_tool_timeout()` reads `FACKEL_TIMEOUT_{TOOL}` env vars for per-tool subprocess timeout override |
 | **Provider key gating** | `provider_keys.py` | Removes tools with missing API keys from agents |
 | **LLM-as-a-judge** | `evaluator.py` | Never raises — returns safe fallback on failure (score=0.5, completeness=partial) |
 | **Approval gate** | `graph.py` | HitL interrupt before active scanning |
-| **IPv6 filtering** | `nodes.py` | Port scan receives only IPv4 addresses (most active tools don't support IPv6) |
+| **IPv6 filtering** | `nodes/port_scan.py` | Port scan receives only IPv4 addresses (most active tools don't support IPv6) |
+| **LLM transient error retry** | `streaming.py` | Retries once on OpenAI rate-limit, timeout, and connection errors with backoff |

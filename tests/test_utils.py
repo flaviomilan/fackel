@@ -1,5 +1,8 @@
 """Tests for shared tool utilities — format_tool_output, run_command, parse_jsonl."""
 
+import pytest
+from langchain_core.tools import ToolException
+
 from fackel.tooling import format_tool_output, parse_jsonl, require_binary
 
 
@@ -44,14 +47,12 @@ class TestParseJsonl:
 
 
 class TestRequireBinary:
-    """require_binary returns error dict or None."""
+    """require_binary raises ToolException when binary is missing."""
 
     def test_existing_binary(self) -> None:
         # 'python3' should exist in any test environment
-        assert require_binary("python3", "test_tool", "target") is None
+        require_binary("python3", "test_tool")  # should not raise
 
     def test_missing_binary(self) -> None:
-        result = require_binary("nonexistent_binary_xyz_12345", "test_tool", "target")
-        assert result is not None
-        assert result["status"] == "error"
-        assert "not found" in result["error"]
+        with pytest.raises(ToolException, match="not found"):
+            require_binary("nonexistent_binary_xyz_12345", "test_tool")

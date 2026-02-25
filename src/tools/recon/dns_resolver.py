@@ -6,7 +6,7 @@ import ipaddress
 import socket
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, guard_target
@@ -31,9 +31,7 @@ def dns_resolve(target: str) -> dict[str, Any]:
     Returns both IPv4 and IPv6 addresses.  Feed discovered IPs into shodan_lookup
     for deeper passive intelligence.
     """
-    target, err = guard_target(target, "dns_resolve", TargetType.HOST)
-    if err:
-        return err
+    target = guard_target(target, "dns_resolve", TargetType.HOST)
 
     try:
         ipaddress.ip_address(target)
@@ -57,9 +55,7 @@ def dns_resolve(target: str) -> dict[str, Any]:
             data={"target": target, "ips": sorted(resolved), "type": "domain"},
         )
     except Exception as exc:
-        return format_tool_output(
-            "dns_resolve",
-            target,
-            "error",
-            error=str(exc),
-        )
+        raise ToolException(f"dns_resolve: {exc}") from exc
+
+
+dns_resolve.handle_tool_error = True

@@ -187,7 +187,7 @@ class TestWhoisLookupTraditional:
         with patch("tools.recon.whois._rdap_query", return_value=None):
             result = whois_lookup.invoke({"domain": "example.info"})
             # Falls through to RDAP which also fails → error
-            assert result["status"] == "error"
+            assert isinstance(result, str)
 
 
 class TestWhoisLookupRdapFallback:
@@ -210,18 +210,18 @@ class TestWhoisLookupRdapFallback:
     def test_both_fail_returns_error(self, _rdap, _whois):
         result = whois_lookup.invoke({"domain": "example.xyz"})
 
-        assert result["status"] == "error"
-        assert "no data" in result["error"].lower()
+        assert isinstance(result, str)
+        assert "no data" in result.lower()
 
 
 class TestWhoisInputValidation:
     def test_empty_domain_rejected(self):
         result = whois_lookup.invoke({"domain": ""})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     def test_ip_address_rejected(self):
         result = whois_lookup.invoke({"domain": "1.2.3.4"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     def test_url_extracts_host(self):
         """guard_target for DOMAIN type should extract host from URL."""

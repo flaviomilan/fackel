@@ -13,9 +13,10 @@ validators
     plus pure IP / domain helpers previously in ``fackel.utils``.
 """
 
-from fackel.tooling.ddgs import DDGS
+from fackel.tooling.ddgs import DDGS  # type: ignore[attr-defined]
 from fackel.tooling.execution import (
     format_tool_output,
+    get_tool_timeout,
     parse_jsonl,
     require_binary,
     require_env,
@@ -43,6 +44,7 @@ __all__ = [
     "TargetType",
     "classify_ip",
     "format_tool_output",
+    "get_tool_timeout",
     "guard_target",
     "is_reverse_ptr_subdomain",
     "is_valid_domain",

@@ -15,7 +15,7 @@ import urllib.request
 from typing import Any
 
 import whois
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, guard_target
@@ -213,9 +213,7 @@ def whois_lookup(domain: str) -> dict[str, Any]:
     returns no data.  Reveals hosting provider, domain age, and registrar —
     useful for attribution and infrastructure mapping.
     """
-    domain, err = guard_target(domain, "whois_lookup", TargetType.DOMAIN)
-    if err:
-        return err
+    domain = guard_target(domain, "whois_lookup", TargetType.DOMAIN)
 
     # ── Attempt 1: traditional WHOIS ──────────────────────────────────
     try:
@@ -235,9 +233,7 @@ def whois_lookup(domain: str) -> dict[str, Any]:
     except Exception as exc:
         logger.debug("RDAP fallback failed for %s: %s", domain, exc)
 
-    return format_tool_output(
-        "whois_lookup",
-        domain,
-        "error",
-        error=f"WHOIS and RDAP lookup returned no data for {domain}",
-    )
+    raise ToolException(f"whois_lookup: WHOIS and RDAP lookup returned no data for {domain}")
+
+
+whois_lookup.handle_tool_error = True

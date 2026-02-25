@@ -11,6 +11,6 @@ try:
     from ddgs import DDGS
 except ImportError:
     try:
-        from duckduckgo_search import DDGS
+        from duckduckgo_search import DDGS  # type: ignore[import-not-found,no-redef]
     except ImportError:
         DDGS = None  # type: ignore[assignment,misc]

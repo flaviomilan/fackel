@@ -35,16 +35,18 @@ Target → OSINT → Approval Gate → Port Scan → Vuln Scan → Triage → Re
 
 | Feature | Description |
 |---------|-------------|
-| **Real ReAct agents** | Each specialist is a `create_react_agent` with its own system prompt, tools, and LLM. The model decides strategy, not code. |
+| **Real ReAct agents** | Each specialist is a `create_agent` with its own system prompt, tools, and LLM. The model decides strategy, not code. |
 | **5-phase pipeline** | OSINT → Port Scan → Vulnerability Scan → Triage → Report. Each phase builds on the previous. |
 | **Human-in-the-loop** | An approval gate pauses before active scanning, showing discovered targets for operator review. |
 | **LLM-as-a-judge** | A quality evaluator scores each phase and drives adaptive routing — skip empty phases, adjust strategy for partial results. |
 | **Real-time observability** | Watch tool calls, results, errors, and LLM reasoning stream to the terminal as they happen. |
-| **Input validation rails** | Every tool validates its inputs (target type, shell metacharacters) before executing — code-level enforcement, not just prompt instructions. |
+| **Input validation rails** | Every tool validates its inputs (target type, shell metacharacters) via `guard_target()` — raises `ToolException` for code-level enforcement, not just prompt instructions. |
+| **Resilient tool execution** | `ToolException` + `handle_tool_error` propagate clean errors to the LLM. Circuit breakers disable flaky HTTP services after repeated failures. Configurable per-tool timeouts via environment variables. |
 | **Per-agent model config** | Assign different models to different agents via environment variables. |
 | **Automatic provider gating** | Tools requiring API keys are auto-removed when keys are missing, preventing wasted LLM calls. |
 | **Two-tier prompting** | Shared soul prompt (identity + anti-hallucination rules) + task-specific skill prompts per phase. |
 | **Dual reports** | Concise LLM report on console + comprehensive archival report saved to disk. |
+| **LangSmith tracing** | Set two env vars and all agent phases appear as hierarchical traces — token usage, tool I/O, latency, middleware activity. |
 
 ---
 
@@ -316,17 +318,23 @@ from agents, preventing the LLM from attempting calls that would fail.
 ### Infrastructure (optional)
 
 ```bash
-# Start MongoDB + Langfuse observability stack
+# Start MongoDB persistence stack
 docker compose up -d
 ```
 
 The `docker-compose.yml` provides:
 - **MongoDB 7** — scan persistence and query system
-- **Langfuse 3** — LLM observability, cost tracking, prompt management
-- **ClickHouse** — Langfuse analytics backend
-- **PostgreSQL 17** — Langfuse metadata
-- **Redis 7** — Langfuse queue
-- **MinIO** — Langfuse blob storage
+
+### Observability (optional)
+
+Fackel uses **LangSmith** for LLM observability.  Set the env vars and all
+agent traces appear automatically:
+
+```bash
+export LANGSMITH_TRACING=true
+export LANGSMITH_API_KEY=lsv2_pt_...
+export LANGSMITH_PROJECT=fackel
+```
 
 See [docs/configuration.md](docs/configuration.md) for full configuration reference.
 
@@ -351,7 +359,7 @@ print(result["report"])
 
 ```python
 # src/tools/recon/my_tool.py
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, guard_target
@@ -363,12 +371,14 @@ class MyToolInput(BaseModel):
 @tool(args_schema=MyToolInput)
 def my_recon_tool(target: str) -> dict:
     """Describe what this tool does — the LLM reads this docstring."""
-    target, err = guard_target(target, "my_recon_tool", TargetType.HOST)
-    if err:
-        return err
+    target = guard_target(target, "my_recon_tool", TargetType.HOST)
+    #  guard_target raises ToolException on invalid input
 
     # ... implementation ...
     return format_tool_output("my_recon_tool", target, "success", data=result)
+
+# Enable LangChain error propagation — the LLM sees errors as tool results.
+my_recon_tool.handle_tool_error = True  # type: ignore[attr-defined]
 ```
 
 2. Import and add it to the relevant agent's tools list.
@@ -388,7 +398,7 @@ src/
 │   └── main.py                      # Typer CLI with real-time Rich rendering
 ├── fackel/
 │   ├── agents/
-│   │   ├── config.py                # Per-agent model selection (env vars)
+│   │   ├── config.py                # build_llm(), get_model(), default_middleware()
 │   │   ├── prompts/
 │   │   │   ├── __init__.py          # Prompt loader with caching
 │   │   │   ├── soul.md              # Shared agent identity + rules
@@ -401,24 +411,32 @@ src/
 │   │   │       └── judge.md         # Quality scoring guide
 │   │   ├── orchestrator/
 │   │   │   ├── state.py             # ScanState (TypedDict + reducers)
-│   │   │   ├── nodes.py             # Graph nodes + event streaming
-│   │   │   ├── graph.py             # StateGraph definition + routing
+│   │   │   ├── graph.py             # StateGraph + SqliteSaver checkpointer
+│   │   │   ├── streaming.py         # Dual-mode agent streaming + HITL
+│   │   │   ├── evaluator.py         # LLM-as-a-judge quality scoring
+│   │   │   ├── extractors.py        # IP/subdomain/fingerprint extraction
 │   │   │   ├── main.py              # Public API: run()
-│   │   │   └── evaluator.py         # LLM-as-a-judge quality scoring
+│   │   │   └── nodes/               # Graph node functions
+│   │   │       ├── osint.py         # OSINT node + quality-gated retry
+│   │   │       ├── port_scan.py     # Port scan node + evaluator
+│   │   │       ├── vuln_scan.py     # Vuln scan node + evaluator
+│   │   │       ├── triage.py        # Triage node
+│   │   │       └── report_and_gates.py  # Report node + approval gate
 │   │   ├── osint/agent.py           # OSINT ReAct agent (18 tools)
 │   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
 │   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (8 tools)
 │   │   ├── triage/agent.py          # Triage structured output
 │   │   └── report/agent.py          # Report synthesis
 │   ├── tooling/
-│   │   ├── validators.py            # guard_target(), TargetType enum
-│   │   ├── execution.py             # run_command, format_tool_output, etc.
+│   │   ├── validators.py            # guard_target() (raises ToolException)
+│   │   ├── execution.py             # run_command, require_binary, get_tool_timeout
 │   │   ├── sanitizers.py            # Input sanitisation helpers
 │   │   ├── ip_classifier.py         # IP classification (CDN, cloud, hosting)
 │   │   └── ddgs.py                  # DuckDuckGo search wrapper
 │   ├── provider_keys.py             # API key gating + tool filtering
 │   └── report_writer.py             # Full archival report builder
 └── tools/
+    ├── circuit_breaker.py           # Per-service circuit breaker
     ├── recon/                       # 16 passive reconnaissance tools
     ├── osint/                       # 2 open-source intelligence tools
     ├── scanning/                    # 7 active scanning tools

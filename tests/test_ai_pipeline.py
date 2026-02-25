@@ -119,17 +119,17 @@ class TestSerializeStructuredContext:
 class TestRunTriageStructuredContext:
     """run_triage passes structured context to the LLM."""
 
-    @patch("fackel.agents.triage.agent.ChatOpenAI")
-    def test_structured_context_in_llm_prompt(self, mock_llm_cls: MagicMock) -> None:
+    @patch("fackel.agents.triage.agent.build")
+    def test_structured_context_in_llm_prompt(self, mock_build: MagicMock) -> None:
         mock_result = TriageResult(
             technologies_detected=["nginx"],
             unassessed_areas=[],
             risk_score=RiskScore(score=3.0, exposure_type="low", factors=[]),
             summary="OK",
         )
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.invoke.return_value = mock_result
-        mock_llm_cls.return_value = mock_llm
+        mock_agent = MagicMock()
+        mock_agent.invoke.return_value = {"structured_response": mock_result, "messages": []}
+        mock_build.return_value = mock_agent
 
         run_triage(
             [{"phase": "osint", "title": "DNS", "detail": "found IPs"}],
@@ -144,25 +144,25 @@ class TestRunTriageStructuredContext:
             ],
         )
 
-        # Verify the LLM received structured context in the message
-        call_args = mock_llm.with_structured_output.return_value.invoke.call_args[0][0]
-        human_msg = call_args[1].content
+        # Verify the agent received structured context in the message
+        call_args = mock_agent.invoke.call_args[0][0]
+        human_msg = call_args["messages"][0].content
         assert "direct_host" in human_msg
         assert "nginx" in human_msg
         assert "React" in human_msg
         assert "osint" in human_msg
 
-    @patch("fackel.agents.triage.agent.ChatOpenAI")
-    def test_no_structured_context_still_works(self, mock_llm_cls: MagicMock) -> None:
+    @patch("fackel.agents.triage.agent.build")
+    def test_no_structured_context_still_works(self, mock_build: MagicMock) -> None:
         mock_result = TriageResult(
             technologies_detected=[],
             unassessed_areas=[],
             risk_score=RiskScore(score=0.0, exposure_type="minimal", factors=[]),
             summary="No data.",
         )
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.invoke.return_value = mock_result
-        mock_llm_cls.return_value = mock_llm
+        mock_agent = MagicMock()
+        mock_agent.invoke.return_value = {"structured_response": mock_result, "messages": []}
+        mock_build.return_value = mock_agent
 
         # Should not raise when no structured context is passed
         result = run_triage([])
@@ -176,11 +176,11 @@ class TestTriageNodeStructuredPassthrough:
     """triage_node passes ip_classifications, tech_fingerprints, and
     phase_evaluations from state to run_triage."""
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.triage.agent.ChatOpenAI")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.triage.agent.run_triage")
     def test_triage_node_passes_structured_data(
         self,
-        mock_llm_cls: MagicMock,
+        mock_run_triage: MagicMock,
         _mock_emit: MagicMock,
     ) -> None:
         from fackel.agents.orchestrator.nodes import triage_node
@@ -191,9 +191,7 @@ class TestTriageNodeStructuredPassthrough:
             risk_score=RiskScore(score=5.0, exposure_type="moderate", factors=[]),
             summary="Moderate.",
         )
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.invoke.return_value = mock_result
-        mock_llm_cls.return_value = mock_llm
+        mock_run_triage.return_value = mock_result
 
         state = {
             "target": "example.com",
@@ -210,15 +208,13 @@ class TestTriageNodeStructuredPassthrough:
             ],
         }
 
-        triage_node(state)
+        triage_node(state, {})
 
-        # The LLM should have received structured context
-        call_args = mock_llm.with_structured_output.return_value.invoke.call_args[0][0]
-        human_msg = call_args[1].content
-        assert "direct_host" in human_msg
-        assert "Hetzner" in human_msg
-        assert "Apache" in human_msg
-        assert "PHP" in human_msg
+        # run_triage should have received structured context kwargs
+        call_kwargs = mock_run_triage.call_args[1]
+        assert call_kwargs["ip_classifications"] == state["ip_classifications"]
+        assert call_kwargs["tech_fingerprints"] == state["tech_fingerprints"]
+        assert call_kwargs["phase_evaluations"] == state["phase_evaluations"]
 
 
 # ── osint_node LAAJ evaluation ─────────────────────────────────────────────
@@ -227,8 +223,8 @@ class TestTriageNodeStructuredPassthrough:
 class TestOsintNodeLAAJ:
     """osint_node now includes LLM-as-a-judge evaluation and retry."""
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.orchestrator.nodes.evaluate_phase")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_returns_phase_evaluation(
         self,
@@ -236,23 +232,19 @@ class TestOsintNodeLAAJ:
         mock_eval: MagicMock,
         _mock_emit: MagicMock,
     ) -> None:
+        from langchain_core.messages import AIMessage
+
         from fackel.agents.orchestrator.nodes import osint_node
 
-        # Mock agent that returns one AI message
+        # Mock agent returning dual stream_mode=["updates", "messages"] events.
         mock_agent = MagicMock()
+        mock_agent.checkpointer = None
         mock_agent.stream.return_value = iter(
             [
-                {
-                    "agent": {
-                        "messages": [
-                            MagicMock(
-                                content="### OSINT Summary\nFound IPs.",
-                                tool_calls=None,
-                                __class__=type("AIMessage", (), {"content": "Summary"}),
-                            )
-                        ]
-                    }
-                },
+                (
+                    "updates",
+                    {"agent": {"messages": [AIMessage(content="### OSINT Summary\nFound IPs.")]}},
+                ),
             ]
         )
         mock_build.return_value = mock_agent
@@ -271,7 +263,7 @@ class TestOsintNodeLAAJ:
         mock_eval.return_value = mock_evaluation
 
         state = {"target": "example.com", "active_scan": True}
-        result = osint_node(state)
+        result = osint_node(state, {})
 
         # Should include phase_evaluations
         assert "phase_evaluations" in result
@@ -282,8 +274,8 @@ class TestOsintNodeLAAJ:
         mock_eval.assert_called_once()
         assert mock_eval.call_args[0][0] == "osint"
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.orchestrator.nodes.evaluate_phase")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_retries_on_empty_evaluation(
         self,
@@ -303,11 +295,15 @@ class TestOsintNodeLAAJ:
 
             return iter(
                 [
-                    {"agent": {"messages": [AIMessage(content="Summary pass.")]}},
+                    (
+                        "updates",
+                        {"agent": {"messages": [AIMessage(content="Summary pass.")]}},
+                    ),
                 ]
             )
 
         mock_agent = MagicMock()
+        mock_agent.checkpointer = None
         mock_agent.stream.side_effect = mock_stream
         mock_build.return_value = mock_agent
 
@@ -326,7 +322,7 @@ class TestOsintNodeLAAJ:
         mock_eval.return_value = mock_evaluation
 
         state = {"target": "example.com", "active_scan": True}
-        osint_node(state)
+        osint_node(state, {})
 
         # Agent should have been streamed twice (initial + retry)
         assert call_count == 2
@@ -337,8 +333,8 @@ class TestOsintNodeLAAJ:
         ]
         assert len(retry_events) == 1
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.orchestrator.nodes.evaluate_phase")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_no_retry_on_good_quality(
         self,
@@ -346,6 +342,8 @@ class TestOsintNodeLAAJ:
         mock_eval: MagicMock,
         _mock_emit: MagicMock,
     ) -> None:
+        from langchain_core.messages import AIMessage
+
         from fackel.agents.orchestrator.nodes import osint_node
 
         call_count = 0
@@ -353,15 +351,17 @@ class TestOsintNodeLAAJ:
         def mock_stream(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            from langchain_core.messages import AIMessage
-
             return iter(
                 [
-                    {"agent": {"messages": [AIMessage(content="Rich OSINT findings.")]}},
+                    (
+                        "updates",
+                        {"agent": {"messages": [AIMessage(content="Rich OSINT findings.")]}},
+                    ),
                 ]
             )
 
         mock_agent = MagicMock()
+        mock_agent.checkpointer = None
         mock_agent.stream.side_effect = mock_stream
         mock_build.return_value = mock_agent
 
@@ -378,13 +378,13 @@ class TestOsintNodeLAAJ:
         mock_eval.return_value = mock_evaluation
 
         state = {"target": "example.com", "active_scan": True}
-        osint_node(state)
+        osint_node(state, {})
 
         # Should only stream once — no retry
         assert call_count == 1
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.orchestrator.nodes.evaluate_phase")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_no_retry_on_partial_quality(
         self,
@@ -392,6 +392,8 @@ class TestOsintNodeLAAJ:
         mock_eval: MagicMock,
         _mock_emit: MagicMock,
     ) -> None:
+        from langchain_core.messages import AIMessage
+
         from fackel.agents.orchestrator.nodes import osint_node
 
         call_count = 0
@@ -399,15 +401,17 @@ class TestOsintNodeLAAJ:
         def mock_stream(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            from langchain_core.messages import AIMessage
-
             return iter(
                 [
-                    {"agent": {"messages": [AIMessage(content="Partial findings.")]}},
+                    (
+                        "updates",
+                        {"agent": {"messages": [AIMessage(content="Partial findings.")]}},
+                    ),
                 ]
             )
 
         mock_agent = MagicMock()
+        mock_agent.checkpointer = None
         mock_agent.stream.side_effect = mock_stream
         mock_build.return_value = mock_agent
 
@@ -424,13 +428,13 @@ class TestOsintNodeLAAJ:
         mock_eval.return_value = mock_evaluation
 
         state = {"target": "example.com", "active_scan": True}
-        osint_node(state)
+        osint_node(state, {})
 
         # Should not retry on partial
         assert call_count == 1
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.orchestrator.nodes.evaluate_phase")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_evaluation_emitted(
         self,
@@ -443,9 +447,13 @@ class TestOsintNodeLAAJ:
         from fackel.agents.orchestrator.nodes import osint_node
 
         mock_agent = MagicMock()
+        mock_agent.checkpointer = None
         mock_agent.stream.return_value = iter(
             [
-                {"agent": {"messages": [AIMessage(content="Summary.")]}},
+                (
+                    "updates",
+                    {"agent": {"messages": [AIMessage(content="Summary.")]}},
+                ),
             ]
         )
         mock_build.return_value = mock_agent
@@ -458,7 +466,7 @@ class TestOsintNodeLAAJ:
         mock_eval.return_value = mock_evaluation
 
         state = {"target": "example.com", "active_scan": True}
-        osint_node(state)
+        osint_node(state, {})
 
         # Verify evaluation event was emitted
         eval_events = [

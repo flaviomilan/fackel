@@ -7,13 +7,12 @@ comprehensive subdomain discovery in a single call.
 from __future__ import annotations
 
 import json
-import shutil
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target, run_command
+from fackel.tooling import TargetType, format_tool_output, guard_target, require_binary, run_command
 
 
 class SubfinderInput(BaseModel):
@@ -47,17 +46,9 @@ def subfinder_enum(
     search engines, and security intelligence feeds — all without
     sending traffic to the target.
     """
-    domain, err = guard_target(domain, "subfinder_enum", TargetType.DOMAIN)
-    if err:
-        return err
+    domain = guard_target(domain, "subfinder_enum", TargetType.DOMAIN)
 
-    if not shutil.which("subfinder"):
-        return format_tool_output(
-            "subfinder_enum",
-            domain,
-            "error",
-            error="subfinder not found in PATH. Install: go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
-        )
+    require_binary("subfinder", "subfinder_enum")
 
     cmd = [
         "subfinder",
@@ -75,12 +66,7 @@ def subfinder_enum(
     try:
         _code, out, _stderr = run_command(cmd, timeout=timeout + 30)
     except Exception as exc:
-        return format_tool_output(
-            "subfinder_enum",
-            domain,
-            "error",
-            error=str(exc),
-        )
+        raise ToolException(f"subfinder_enum: {exc}") from exc
 
     subdomains: list[str] = []
     sources_seen: set[str] = set()
@@ -116,3 +102,6 @@ def subfinder_enum(
             "details": details,
         },
     )
+
+
+subfinder_enum.handle_tool_error = True

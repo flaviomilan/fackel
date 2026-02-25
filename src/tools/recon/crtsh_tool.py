@@ -11,10 +11,12 @@ import time
 from typing import Any
 
 import requests
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from tools.circuit_breaker import circuit_breaker
+from tools.http_client import get_session
 
 _CRTSH_URL = "https://crt.sh/"
 _MAX_RETRIES = 2
@@ -41,10 +43,10 @@ def _fetch_crtsh(domain: str) -> requests.Response:
         if attempt:
             time.sleep(_RETRY_DELAY)
         try:
-            resp = requests.get(
+            resp = get_session().get(
                 _CRTSH_URL,
                 params={"q": f"%.{domain}", "output": "json"},
-                timeout=_TIMEOUT,
+                timeout=get_tool_timeout("crtsh_subdomain_enum", _TIMEOUT),
                 headers={"User-Agent": "Mozilla/5.0"},
             )
             resp.raise_for_status()
@@ -70,45 +72,29 @@ def crtsh_subdomain_enum(domain: str) -> dict[str, Any]:
     here — often reveals staging, internal, and forgotten subdomains.
     Free, no API key required.  Most reliable passive subdomain source.
     """
-    domain, err = guard_target(domain, "crtsh_subdomain_enum", TargetType.DOMAIN)
-    if err:
-        return err
+    domain = guard_target(domain, "crtsh_subdomain_enum", TargetType.DOMAIN)
     domain = domain.lstrip("*.")
 
-    try:
-        resp = _fetch_crtsh(domain)
-    except requests.HTTPError as exc:
-        if exc.response is not None and exc.response.status_code == 404:
-            # crt.sh returns 404 when no certificates exist for the domain.
-            return format_tool_output(
-                "crtsh_subdomain_enum",
-                domain,
-                "ok",
-                data={"count": 0, "subdomains": []},
-            )
-        return format_tool_output(
-            "crtsh_subdomain_enum",
-            domain,
-            "error",
-            error=f"crt.sh request failed: {exc}",
-        )
-    except requests.RequestException as exc:
-        return format_tool_output(
-            "crtsh_subdomain_enum",
-            domain,
-            "error",
-            error=f"crt.sh request failed: {exc}",
-        )
+    with circuit_breaker("crtsh"):
+        try:
+            resp = _fetch_crtsh(domain)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                # crt.sh returns 404 when no certificates exist for the domain.
+                return format_tool_output(
+                    "crtsh_subdomain_enum",
+                    domain,
+                    "ok",
+                    data={"count": 0, "subdomains": []},
+                )
+            raise ToolException(f"crtsh_subdomain_enum: request failed: {exc}") from exc
+        except requests.RequestException as exc:
+            raise ToolException(f"crtsh_subdomain_enum: request failed: {exc}") from exc
 
-    try:
-        entries = resp.json()
-    except ValueError:
-        return format_tool_output(
-            "crtsh_subdomain_enum",
-            domain,
-            "error",
-            error="crt.sh returned non-JSON response (service may be overloaded).",
-        )
+        try:
+            entries = resp.json()
+        except ValueError:
+            raise ToolException("crtsh_subdomain_enum: returned non-JSON response") from None
 
     subdomains: set[str] = set()
     for entry in entries:
@@ -127,3 +113,6 @@ def crtsh_subdomain_enum(domain: str) -> dict[str, Any]:
             "subdomains": sorted(subdomains),
         },
     )
+
+
+crtsh_subdomain_enum.handle_tool_error = True
