@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import shodan
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import format_tool_output, is_valid_ip, require_env
+from fackel.tooling import TargetType, format_tool_output, guard_target, is_valid_ip, require_env
 
 
 class ShodanInput(BaseModel):
@@ -33,9 +33,9 @@ def shodan_lookup(query: str) -> dict[str, Any]:
     hostnames, CVEs) or the search API for query strings.
     Requires SHODAN_API_KEY environment variable.
     """
-    api_key, env_err = require_env("SHODAN_API_KEY", "shodan_lookup", query)
-    if env_err:
-        return env_err
+    query = guard_target(query, "shodan_lookup", TargetType.HOST)
+
+    api_key = require_env("SHODAN_API_KEY", "shodan_lookup")
 
     api = shodan.Shodan(api_key)
     try:
@@ -95,9 +95,7 @@ def shodan_lookup(query: str) -> dict[str, Any]:
                 data={"total": result.get("total", 0), "matches": matches},
             )
     except Exception as e:
-        return format_tool_output(
-            "shodan_lookup",
-            query,
-            "error",
-            error=f"Shodan query failed: {e}",
-        )
+        raise ToolException(f"shodan_lookup: Shodan query failed: {e}") from e
+
+
+shodan_lookup.handle_tool_error = True

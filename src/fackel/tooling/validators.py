@@ -29,7 +29,7 @@ import re
 from enum import Enum
 from urllib.parse import urlparse
 
-from fackel.tooling.execution import format_tool_output
+from langchain_core.tools import ToolException
 
 # ── Low-level validation helpers ───────────────────────────────────────
 
@@ -89,23 +89,25 @@ def guard_target(
     value: str,
     tool_name: str,
     accept: TargetType,
-) -> tuple[str, dict | None]:
+) -> str:
     """Validate and normalise a tool target.
 
-    Returns
-    -------
-    (cleaned_value, None)
-        Validation passed.  Use *cleaned_value* going forward.
-    ("", error_dict)
-        Validation failed.  The tool should ``return error_dict``.
+    Returns the cleaned value on success.  Raises ``ToolException`` on
+    validation failure so the agent receives a clear error message.
+
+    Raises
+    ------
+    ToolException
+        When the target is empty, contains forbidden characters, or
+        does not match the expected *accept* type.
     """
 
-    def _err(msg: str) -> tuple[str, dict]:
-        return "", format_tool_output(tool_name, value, "error", error=msg)
+    def _err(msg: str) -> ToolException:
+        return ToolException(f"{tool_name}: {msg}")
 
     # ── basic sanity ────────────────────────────────────────────────
     if not value or not value.strip():
-        return _err("target is empty")
+        raise _err("target is empty")
 
     raw = value.strip()
 
@@ -113,13 +115,13 @@ def guard_target(
     if accept is TargetType.URL:
         parsed = urlparse(raw)
         if parsed.scheme not in ("http", "https"):
-            return _err(f"expected a full URL (http/https), got: {raw}")
+            raise _err(f"expected a full URL (http/https), got: {raw}")
         if not parsed.hostname:
-            return _err(f"URL has no hostname: {raw}")
+            raise _err(f"URL has no hostname: {raw}")
         host = parsed.hostname
         if _SHELL_META_RE.search(host):
-            return _err(f"target contains forbidden characters: {host!r}")
-        return raw, None
+            raise _err(f"target contains forbidden characters: {host!r}")
+        return raw
 
     # ── HOST_OR_URL: accept either scheme-based URL or bare host ────
     if accept is TargetType.HOST_OR_URL:
@@ -127,8 +129,8 @@ def guard_target(
         if parsed.scheme in ("http", "https") and parsed.hostname:
             host = parsed.hostname
             if _SHELL_META_RE.search(host):
-                return _err(f"target contains forbidden characters: {host!r}")
-            return raw, None  # keep full URL
+                raise _err(f"target contains forbidden characters: {host!r}")
+            return raw  # keep full URL
         # fall through → treat as HOST
         return guard_target(raw, tool_name, TargetType.HOST)
 
@@ -136,27 +138,27 @@ def guard_target(
     host = _extract_host(raw)
 
     if _SHELL_META_RE.search(host):
-        return _err(f"target contains forbidden characters: {host!r}")
+        raise _err(f"target contains forbidden characters: {host!r}")
 
     if accept is TargetType.DOMAIN:
         if is_valid_ip(host):
-            return _err(
+            raise _err(
                 f"{tool_name} requires a domain name, not an IP address. "
                 f"Use the domain or subdomain instead of {host}."
             )
         if not is_valid_domain(host):
-            return _err(f"invalid domain name: {host!r}")
-        return host, None
+            raise _err(f"invalid domain name: {host!r}")
+        return host
 
     if accept is TargetType.IP:
         if not is_valid_ip(host):
-            return _err(f"{tool_name} requires an IP address, got: {host!r}")
-        return host, None
+            raise _err(f"{tool_name} requires an IP address, got: {host!r}")
+        return host
 
     if accept is TargetType.HOST:
         if not is_valid_ip(host) and not is_valid_domain(host):
-            return _err(f"invalid host (not a valid IP or domain): {host!r}")
-        return host, None
+            raise _err(f"invalid host (not a valid IP or domain): {host!r}")
+        return host
 
     if accept is TargetType.HOST_PORT:
         # Accept "host", "host:port", "ip:port"
@@ -171,12 +173,12 @@ def guard_target(
                 port_part = f":{maybe_port}"
         bare = candidate.strip().rstrip(".")
         if _SHELL_META_RE.search(bare):
-            return _err(f"target contains forbidden characters: {bare!r}")
+            raise _err(f"target contains forbidden characters: {bare!r}")
         if not is_valid_ip(bare) and not is_valid_domain(bare):
-            return _err(f"invalid host (not a valid IP or domain): {bare!r}")
-        return f"{bare}{port_part}", None
+            raise _err(f"invalid host (not a valid IP or domain): {bare!r}")
+        return f"{bare}{port_part}"
 
-    return _err(f"unknown target type: {accept}")  # pragma: no cover
+    raise _err(f"unknown target type: {accept}")  # pragma: no cover
 
 
 # ── Orchestrator-facing helper ─────────────────────────────────────────

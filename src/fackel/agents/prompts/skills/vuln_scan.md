@@ -33,78 +33,46 @@ agent can flag it as an unassessed area.
 
 ## Playbook
 
-### 1. Domain nuclei scan (ALWAYS FIRST)
+> **Parallelism is critical.** Call independent tools in the same step.
+> Each numbered section below is a **single parallel batch**.
 
-`nuclei_scan(target=<domain>)` with **empty severity** (all templates). This
-is critical — many templates only work with the hostname:
+### Batch 1 — Domain scan + HTTP surface + WAF (parallel)
 
-- DNS: DMARC, SPF, DKIM, MX, nameservers, DNSSEC
-- SSL: TLS version, issuer, SANs, wildcard certs
-- HTTP-with-SNI: security headers, CSP, WAF, tech detect, GraphQL, Azure tenant
-- RDAP/WHOIS: registration dates, expiration, domain status
+Call all three simultaneously on the main domain:
+- `nuclei_scan(target=<domain>)` — all templates, empty severity.
+- `httpx_scan(domain=<domain>, ports="<port-scan ports>")` — HTTP surface.
+- `wafw00f_detect(target=<domain>)` — WAF detection.
+
+These are independent and can run in one step.
 
 > Scanning only IPs misses 80%+ of findings. DNS/SSL/HTTP-SNI templates
 > **require** the hostname.
 
-### 2. HTTP surface + WAF (on the domain)
+### Batch 2 — Web discovery (parallel)
 
-1. `httpx_scan(domain=<domain>, ports="<port-scan ports>")` — map HTTP surface.
-2. `wafw00f_detect(target=<domain>)` — use domain, not bare IPs.
-3. If wafw00f finds nothing but nuclei reported WAF, retry with `check_all=true`.
+Call both crawling tools simultaneously:
+- `katana_crawl(target=<domain>)` — spider for JS endpoints, form actions, links.
+- `feroxbuster_scan(target=<domain>)` — brute-force hidden paths, admin panels,
+  backup files.
 
-### 3. Deep-dive on findings
+> **Both complement each other** — crawling finds linked content, brute-forcing
+> finds unlinked content. Run them in parallel.
 
-Analyse nuclei results. When a finding has a matching specialist tool, use it:
+### Batch 3 — Deep-dive + TLS (parallel)
 
-| Nuclei finding              | Action                                   |
-|-----------------------------|------------------------------------------|
-| `graphql-detect`, `graphql-*` | `graphql_scan(url=<matched_at URL>)`   |
-| Tech-specific templates     | `nuclei_scan(tags="<matching tech>")`    |
+Based on Batch 1 results, call these simultaneously:
+- `testssl_scan(target=<domain>)` — deep TLS/SSL analysis when port 443 is open.
+- `graphql_scan(url=<endpoint>)` — if nuclei detected GraphQL.
+- `extract_webpage_content(url=<url>)` — for interesting pages found by nuclei.
+- Additional `nuclei_scan(tags="<tech>")` — targeted templates for detected tech.
 
-### 4. Web surface discovery
-
-Expand the known attack surface beyond what nuclei templates alone find:
-
-1. `katana_crawl(target=<domain>)` — spider the site to discover JS-defined
-   API endpoints, form actions, redirect chains, and linked resources. This
-   finds URLs that template-based scanning misses.
-2. `feroxbuster_scan(target=<domain>)` — brute-force web paths for hidden
-   admin panels, backup files (`.bak`, `.sql`, `.zip`), config endpoints, and
-   unlinked content that crawling cannot reach.
-3. Review discovered URLs — feed interesting endpoints back to nuclei with
-   targeted `tags` if they reveal new technologies.
-
-> **Order matters**: crawl first (fast, link-based), then brute-force (slower,
-> wordlist-based). Both complement each other.
-
-### 5. TLS/SSL deep analysis
-
-When port 443 (or any TLS port) is open:
-- `testssl_scan(target=<domain>)` — provides cipher-level detail that nuclei
-  SSL templates cannot match: protocol versions (SSLv3, TLS 1.0–1.3), cipher
-  suite enumeration, certificate chain validation, HSTS preload status, and
-  known vulnerabilities (Heartbleed, POODLE, BEAST, ROBOT, DROWN, Logjam).
-- Run on the **domain name** first (SNI), then on individual IPs if different
-  certificates are expected.
-- Use `checks="vulnerabilities"` for a focused scan when time is limited.
-
-### 6. Page content analysis
-
-When katana or feroxbuster discovers interesting pages (admin panels, status
-pages, API docs):
-- `extract_webpage_content(url=<url>)` — read the page content to identify
-  technologies, version strings, or sensitive information exposed.
-- Useful for login pages, error pages, or any endpoint that may leak intel.
-
-### 7. Subdomain scans
+### Batch 4 — Subdomain scans (parallel)
 
 Run `nuclei_scan(target=<subdomain>)` for each **subdomain** that resolves to
-an IP different from the main domain — they may host distinct services.
-**Do NOT** run nuclei on raw IPs; the domain-level scan already covers the web
-surface, and bare-IP scans behind CDN/proxy (e.g. Cloudflare) return nothing
-useful.
+an IP different from the main domain — batch all subdomain nuclei calls into
+one step. **Do NOT** run nuclei on raw IPs.
 
-### 8. Summary
+### 5. Summary
 
 Compile all results. Explicitly mention:
 - Technologies **investigated** with a specialist tool and what was found.

@@ -13,7 +13,15 @@ import requests
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target, require_env
+from fackel.tooling import (
+    TargetType,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+    require_env,
+)
+from tools.circuit_breaker import circuit_breaker
+from tools.http_client import get_session
 
 _BASE_URL = "https://api.securitytrails.com/v1"
 _TIMEOUT = 20
@@ -43,10 +51,10 @@ def _fetch_history(
     """
     url = f"{_BASE_URL}/history/{domain}/dns/{record_type}"
     try:
-        resp = requests.get(
+        resp = get_session().get(
             url,
             headers={"APIKEY": api_key, "Accept": "application/json"},
-            timeout=_TIMEOUT,
+            timeout=get_tool_timeout("securitytrails_history", _TIMEOUT),
         )
         resp.raise_for_status()
     except requests.RequestException as exc:
@@ -88,21 +96,13 @@ def securitytrails_history(domain: str) -> dict[str, Any]:
     detecting hosting migrations, and understanding infrastructure evolution.
     Requires SECURITYTRAILS_API_KEY environment variable (free tier: 50 queries/month).
     """
-    domain, err = guard_target(domain, "securitytrails_history", TargetType.DOMAIN)
-    if err:
-        return err
+    domain = guard_target(domain, "securitytrails_history", TargetType.DOMAIN)
+    api_key = require_env("SECURITYTRAILS_API_KEY", "securitytrails_history")
 
-    api_key, env_err = require_env(
-        "SECURITYTRAILS_API_KEY",
-        "securitytrails_history",
-        domain,
-    )
-    if env_err:
-        return env_err
-
-    a_records = _fetch_history(api_key, domain, "a")
-    mx_records = _fetch_history(api_key, domain, "mx")
-    ns_records = _fetch_history(api_key, domain, "ns")
+    with circuit_breaker("securitytrails"):
+        a_records = _fetch_history(api_key, domain, "a")
+        mx_records = _fetch_history(api_key, domain, "mx")
+        ns_records = _fetch_history(api_key, domain, "ns")
 
     return format_tool_output(
         "securitytrails_history",
@@ -114,3 +114,6 @@ def securitytrails_history(domain: str) -> dict[str, Any]:
             "ns_records": ns_records,
         },
     )
+
+
+securitytrails_history.handle_tool_error = True

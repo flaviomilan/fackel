@@ -119,13 +119,13 @@ class TestHttpxOutputParsing:
     @patch("tools.scanning.httpx_tool.run_command")
     @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
     def test_no_output_reports_stderr(self, _bin, mock_run):
-        """When httpx produces no JSON but exits 0, stderr is forwarded."""
+        """When httpx produces no JSON but exits 0, stderr is forwarded as data message."""
         mock_run.return_value = (0, "", "banner text only")
 
         result = httpx_scan.invoke({"domain": "example.com"})
 
         assert result["status"] == "ok"
-        assert result["error"] == "banner text only"
+        assert result["data"]["message"] == "banner text only"
 
     @patch("tools.scanning.httpx_tool.run_command")
     @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
@@ -136,7 +136,7 @@ class TestHttpxOutputParsing:
         result = httpx_scan.invoke({"domain": "example.com"})
 
         assert result["status"] == "ok"
-        assert "no HTTP services" in (result.get("error") or "")
+        assert "no HTTP services" in result["data"]["message"]
 
     @patch("tools.scanning.httpx_tool.run_command")
     @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
@@ -145,7 +145,7 @@ class TestHttpxOutputParsing:
 
         result = httpx_scan.invoke({"domain": "example.com"})
 
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
     def test_subprocess_exception(self, _bin):
@@ -154,13 +154,18 @@ class TestHttpxOutputParsing:
             side_effect=OSError("command not found"),
         ):
             result = httpx_scan.invoke({"domain": "example.com"})
-            assert result["status"] == "error"
+            assert isinstance(result, str)
 
     def test_binary_missing(self):
-        with patch("tools.scanning.httpx_tool.require_binary") as mock_req:
-            mock_req.return_value = {"status": "error", "error": "httpx not found"}
+        with patch(
+            "tools.scanning.httpx_tool.require_binary",
+            side_effect=__import__(
+                "langchain_core.tools", fromlist=["ToolException"]
+            ).ToolException("httpx not found in PATH"),
+        ):
             result = httpx_scan.invoke({"domain": "example.com"})
-            assert result["status"] == "error"
+            assert isinstance(result, str)
+            assert "not found" in result.lower()
 
 
 class TestHttpxInputValidation:
@@ -169,7 +174,7 @@ class TestHttpxInputValidation:
     @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
     def test_empty_domain_rejected(self, _bin):
         result = httpx_scan.invoke({"domain": ""})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
     def test_valid_ip_accepted(self, _bin):

@@ -23,7 +23,7 @@ import tempfile
 from datetime import UTC, datetime
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, guard_target
@@ -180,20 +180,13 @@ def tlscert_lookup(hostname: str, port: int = _DEFAULT_PORT) -> dict[str, Any]:
     dates, and negotiated protocol version.  Pure Python — no external
     binary required.
     """
-    hostname, err = guard_target(hostname, "tlscert_lookup", TargetType.DOMAIN)
-    if err:
-        return err
+    hostname = guard_target(hostname, "tlscert_lookup", TargetType.DOMAIN)
 
     cert, der_cert, protocol_version, verified = _connect_and_get_cert(hostname, port)
 
     if cert is None:
         # _connect_and_get_cert returns an error string in protocol_version on failure
-        return format_tool_output(
-            "tlscert_lookup",
-            hostname,
-            "error",
-            error=protocol_version,
-        )
+        raise ToolException(f"tlscert_lookup: {protocol_version}")
 
     subject = _parse_rdns(cert.get("subject", ()))
     issuer = _parse_rdns(cert.get("issuer", ()))
@@ -219,3 +212,6 @@ def tlscert_lookup(hostname: str, port: int = _DEFAULT_PORT) -> dict[str, Any]:
             "verified": verified,
         },
     )
+
+
+tlscert_lookup.handle_tool_error = True

@@ -11,13 +11,13 @@ the agent's output.  The resulting ``PhaseEvaluation`` drives:
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Literal, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
-from fackel.agents.config import get_model
+from fackel.agents.config import build_llm
 from fackel.agents.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -73,17 +73,25 @@ def evaluate_phase(
     targets: list[str],
     *,
     model_name: str | None = None,
+    config: RunnableConfig | None = None,
 ) -> PhaseEvaluation:
     """Evaluate a phase's output quality via LLM-as-a-judge.
 
     Returns a structured ``PhaseEvaluation`` that downstream nodes and
     routing functions use to adapt the pipeline.  Never raises — returns
     a safe fallback on any LLM failure.
+
+    Parameters
+    ----------
+    config:
+        Optional ``RunnableConfig`` for observability trace nesting.
     """
     try:
-        llm = ChatOpenAI(
-            model=model_name or get_model("judge"),
+        llm = build_llm(
+            "judge",
+            model_name=model_name,
             temperature=0,
+            request_timeout=30,
         )
         structured_llm = llm.with_structured_output(PhaseEvaluation)
 
@@ -93,11 +101,15 @@ def evaluate_phase(
             f"Agent output:\n{agent_summary}"
         )
 
-        result = structured_llm.invoke(
-            [
-                SystemMessage(content=load_prompt("judge")),
-                HumanMessage(content=context),
-            ]
+        result = cast(
+            PhaseEvaluation,
+            structured_llm.invoke(
+                [
+                    SystemMessage(content=load_prompt("judge")),
+                    HumanMessage(content=context),
+                ],
+                config=config,
+            ),
         )
         logger.info(
             "judge: %s → %s (score=%.1f, rec=%s)",

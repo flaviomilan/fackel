@@ -84,14 +84,21 @@ brew install nmap wafw00f whois         # macOS
 src/
 ├── fackel/
 │   ├── agents/
-│   │   ├── config.py           # get_model(), create_agent()
+│   │   ├── config.py           # build_llm(), get_model(), default_middleware()
 │   │   ├── prompts/
 │   │   │   ├── __init__.py      # Prompt loader with caching
 │   │   │   ├── soul.md          # Shared agent identity + rules
 │   │   │   └── skills/          # Per-agent skill prompts
 │   │   ├── orchestrator/       # LangGraph graph
 │   │   │   ├── graph.py        # build_graph() — node + edge wiring
-│   │   │   ├── nodes.py        # Node functions (run_osint, run_port_scan, ...)
+│   │   │   ├── nodes/           # Node functions (one file per phase)
+│   │   │   │   ├── osint.py     # osint_node(state, config)
+│   │   │   │   ├── port_scan.py # port_scan_node(state, config)
+│   │   │   │   ├── vuln_scan.py # vuln_scan_node(state, config)
+│   │   │   │   ├── triage.py    # triage_node(state, config)
+│   │   │   │   └── report_and_gates.py  # report + gate nodes
+│   │   │   ├── streaming.py    # _AgentStreamer, run_and_stream_agent()
+│   │   │   ├── extractors.py   # Post-processing helpers (IPs, subdomains)
 │   │   │   ├── state.py        # ScanState TypedDict + reducers
 │   │   │   ├── main.py         # run() entry point
 │   │   │   └── evaluator.py    # LLM-as-a-judge (PhaseEvaluation)
@@ -101,14 +108,15 @@ src/
 │   │   ├── triage/agent.py     # Triage structured output
 │   │   └── report/agent.py     # Report synthesis
 │   ├── tooling/
-│   │   ├── validators.py       # guard_target(), TargetType enum
-│   │   ├── execution.py        # run_command(), format_tool_output(), etc.
+│   │   ├── validators.py       # guard_target(), TargetType (raises ToolException)
+│   │   ├── execution.py        # run_command(), require_binary(), get_tool_timeout()
 │   │   ├── sanitizers.py       # Input sanitisation helpers
 │   │   ├── ip_classifier.py    # IP classification (CDN, cloud, hosting)
 │   │   └── ddgs.py             # DuckDuckGo search wrapper
 │   ├── provider_keys.py        # API key gating + tool filtering
 │   └── report_writer.py        # Full archival report builder
 ├── tools/
+│   ├── circuit_breaker.py      # Per-service circuit breaker for HTTP tools
 │   ├── recon/                  # 16 passive reconnaissance tools
 │   ├── osint/                  # 2 open-source intelligence tools
 │   ├── scanning/               # 7 active scanning tools
@@ -230,8 +238,9 @@ Do **not** use these words in code, comments, or documentation:
 
 ```python
 # src/tools/recon/my_new_tool.py
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
+
 from fackel.tooling import TargetType, format_tool_output, guard_target, run_command
 
 class MyNewToolInput(BaseModel):
@@ -242,17 +251,25 @@ class MyNewToolInput(BaseModel):
 @tool(args_schema=MyNewToolInput)
 def my_new_tool(target: str, timeout: int = 30) -> str:
     """One-line description shown to the LLM."""
-    # 1. Validate input
-    error = guard_target(target, TargetType.DOMAIN)
-    if error:
-        return format_tool_output("my_new_tool", error)
+    # 1. Validate input (raises ToolException on invalid target)
+    target = guard_target(target, TargetType.DOMAIN)
 
     # 2. Execute tool logic
     result = run_command(["my-binary", target, "--timeout", str(timeout)])
 
     # 3. Return standardised envelope
     return format_tool_output("my_new_tool", result)
+
+my_new_tool.handle_tool_error = True  # LLM sees clean error messages
 ```
+
+**Key patterns:**
+- `guard_target()` **raises** `ToolException` on invalid input (no tuple return).
+- `handle_tool_error = True` as attribute — LangChain converts `ToolException` into a tool message with `status="error"`, so the LLM can retry or adjust.
+- For binary tools, use `require_binary("my-binary", "my_new_tool")` to raise `ToolException` if the binary is missing.
+- For API tools, use `require_env("MY_API_KEY", "my_new_tool")` to raise `ToolException` if the env var is unset.
+- Use `get_tool_timeout("my_new_tool")` instead of hardcoded timeouts — allows override via `FACKEL_TIMEOUT_MY_NEW_TOOL`.
+- For HTTP-based tools, wrap calls in `circuit_breaker("service_name")` to auto-disable flaky APIs after 3 consecutive failures.
 
 ### 2. Wire it into an agent
 
@@ -284,8 +301,10 @@ ProviderKeySpec(
 ### Checklist
 
 - [ ] Pydantic `BaseModel` input schema with `Field(description=...)`
-- [ ] `guard_target()` as first line in function body
+- [ ] `guard_target()` as first line (raises `ToolException` on invalid input)
+- [ ] `handle_tool_error = True` attribute set on the tool function
 - [ ] `format_tool_output()` for return value (standardised envelope)
+- [ ] `get_tool_timeout()` for subprocess timeouts (allows env var override)
 - [ ] Provider key gating if API key needed
 - [ ] Tool added to agent tool list
 - [ ] Tested manually: `uv run python -c "from tools.recon.my_new_tool import my_new_tool"`
@@ -298,32 +317,49 @@ ProviderKeySpec(
 
 ```python
 # src/fackel/agents/my_agent/agent.py
-from fackel.agents.config import create_agent, get_model
+from langchain.agents import create_agent
+
+from fackel.agents.config import build_llm, default_middleware
 from fackel.provider_keys import filter_tools
 from tools.recon.tool_a import tool_a
 from tools.recon.tool_b import tool_b
 
 TOOLS = [tool_a, tool_b]
 
-def build_my_agent():
-    available_tools = filter_tools(TOOLS)
+def build(model_name: str | None = None, *, approve_tools: bool = False):
+    llm = build_llm("my_agent", model_name=model_name)
+    available, skipped = filter_tools(TOOLS)
     return create_agent(
-        model_name=get_model("MY_AGENT"),
-        tools=available_tools,
-        system_prompt="...",  # Or loaded from workspace/skills/my_agent.md
+        llm,
+        available,
+        system_prompt="...",  # Or load_prompt("my_agent")
+        middleware=default_middleware(approve_tools=approve_tools),
+        name="my_agent",
     )
 ```
 
 ### 2. Add a graph node
 
-In `src/fackel/agents/orchestrator/nodes.py`, add a node function:
+Create a file in `src/fackel/agents/orchestrator/nodes/`, e.g. `my_agent.py`:
 
 ```python
-async def run_my_agent(state: ScanState) -> dict:
-    agent = build_my_agent()
-    result = await agent.ainvoke({"messages": [...]})
+from langchain_core.runnables import RunnableConfig
+
+from fackel.agents.my_agent.agent import build
+from fackel.agents.orchestrator.state import ScanState
+from fackel.agents.orchestrator.streaming import run_and_stream_agent
+
+async def my_agent_node(state: ScanState, config: RunnableConfig) -> dict:
+    agent = build()
+    result = await run_and_stream_agent(
+        agent, state, config, agent_label="My Agent"
+    )
     return {"my_agent_output": result}
 ```
+
+Key points:
+- Node functions accept `(state, config: RunnableConfig)` — config carries LangSmith callbacks and metadata.
+- Use `run_and_stream_agent()` from `streaming.py` for consistent streaming and error handling.
 
 ### 3. Wire into the graph
 
@@ -487,6 +523,9 @@ Before submitting or approving code changes, verify:
 - [ ] Naming matches domain glossary
 - [ ] Type hints on all functions
 - [ ] `guard_target()` on all tool functions that accept targets
+- [ ] `handle_tool_error = True` attribute on all tool functions
 - [ ] `format_tool_output()` for all tool return values
+- [ ] `build_llm()` for agent model construction (never direct `ChatOpenAI`)
+- [ ] `name` parameter on all `create_agent()` calls
 
 > **If a change does not clearly improve quality, do not make it.**

@@ -14,12 +14,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     format_tool_output,
+    get_tool_timeout,
     guard_target,
     require_binary,
     run_command,
@@ -85,12 +86,9 @@ def testssl_scan(
     Use after port scanning confirms port 443 (or another TLS port) is open.
     Provides cipher-level detail that nuclei SSL templates cannot match.
     """
-    if binary_err := require_binary("testssl.sh", "testssl_scan", target):
-        return binary_err
+    require_binary("testssl.sh", "testssl_scan")
 
-    host, err = guard_target(target, "testssl_scan", TargetType.HOST_PORT)
-    if err:
-        return err
+    host = guard_target(target, "testssl_scan", TargetType.HOST_PORT)
 
     cmd = [
         "testssl.sh",
@@ -119,14 +117,9 @@ def testssl_scan(
     cmd.append(host)
 
     try:
-        _code, out, _stderr = run_command(cmd, timeout=_TIMEOUT)
+        _code, out, _stderr = run_command(cmd, timeout=get_tool_timeout("testssl_scan", _TIMEOUT))
     except Exception as exc:
-        return format_tool_output(
-            "testssl_scan",
-            target,
-            "error",
-            error=str(exc),
-        )
+        raise ToolException(f"testssl_scan: {exc}") from exc
 
     # Parse JSON output (testssl.sh outputs a JSON array to stdout with --jsonfile=-).
     findings: list[dict[str, Any]] = []
@@ -134,7 +127,7 @@ def testssl_scan(
     # Validate and normalise severity filter.
     severity, sev_err = sanitize_severity(severity)
     if sev_err:
-        return format_tool_output("testssl_scan", target, "error", error=sev_err)
+        raise ToolException(f"testssl_scan: {sev_err}")
 
     severity_filter = {s.strip() for s in severity.split(",") if s.strip()} if severity else set()
 
@@ -198,3 +191,6 @@ def testssl_scan(
             },
         },
     )
+
+
+testssl_scan.handle_tool_error = True

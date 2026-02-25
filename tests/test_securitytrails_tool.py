@@ -75,8 +75,9 @@ class TestSecurityTrailsHappyPath:
     """Successful SecurityTrails API responses."""
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.requests.get")
-    def test_returns_all_record_types(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.securitytrails_tool.get_session")
+    def test_returns_all_record_types(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         # Three sequential calls: A, MX, NS
         mock_get.side_effect = [
             _ok_response(_A_HISTORY),
@@ -106,8 +107,9 @@ class TestSecurityTrailsHappyPath:
         assert data["ns_records"][0]["value"] == "ns1.cloudflare.com"
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.requests.get")
-    def test_passes_api_key_in_header(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.securitytrails_tool.get_session")
+    def test_passes_api_key_in_header(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"records": []})
 
         securitytrails_history.invoke({"domain": "example.com"})
@@ -117,8 +119,9 @@ class TestSecurityTrailsHappyPath:
             assert call.kwargs["headers"]["APIKEY"] == "test-key-123"
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.requests.get")
-    def test_empty_records(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.securitytrails_tool.get_session")
+    def test_empty_records(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"records": []})
 
         result = securitytrails_history.invoke({"domain": "example.com"})
@@ -129,9 +132,10 @@ class TestSecurityTrailsHappyPath:
         assert result["data"]["ns_records"] == []
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.requests.get")
-    def test_strips_trailing_dot(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.securitytrails_tool.get_session")
+    def test_strips_trailing_dot(self, mock_gs: MagicMock) -> None:
         """Nameservers/hosts with trailing dots are normalised."""
+        mock_get = mock_gs.return_value.get
         mock_get.side_effect = [
             _ok_response({"records": []}),
             _ok_response({"records": []}),
@@ -156,9 +160,10 @@ class TestSecurityTrailsErrors:
     """Error handling."""
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.requests.get")
-    def test_partial_failure_still_returns_ok(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.securitytrails_tool.get_session")
+    def test_partial_failure_still_returns_ok(self, mock_gs: MagicMock) -> None:
         """If one record type fails, others still succeed."""
+        mock_get = mock_gs.return_value.get
         mock_get.side_effect = [
             _error_response(429),  # A records rate-limited
             _ok_response(_MX_HISTORY),
@@ -183,8 +188,8 @@ class TestSecurityTrailsErrors:
         original = os.environ.pop("SECURITYTRAILS_API_KEY", None)
         try:
             result = securitytrails_history.invoke({"domain": "example.com"})
-            assert result["status"] == "error"
-            assert "SECURITYTRAILS_API_KEY" in result["error"]
+            assert isinstance(result, str)
+            assert "SECURITYTRAILS_API_KEY" in result
         finally:
             if original is not None:
                 os.environ["SECURITYTRAILS_API_KEY"] = original
@@ -196,14 +201,14 @@ class TestSecurityTrailsValidation:
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
     def test_rejects_ip_address(self) -> None:
         result = securitytrails_history.invoke({"domain": "1.2.3.4"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
     def test_rejects_empty_domain(self) -> None:
         result = securitytrails_history.invoke({"domain": ""})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
     def test_rejects_shell_metacharacters(self) -> None:
         result = securitytrails_history.invoke({"domain": "example.com; rm -rf /"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)

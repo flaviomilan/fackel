@@ -47,109 +47,68 @@ via httpx for tech stack, server headers, WAF detection, and redirect analysis.
 
 ## Playbook
 
-1. **DNS** — `dns_resolve` to discover IPv4 + IPv6 addresses.
-2. **WHOIS** — `whois_lookup` for registrar, creation/expiration dates,
-   nameservers. Reveals hosting provider and domain age.
-3. **Subdomain enumeration** — run **all available** tools for maximum coverage:
-   - `subfinder_enum` — aggregates 40+ passive sources (SecurityTrails, Censys,
-     crt.sh, etc.) in a single call. Most comprehensive subdomain discovery.
-   - `crtsh_subdomain_enum` — Certificate Transparency logs. Most reliable
-     passive subdomain source. Free, no API key. Reveals subdomains that
-     ever had TLS certificates — including staging, internal, and forgotten hosts.
-   - `dnsdumpster_lookup` — free, no API key, also returns DNS/MX/NS/TXT
-     records and hosting provider info alongside subdomains.
-   - `virustotal_subdomain_enum` — if API key available, reveals subdomains from
-     VT's global passive DNS dataset.
-   - If one fails (API key missing, rate limit, timeout), report and continue
-     with the others. **Never skip all subdomain tools because one failed.**
-   - Subdomains expand the attack surface — every discovered host is a potential
-     target for later phases.
-4. **Reverse DNS** — `reverse_dns_lookup` with each **unique IPv4** discovered
-   (from dns_resolve and from subdomain results).
-   - Returns PTR hostname (who owns the IP block) and other domains sharing
-     that IP (shared hosting / virtual hosts).
-   - Critical for detecting multi-tenant environments — one compromised
-     neighbour affects all tenants.
-   - One call per unique IPv4.
-5. **IP classification** — `ipinfo_lookup` with each **unique IPv4** discovered.
-   - Returns organisation (ASN owner), AS number, city, country, and anycast flag.
-   - Reveals whether an IP belongs to a CDN (Cloudflare, Akamai, Fastly),
-     cloud provider (AWS, GCP, Azure), ISP, or the target's own infrastructure.
-   - One call per unique IPv4 — do not skip this step.
-   - Optionally supplement with `bgp_lookup` for richer BGP context
-     (CIDR prefix, RIR allocation, ASN description). Especially useful when
-     ipinfo returns a generic org name.
-   - Report the classification for each IP in the output.
-6. **Shodan / Censys** — `shodan_lookup` and/or `censys_lookup` with each
-   **IPv4** discovered. Returns org, ISP, open ports, banners, hostnames,
-   known CVEs. Pure passive data.
-   - Only call if dns_resolve returned IPs.
-   - If API key error, skip and note it.
-   - One call per IPv4 — each IP may belong to a different org.
-   - Censys complements Shodan with different scan coverage — use both when
-     available.
-7. **HTTP fingerprinting** — `httpx_scan` on the **main domain** and up to
-   **5 interesting subdomains** (www, api, app, admin, staging, etc.).
-   - Returns HTTP status code, page title, server header, detected technologies
-     (frameworks, CMSs, CDN), redirect chain, and TLS info.
-   - Use `tech_detect=true` (default) for technology fingerprinting.
-   - If ports were discovered by Shodan/Censys, pass them via the `ports`
-     parameter (e.g. `ports="80,443,8080,8443"`).
-   - This is the **primary source of technology intelligence** — reveals
-     web frameworks, CMS platforms, load balancers, reverse proxies, and WAFs.
-   - One call per target host (main domain + selected subdomains).
-   - Do NOT skip this step — tech fingerprints drive downstream vulnerability
-     scanning priorities.
-8. **TLS certificate inspection** — `tlscert_lookup` on the **main domain** and
-   up to **5 interesting subdomains** (same hosts used for httpx_scan).
-   - Returns subject CN, issuer, SAN domains, SHA-256 fingerprint, validity
-     dates, and negotiated TLS protocol version.
-   - **SANs are a high-value subdomain source** — certificates often cover
-     staging, internal, and wildcard hosts not found by other tools.
-   - If multiple hosts share the same certificate fingerprint, note it
-     (shared certificate = same infrastructure / load balancer).
-   - One call per target host. Default port is 443; if Shodan/Censys revealed
-     other TLS ports (8443, 4443), pass them via the `port` parameter.
-   - Skip hosts where httpx_scan showed no HTTPS (HTTP-only).
-9. **Historical DNS** — `securitytrails_history` on the **main domain**.
-   - Returns historical A, MX, and NS records with first-seen / last-seen
-     timestamps and organisation names.
-   - **Key goal: find old A-record IPs** — if the domain was previously hosted
-     directly (without CDN), those old IPs may still be live and accepting
-     connections, bypassing Cloudflare / Akamai / etc.
-   - Compare historical A-record IPs against current IPs. Highlight any that
-     differ — these are **direct-origin candidates**.
-   - Historical MX records reveal previous email providers.
-   - Historical NS records reveal previous DNS providers and migrations.
-   - Only for domain targets, not bare IPs.  Requires API key.
-   - If the API key is unavailable, skip and note it.
-10. **Urlscan.io** — `urlscan_search` on the **main domain**.
-   - Returns cached community scan results — URLs, resolved IPs, server
-     headers, page titles, and protocol stats from previous scans.
-   - Especially useful for discovering JS endpoints, third-party resources,
-     and page structure without touching the target directly.
-   - Free, no API key required. One call per domain.
-   - If no results found, skip and note it.
-11. **AlienVault OTX** — `otx_passive_dns` on the **main domain**.
-   - Returns community-sourced passive DNS records — historical IP
-     resolutions (A/AAAA/CNAME) with first-seen / last-seen timestamps.
-   - Complements SecurityTrails with broader coverage from OTX's global
-     threat intelligence platform.
-   - Only for domain targets, not bare IPs.  Requires API key.
-   - If the API key is unavailable, skip and note it.
-12. **Tech stack via job postings** — `job_search` with the **company/org name**
-   (from WHOIS registrant org, or the domain's SLD). Reveals internal tech
-   stack, cloud providers, frameworks, and tools from public job listings.
-   - Only for domain targets, not bare IPs.
-   - One call per organisation name.
-13. **Email analysis** — `analyze_email` when an email address is discovered
-   in WHOIS, DNS SOA, or other OSINT output. Checks breach exposure, reputation,
-   and service registrations.
-   - Only call with actual email addresses found during the scan.
-   - Do not fabricate email addresses to test.
-14. If the target is already an **IP**, skip DNS, subdomain enum, historical
-   DNS, Urlscan, OTX, and job search but run WHOIS, reverse DNS, ipinfo,
-   httpx, tlscert, and Shodan/Censys.
+> **Parallelism is critical.** Group independent calls into batches. Each
+> numbered step below runs as a **single parallel batch** unless noted.
+
+### Batch 1 — DNS + WHOIS (parallel)
+
+Call both simultaneously — they are independent:
+- `dns_resolve(target)` — discover IPv4 + IPv6 addresses.
+- `whois_lookup(domain)` — registrar, creation/expiration dates, nameservers.
+
+### Batch 2 — Subdomain enumeration (parallel)
+
+Call **all available** subdomain tools in one batch:
+- `subfinder_enum(domain, all_sources=true)` — aggregates 40+ passive sources.
+- `crtsh_subdomain_enum(domain)` — Certificate Transparency logs.
+- `dnsdumpster_lookup(domain)` — DNS/MX/NS/TXT records + subdomains.
+- `virustotal_subdomain_enum(domain)` — if API key available.
+
+If one fails (API key missing, rate limit, timeout), the others still return.
+**Never skip all subdomain tools because one failed.**
+
+### Batch 3 — Per-IP enrichment (parallel, all IPs at once)
+
+For each **unique IPv4** from Batch 1, call all three in a single batch:
+- `reverse_dns_lookup(ip)` — PTR + shared hosting detection.
+- `ipinfo_lookup(ip)` — geolocation, ASN, org, anycast flag.
+- `bgp_lookup(ip)` — ASN holder, CIDR prefix, RIR allocation.
+
+**Example with 2 IPs:** call all 6 functions in ONE step:
+`reverse_dns_lookup(ip1)` + `reverse_dns_lookup(ip2)` +
+`ipinfo_lookup(ip1)` + `ipinfo_lookup(ip2)` +
+`bgp_lookup(ip1)` + `bgp_lookup(ip2)`.
+
+### Batch 4 — Shodan + Censys (parallel, per IP)
+
+Call `shodan_lookup(ip)` and `censys_lookup(ip)` for all IPs in one batch
+(if API keys available). Pure passive data — no contact with target.
+
+### Batch 5 — HTTP + TLS + historical (parallel)
+
+Call these simultaneously on the **main domain**:
+- `httpx_scan(domain, tech_detect=true)` — technology fingerprinting.
+- `tlscert_lookup(hostname)` — certificate metadata + SAN subdomain discovery.
+- `securitytrails_history(domain)` — historical A/MX/NS records (if API key).
+- `urlscan_search(domain)` — cached community scan results.
+- `otx_passive_dns(domain)` — passive DNS from AlienVault OTX (if API key).
+
+### Batch 6 — Tech stack + email (parallel, if applicable)
+
+- `job_search(company_name)` — job postings for tech stack intelligence.
+- `analyze_email(email)` — only if email addresses were discovered.
+
+### Batch 7 — Subdomain deep-dive (parallel)
+
+For up to **5 interesting subdomains** (www, api, app, admin, staging):
+- `httpx_scan(subdomain)` + `tlscert_lookup(subdomain)` in one batch per sub.
+- Batch all subdomain calls together (up to 10 calls in one step).
+
+### 14. IP-only target
+
+If the target is already an **IP**, skip DNS, subdomain enum, historical
+DNS, Urlscan, OTX, and job search but run WHOIS, reverse DNS, ipinfo,
+httpx, tlscert, and Shodan/Censys.
 
 ## Output Format
 

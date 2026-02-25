@@ -11,8 +11,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from fackel.formatting import PHASE_LABELS, PHASE_ORDER, find_evaluation, is_ipv6
 
-def build_full_report(state: dict) -> str:
+
+def build_full_report(state: dict[str, Any]) -> str:
     """Build a comprehensive Markdown document from the completed scan state.
 
     Parameters
@@ -44,8 +46,8 @@ def build_full_report(state: dict) -> str:
     sections.append(f"| **Target** | `{target}` |")
     sections.append(f"| **Date** | {now} |")
     sections.append(f"| **Active Scan** | {'Yes' if active_scan else 'No'} |")
-    sections.append(f"| **IPv4 Discovered** | {len([ip for ip in ips if ':' not in ip])} |")
-    sections.append(f"| **IPv6 Discovered** | {len([ip for ip in ips if ':' in ip])} |")
+    sections.append(f"| **IPv4 Discovered** | {len([ip for ip in ips if not is_ipv6(ip)])} |")
+    sections.append(f"| **IPv6 Discovered** | {len([ip for ip in ips if is_ipv6(ip)])} |")
     sections.append(f"| **Subdomains Discovered** | {len(subdomains)} |")
     sections.append("")
 
@@ -54,17 +56,10 @@ def build_full_report(state: dict) -> str:
     sections.append("1. [Executive Summary](#1-executive-summary)")
     sections.append("2. [Discovered Assets](#2-discovered-assets)")
     toc_idx = 3
-    phase_order = ["osint", "port_scan", "vuln_scan", "triage"]
-    phase_labels = {
-        "osint": "OSINT",
-        "port_scan": "Port Scan",
-        "vuln_scan": "Vulnerability Scan",
-        "triage": "Triage",
-    }
-    for phase in phase_order:
+    for phase in PHASE_ORDER:
         phase_findings = [f for f in findings if f.get("phase") == phase]
         if phase_findings:
-            label = phase_labels.get(phase, phase)
+            label = PHASE_LABELS.get(phase, phase)
             anchor = f"{toc_idx}-{label.lower().replace(' ', '-')}"
             sections.append(f"{toc_idx}. [{label}](#{anchor})")
             toc_idx += 1
@@ -102,7 +97,7 @@ def build_full_report(state: dict) -> str:
         sections.append("| IP Address | Type |")
         sections.append("|------------|------|")
         for ip in ips:
-            ip_type = "IPv6" if ":" in ip else "IPv4"
+            ip_type = "IPv6" if is_ipv6(ip) else "IPv4"
             sections.append(f"| `{ip}` | {ip_type} |")
     else:
         sections.append("_No IP addresses discovered._")
@@ -118,12 +113,12 @@ def build_full_report(state: dict) -> str:
 
     # ── Phase findings (verbatim) ──────────────────────────────────────
     section_idx = 3
-    for phase in phase_order:
+    for phase in PHASE_ORDER:
         phase_findings = [f for f in findings if f.get("phase") == phase]
         if not phase_findings:
             continue
 
-        label = phase_labels.get(phase, phase)
+        label = PHASE_LABELS.get(phase, phase)
         sections.append("---\n")
         sections.append(f"## {section_idx}. {label}\n")
 
@@ -144,7 +139,7 @@ def build_full_report(state: dict) -> str:
             sections.append("")
 
         # Append evaluation inline if available for this phase.
-        phase_eval = _find_evaluation(evaluations, phase)
+        phase_eval = find_evaluation(evaluations, phase)
         if phase_eval:
             sections.append(f"### {label} — Quality Assessment\n")
             sections.append(_format_evaluation(phase_eval))
@@ -160,7 +155,7 @@ def build_full_report(state: dict) -> str:
         sections.append("|-------|-------------|-------|----------------|")
         for ev in evaluations:
             if not isinstance(ev, dict):
-                continue
+                continue  # type: ignore[unreachable]
             phase = ev.get("phase", "?")
             completeness = ev.get("completeness", "?")
             try:
@@ -173,7 +168,7 @@ def build_full_report(state: dict) -> str:
 
         for ev in evaluations:
             if not isinstance(ev, dict):
-                continue
+                continue  # type: ignore[unreachable]
             sections.append(f"### {ev.get('phase', '?')}\n")
             sections.append(_format_evaluation(ev))
             sections.append("")
@@ -188,7 +183,7 @@ def build_full_report(state: dict) -> str:
         sections.append("|-----------|-------------|--------|----------------|")
         for area in unassessed:
             if not isinstance(area, dict):
-                continue
+                continue  # type: ignore[unreachable]
             tech = area.get("technology", "?")
             detected = area.get("detected_by", "?")
             reason = area.get("reason", "")
@@ -240,14 +235,6 @@ def _extract_section(markdown: str, heading: str) -> str | None:
 
     text = "\n".join(captured).strip()
     return text if text else None
-
-
-def _find_evaluation(evaluations: list[dict[str, Any]], phase: str) -> dict[str, Any] | None:
-    """Find the latest evaluation dict for a given phase."""
-    for ev in reversed(evaluations):
-        if isinstance(ev, dict) and ev.get("phase") == phase:
-            return ev
-    return None
 
 
 def _format_evaluation(ev: dict[str, Any]) -> str:

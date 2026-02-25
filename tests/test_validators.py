@@ -1,6 +1,7 @@
 """Tests for tool input validation — guard_target() and TargetType."""
 
 import pytest
+from langchain_core.tools import ToolException
 
 from fackel.tooling import TargetType, guard_target
 
@@ -20,28 +21,22 @@ class TestGuardTargetDomain:
         ],
     )
     def test_valid_domains(self, value: str) -> None:
-        cleaned, err = guard_target(value, "test_tool", TargetType.DOMAIN)
-        assert err is None
-        assert cleaned == value
+        assert guard_target(value, "test_tool", TargetType.DOMAIN) == value
 
     def test_strips_whitespace(self) -> None:
-        cleaned, err = guard_target("  example.com  ", "test_tool", TargetType.DOMAIN)
-        assert err is None
-        assert cleaned == "example.com"
+        assert guard_target("  example.com  ", "test_tool", TargetType.DOMAIN) == "example.com"
 
     def test_rejects_ip_address(self) -> None:
-        _, err = guard_target("192.168.1.1", "test_tool", TargetType.DOMAIN)
-        assert err is not None
-        assert err["status"] == "error"
+        with pytest.raises(ToolException):
+            guard_target("192.168.1.1", "test_tool", TargetType.DOMAIN)
 
     def test_rejects_empty(self) -> None:
-        _, err = guard_target("", "test_tool", TargetType.DOMAIN)
-        assert err is not None
-        assert "empty" in err["error"]
+        with pytest.raises(ToolException, match="empty"):
+            guard_target("", "test_tool", TargetType.DOMAIN)
 
     def test_rejects_whitespace_only(self) -> None:
-        _, err = guard_target("   ", "test_tool", TargetType.DOMAIN)
-        assert err is not None
+        with pytest.raises(ToolException):
+            guard_target("   ", "test_tool", TargetType.DOMAIN)
 
     @pytest.mark.parametrize(
         "value",
@@ -54,9 +49,8 @@ class TestGuardTargetDomain:
         ],
     )
     def test_rejects_shell_metacharacters(self, value: str) -> None:
-        _, err = guard_target(value, "test_tool", TargetType.DOMAIN)
-        assert err is not None
-        assert err["status"] == "error"
+        with pytest.raises(ToolException):
+            guard_target(value, "test_tool", TargetType.DOMAIN)
 
 
 # ── TargetType.IP ──────────────────────────────────────────────────────
@@ -76,14 +70,11 @@ class TestGuardTargetIP:
         ],
     )
     def test_valid_ips(self, value: str) -> None:
-        cleaned, err = guard_target(value, "test_tool", TargetType.IP)
-        assert err is None
-        assert cleaned == value
+        assert guard_target(value, "test_tool", TargetType.IP) == value
 
     def test_rejects_domain(self) -> None:
-        _, err = guard_target("example.com", "test_tool", TargetType.IP)
-        assert err is not None
-        assert err["status"] == "error"
+        with pytest.raises(ToolException):
+            guard_target("example.com", "test_tool", TargetType.IP)
 
 
 # ── TargetType.HOST ────────────────────────────────────────────────────
@@ -93,18 +84,14 @@ class TestGuardTargetHost:
     """guard_target with TargetType.HOST — domain or IP."""
 
     def test_accepts_domain(self) -> None:
-        cleaned, err = guard_target("example.com", "test_tool", TargetType.HOST)
-        assert err is None
-        assert cleaned == "example.com"
+        assert guard_target("example.com", "test_tool", TargetType.HOST) == "example.com"
 
     def test_accepts_ip(self) -> None:
-        cleaned, err = guard_target("10.0.0.1", "test_tool", TargetType.HOST)
-        assert err is None
-        assert cleaned == "10.0.0.1"
+        assert guard_target("10.0.0.1", "test_tool", TargetType.HOST) == "10.0.0.1"
 
     def test_rejects_garbage(self) -> None:
-        _, err = guard_target("not a valid host!!!", "test_tool", TargetType.HOST)
-        assert err is not None
+        with pytest.raises(ToolException):
+            guard_target("not a valid host!!!", "test_tool", TargetType.HOST)
 
 
 # ── TargetType.URL ─────────────────────────────────────────────────────
@@ -122,14 +109,11 @@ class TestGuardTargetURL:
         ],
     )
     def test_valid_urls(self, value: str) -> None:
-        cleaned, err = guard_target(value, "test_tool", TargetType.URL)
-        assert err is None
-        assert cleaned == value
+        assert guard_target(value, "test_tool", TargetType.URL) == value
 
     def test_rejects_bare_domain(self) -> None:
-        _, err = guard_target("example.com", "test_tool", TargetType.URL)
-        assert err is not None
-        assert "http" in err["error"].lower()
+        with pytest.raises(ToolException, match=r"(?i)http"):
+            guard_target("example.com", "test_tool", TargetType.URL)
 
 
 # ── TargetType.HOST_OR_URL ─────────────────────────────────────────────
@@ -139,16 +123,13 @@ class TestGuardTargetHostOrURL:
     """guard_target with TargetType.HOST_OR_URL."""
 
     def test_accepts_url(self) -> None:
-        cleaned, err = guard_target("https://example.com", "test_tool", TargetType.HOST_OR_URL)
-        assert err is None
-        assert cleaned == "https://example.com"
+        assert (
+            guard_target("https://example.com", "test_tool", TargetType.HOST_OR_URL)
+            == "https://example.com"
+        )
 
     def test_accepts_domain(self) -> None:
-        cleaned, err = guard_target("example.com", "test_tool", TargetType.HOST_OR_URL)
-        assert err is None
-        assert cleaned == "example.com"
+        assert guard_target("example.com", "test_tool", TargetType.HOST_OR_URL) == "example.com"
 
     def test_accepts_ip(self) -> None:
-        cleaned, err = guard_target("10.0.0.1", "test_tool", TargetType.HOST_OR_URL)
-        assert err is None
-        assert cleaned == "10.0.0.1"
+        assert guard_target("10.0.0.1", "test_tool", TargetType.HOST_OR_URL) == "10.0.0.1"

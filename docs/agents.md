@@ -24,25 +24,41 @@ what tools it has, what prompt drives it, and how it fits into the pipeline.
 All ReAct agents follow the same construction pattern:
 
 ```python
-from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
 
-from fackel.agents.config import get_model
+from fackel.agents.config import build_llm, default_middleware
 from fackel.agents.prompts import load_prompt
+from fackel.provider_keys import filter_tools
 
-def build(model_name: str | None = None) -> CompiledStateGraph:
-    llm = ChatOpenAI(model=model_name or get_model("agent_name"))
-    prompt = load_prompt("skill_name")
+def build(model_name: str | None = None, *, approve_tools: bool = False) -> CompiledStateGraph:
+    llm = build_llm("agent_name", model_name=model_name)
     tools = [tool_a, tool_b, ...]
     available, skipped = filter_tools(tools)
-    return create_react_agent(llm, available, prompt=prompt)
+    return create_agent(
+        llm,
+        available,
+        system_prompt=load_prompt("skill_name"),
+        middleware=default_middleware(approve_tools=approve_tools),
+        checkpointer=MemorySaver() if approve_tools else None,
+        name="agent_name",
+    )
 ```
 
 Key points:
-- **Model selection** — `get_model("agent_name")` reads `FACKEL_MODEL_{AGENT_NAME}` env var, falls back to `gpt-5-mini`.
+- **Model factory** — `build_llm("agent_name")` centralises model creation with `ChatOpenAI`, reads `FACKEL_MODEL_{AGENT_NAME}` env var, falls back to `gpt-5-mini`, and applies a standard timeout.
 - **Prompt composition** — `load_prompt()` combines `soul.md` (shared identity) with `skills/<name>.md` (task-specific).
 - **Tool filtering** — `filter_tools()` removes tools whose API keys are missing.
-- **ReAct loop** — LangGraph's `create_react_agent` implements the full Think → Act → Observe cycle.
+- **Agent naming** — `name="agent_name"` gives each agent an identifiable name in LangSmith traces.
+- **ReAct loop** — `create_agent` implements the full Think → Act → Observe cycle.
+- **Error handling** — all tools raise `ToolException` on errors with `handle_tool_error = True`, so the LLM sees clean error messages as tool results.
+- **Circuit breaker** — HTTP-based tools are wrapped in per-service circuit breakers that disable flaky APIs after 3 consecutive failures.
+- **Middleware stack** — `default_middleware()` applies:
+  - **ParallelToolCalls** — injects `parallel_tool_calls=True` so independent tools execute concurrently.
+  - **ToolRetryMiddleware** — retries transient network errors (ConnectionError, TimeoutError, OSError) with exponential backoff.
+  - **HumanInTheLoopMiddleware** *(opt-in)* — when `approve_tools=True`, interrupts before active scanning tools for per-call human approval.
+- **Streaming** — agents use dual `stream_mode=["updates", "messages"]` for reliable message collection and real-time token streaming via `_AgentStreamer` in `streaming.py`.
+- **RunnableConfig propagation** — orchestrator config (callbacks, metadata, tags) is forwarded to inner agents for nested LangSmith traces.
+- **Structured output** — the triage agent uses `response_format=TriageResult` for typed responses.
 
 ---
 
@@ -102,7 +118,7 @@ without sending any probe packets.
 
 ### Node post-processing
 
-After the agent completes, `osint_node` in `nodes.py`:
+After the agent completes, `osint_node` in `nodes/osint.py`:
 
 - **Extracts IPs** from `dns_resolve`, `dnsdumpster_lookup`, and `shodan_lookup` tool results
 - **Extracts subdomains** from `crtsh_subdomain_enum`, `virustotal_subdomain_enum`, `subfinder_enum`, and `dnsdumpster_lookup`
@@ -202,9 +218,10 @@ adequately assessed, and flag coverage gaps.
 
 **Model env var:** `FACKEL_MODEL_TRIAGE`
 
-### Type: structured LLM output (no tools)
+### Type: `create_agent` with `response_format` (no tools)
 
-Uses `ChatOpenAI.with_structured_output(TriageResult)` for deterministic schema.
+Uses `create_agent(llm, [], response_format=TriageResult, name="triage")` for
+structured output. The typed result is accessed via `result["structured_response"]`.
 
 ### Output model
 
@@ -215,9 +232,15 @@ class UnassessedArea(BaseModel):
     reason: str          # Why it wasn't assessed
     recommendation: str  # What should be done
 
+class RiskScore(BaseModel):
+    score: float         # 0-10 exposure risk score
+    exposure_type: str   # critical / high / moderate / low / minimal
+    factors: list[str]   # Evidence-backed risk factors
+
 class TriageResult(BaseModel):
     technologies_detected: list[str]
     unassessed_areas: list[UnassessedArea]
+    risk_score: RiskScore
     summary: str
 ```
 

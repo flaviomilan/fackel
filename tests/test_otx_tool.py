@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
+from tools.circuit_breaker import reset_all as reset_circuits
 from tools.recon.otx_tool import otx_passive_dns
 
 
@@ -60,8 +61,9 @@ class TestOtxPassiveDnsHappyPath:
     """Successful OTX API responses."""
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.requests.get")
-    def test_returns_parsed_records(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.otx_tool.get_session")
+    def test_returns_parsed_records(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response(_PASSIVE_DNS_RESPONSE)
 
         result = otx_passive_dns.invoke({"domain": "example.com"})
@@ -81,8 +83,9 @@ class TestOtxPassiveDnsHappyPath:
         assert first["asn"] == "AS15133"
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.requests.get")
-    def test_passes_api_key_in_header(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.otx_tool.get_session")
+    def test_passes_api_key_in_header(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"passive_dns": []})
 
         otx_passive_dns.invoke({"domain": "example.com"})
@@ -91,8 +94,9 @@ class TestOtxPassiveDnsHappyPath:
         assert call_args.kwargs["headers"]["X-OTX-API-KEY"] == "test-otx-key"
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.requests.get")
-    def test_empty_records(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.otx_tool.get_session")
+    def test_empty_records(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"passive_dns": []})
 
         result = otx_passive_dns.invoke({"domain": "example.com"})
@@ -102,9 +106,10 @@ class TestOtxPassiveDnsHappyPath:
         assert result["data"]["records"] == []
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.requests.get")
-    def test_deduplicates_records(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.otx_tool.get_session")
+    def test_deduplicates_records(self, mock_gs: MagicMock) -> None:
         """Duplicate (address, record_type, hostname) combos are filtered."""
+        mock_get = mock_gs.return_value.get
         duped = {
             "passive_dns": [
                 {
@@ -135,19 +140,27 @@ class TestOtxPassiveDnsHappyPath:
 class TestOtxPassiveDnsErrors:
     """Error handling."""
 
+    def setup_method(self) -> None:
+        reset_circuits()
+
+    def teardown_method(self) -> None:
+        reset_circuits()
+
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.requests.get")
-    def test_http_error(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.otx_tool.get_session")
+    def test_http_error(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.HTTPError("403 Forbidden")
 
         result = otx_passive_dns.invoke({"domain": "example.com"})
 
-        assert result["status"] == "error"
-        assert "403" in result["error"]
+        assert isinstance(result, str)
+        assert "403" in result
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.requests.get")
-    def test_non_json_response(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.otx_tool.get_session")
+    def test_non_json_response(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         resp = MagicMock(spec=requests.Response)
         resp.raise_for_status.return_value = None
         resp.json.side_effect = ValueError("No JSON")
@@ -155,16 +168,16 @@ class TestOtxPassiveDnsErrors:
 
         result = otx_passive_dns.invoke({"domain": "example.com"})
 
-        assert result["status"] == "error"
-        assert "non-JSON" in result["error"]
+        assert isinstance(result, str)
+        assert "non-json" in result.lower()
 
     def test_missing_api_key(self) -> None:
         """Returns error when OTX_API_KEY is not set."""
         original = os.environ.pop("OTX_API_KEY", None)
         try:
             result = otx_passive_dns.invoke({"domain": "example.com"})
-            assert result["status"] == "error"
-            assert "OTX_API_KEY" in result["error"]
+            assert isinstance(result, str)
+            assert "OTX_API_KEY" in result
         finally:
             if original is not None:
                 os.environ["OTX_API_KEY"] = original
@@ -176,14 +189,14 @@ class TestOtxPassiveDnsValidation:
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
     def test_rejects_ip_address(self) -> None:
         result = otx_passive_dns.invoke({"domain": "1.2.3.4"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
     def test_rejects_empty_domain(self) -> None:
         result = otx_passive_dns.invoke({"domain": ""})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
     def test_rejects_shell_metacharacters(self) -> None:
         result = otx_passive_dns.invoke({"domain": "example.com; rm -rf /"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)

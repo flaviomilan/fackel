@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
+from tools.circuit_breaker import reset_all as reset_circuits
 from tools.recon.urlscan_tool import urlscan_search
 
 
@@ -78,8 +79,9 @@ _SEARCH_RESPONSE = {
 class TestUrlscanSearchHappyPath:
     """Successful Urlscan.io search responses."""
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_returns_parsed_results(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_returns_parsed_results(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response(_SEARCH_RESPONSE)
 
         result = urlscan_search.invoke({"domain": "example.com"})
@@ -98,8 +100,9 @@ class TestUrlscanSearchHappyPath:
         assert first["title"] == "Example Domain"
         assert first["technologies"] == ["h2", "TLSv1.3"]
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_passes_correct_query_params(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_passes_correct_query_params(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"total": 0, "results": []})
 
         urlscan_search.invoke({"domain": "example.com"})
@@ -108,8 +111,9 @@ class TestUrlscanSearchHappyPath:
         assert call_args.kwargs["params"]["q"] == "domain:example.com"
         assert call_args.kwargs["params"]["size"] == 10
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_empty_results(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_empty_results(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"total": 0, "results": []})
 
         result = urlscan_search.invoke({"domain": "example.com"})
@@ -118,9 +122,10 @@ class TestUrlscanSearchHappyPath:
         assert result["data"]["total"] == 0
         assert result["data"]["results"] == []
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_caps_at_max_results(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_caps_at_max_results(self, mock_gs: MagicMock) -> None:
         """Even if API returns more than 10, we cap at _MAX_RESULTS."""
+        mock_get = mock_gs.return_value.get
         many_results = {
             "total": 100,
             "results": [
@@ -138,9 +143,10 @@ class TestUrlscanSearchHappyPath:
 
         assert len(result["data"]["results"]) == 10
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_handles_missing_fields_gracefully(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_handles_missing_fields_gracefully(self, mock_gs: MagicMock) -> None:
         """Missing fields produce empty strings, not KeyErrors."""
+        mock_get = mock_gs.return_value.get
         sparse = {
             "total": 1,
             "results": [{"page": {}, "task": {}, "stats": {}}],
@@ -159,26 +165,35 @@ class TestUrlscanSearchHappyPath:
 class TestUrlscanSearchErrors:
     """Error handling."""
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_http_error(self, mock_get: MagicMock) -> None:
+    def setup_method(self) -> None:
+        reset_circuits()
+
+    def teardown_method(self) -> None:
+        reset_circuits()
+
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_http_error(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.HTTPError("429 Too Many Requests")
 
         result = urlscan_search.invoke({"domain": "example.com"})
 
-        assert result["status"] == "error"
-        assert "429" in result["error"]
+        assert isinstance(result, str)
+        assert "429" in result
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_connection_error(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_connection_error(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.ConnectionError("Connection refused")
 
         result = urlscan_search.invoke({"domain": "example.com"})
 
-        assert result["status"] == "error"
-        assert "Connection refused" in result["error"]
+        assert isinstance(result, str)
+        assert "Connection refused" in result
 
-    @patch("tools.recon.urlscan_tool.requests.get")
-    def test_non_json_response(self, mock_get: MagicMock) -> None:
+    @patch("tools.recon.urlscan_tool.get_session")
+    def test_non_json_response(self, mock_gs: MagicMock) -> None:
+        mock_get = mock_gs.return_value.get
         resp = MagicMock(spec=requests.Response)
         resp.raise_for_status.return_value = None
         resp.json.side_effect = ValueError("No JSON")
@@ -186,8 +201,8 @@ class TestUrlscanSearchErrors:
 
         result = urlscan_search.invoke({"domain": "example.com"})
 
-        assert result["status"] == "error"
-        assert "non-JSON" in result["error"]
+        assert isinstance(result, str)
+        assert "non-json" in result.lower()
 
 
 class TestUrlscanSearchValidation:
@@ -195,12 +210,12 @@ class TestUrlscanSearchValidation:
 
     def test_rejects_ip_address(self) -> None:
         result = urlscan_search.invoke({"domain": "1.2.3.4"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     def test_rejects_empty_domain(self) -> None:
         result = urlscan_search.invoke({"domain": ""})
-        assert result["status"] == "error"
+        assert isinstance(result, str)
 
     def test_rejects_shell_metacharacters(self) -> None:
         result = urlscan_search.invoke({"domain": "example.com; rm -rf /"})
-        assert result["status"] == "error"
+        assert isinstance(result, str)

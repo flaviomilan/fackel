@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import DDGS, format_tool_output
@@ -27,19 +27,9 @@ def job_search(company_name: str) -> dict[str, Any]:
     """
     company_name = company_name.strip()
     if not company_name:
-        return format_tool_output(
-            "job_search",
-            company_name,
-            "error",
-            error="company name is empty",
-        )
+        raise ToolException("job_search: company name is empty")
     if DDGS is None:
-        return format_tool_output(
-            "job_search",
-            company_name,
-            "error",
-            error="ddgs not installed. pip install ddgs",
-        )
+        raise ToolException("job_search: duckduckgo-search not installed")
     try:
         with DDGS() as ddgs:
             query = (
@@ -82,10 +72,8 @@ def job_search(company_name: str) -> dict[str, Any]:
                 "ok",
                 data={"results": job_posts},
             )
-    except Exception as e:
-        return format_tool_output(
-            "job_search",
-            company_name,
-            "error",
-            error=f"Job search failed: {e}",
-        )
+    except Exception as exc:
+        raise ToolException(f"job_search: {exc}") from exc
+
+
+job_search.handle_tool_error = True

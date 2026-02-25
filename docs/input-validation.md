@@ -7,7 +7,8 @@ arguments, URLs where bare hosts are expected).
 
 Prompt-level instructions ("do NOT pass IPs") are insufficient because models
 ignore them under pressure. `guard_target()` enforces constraints in code,
-returning structured error messages that the LLM sees and can self-correct from.
+**raising `ToolException`** with clear error messages that the LLM sees as tool
+results and can self-correct from.
 
 ---
 
@@ -42,14 +43,15 @@ During real scans, the following was observed:
    unvalidated inputs could lead to command injection.
 
 The solution: every tool validates its input **at the function level** before any
-processing happens. Invalid inputs return a clean error dict that the LLM sees in
-the observation, learns from, and retries correctly.
+processing happens. Invalid inputs raise a `ToolException` that LangChain
+converts into a tool message with `status="error"`, which the LLM reads, learns
+from, and retries correctly.
 
 ### Design decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Return `(value, error)` tuple, not exception | Compatible with LangChain tool error propagation — the LLM sees the error as a tool result |
+| Raise `ToolException`, not return tuple | `handle_tool_error = True` lets LangChain convert exceptions into tool messages — the LLM sees a clean error as a tool observation, eliminating all `if err: return err` boilerplate |
 | Shell metacharacter regex on all types | Security hardening — even if a domain looks valid, `example.com; rm -rf /` must be rejected |
 | `_extract_host()` strips URL scheme | Tools that accept HOST may receive `https://example.com` — we extract the bare hostname before validation |
 | `HOST_OR_URL` falls through to `HOST` validation for bare inputs | Avoids duplicating validation logic |
@@ -89,7 +91,7 @@ def guard_target(
     value: str,
     tool_name: str,
     accept: TargetType,
-) -> tuple[str, dict | None]:
+) -> str:
 ```
 
 ### Parameters
@@ -100,14 +102,18 @@ def guard_target(
 | `tool_name` | `str` | Tool name (used in error messages) |
 | `accept` | `TargetType` | What kind of target this tool accepts |
 
-### Return value
+### Return value / exceptions
 
-| Case | Returns | Action |
-|------|---------|--------|
-| Valid input | `(cleaned_value, None)` | Use `cleaned_value` going forward |
-| Invalid input | `("", error_dict)` | Tool should `return error_dict` immediately |
+| Case | Behaviour |
+|------|-----------|
+| Valid input | Returns the cleaned string (stripped, hostname extracted where applicable) |
+| Invalid input | Raises `ToolException` with a descriptive error message |
 
-The `cleaned_value` is stripped of whitespace. For `HOST_OR_URL` and `URL`
+Because all tools set `handle_tool_error = True`, LangChain intercepts the
+`ToolException` and converts it into a tool message with `status="error"`. The
+LLM sees the error text as the tool's observation and can self-correct.
+
+The cleaned value is stripped of whitespace. For `HOST_OR_URL` and `URL`
 types, the full URL is preserved. For `HOST`, `DOMAIN`, and `IP`, only the bare
 hostname/IP is returned (URL scheme and path are stripped).
 
@@ -115,20 +121,24 @@ hostname/IP is returned (URL scheme and path are stripped).
 
 ## Usage pattern
 
-Every tool that accepts a target uses this 3-line pattern at the top of its body:
+Every tool that accepts a target uses this pattern at the top of its body:
 
 ```python
+from langchain_core.tools import ToolException, tool
+
 @tool(args_schema=MyInput)
-def my_tool(target: str) -> dict:
+def my_tool(target: str) -> str:
     """My tool docstring — LLM reads this."""
-    target, err = guard_target(target, "my_tool", TargetType.DOMAIN)
-    if err:
-        return err
+    target = guard_target(target, "my_tool", TargetType.DOMAIN)
 
     # ... proceed safely with validated 'target' ...
+
+my_tool.handle_tool_error = True
 ```
 
-This is uniform across all 20 target-accepting tools.
+`guard_target()` either returns the cleaned value or raises `ToolException`.
+No explicit error checking is needed — the exception propagates automatically.
+This pattern is uniform across all 20+ target-accepting tools.
 
 ---
 
@@ -243,16 +253,20 @@ passes validation — the `&` in the URL query is not part of the hostname.
 
 ## Error format
 
-When validation fails, `guard_target()` returns a standard error dict via
-`format_tool_output()`:
+When validation fails, `guard_target()` raises `ToolException` with a
+descriptive message:
 
 ```python
+ToolException("nuclei_scan: nuclei_scan requires a domain name, not an IP address. Use the domain or subdomain instead of 1.2.3.4.")
+```
+
+With `handle_tool_error = True`, LangChain converts this into a tool message:
+
+```json
 {
-    "tool": "nuclei_scan",
-    "target": "1.2.3.4",
-    "status": "error",
-    "data": None,
-    "error": "nuclei_scan requires a domain name, not an IP address. Use the domain or subdomain instead of 1.2.3.4."
+  "role": "tool",
+  "content": "nuclei_scan: nuclei_scan requires a domain name, not an IP address. Use the domain or subdomain instead of 1.2.3.4.",
+  "status": "error"
 }
 ```
 
@@ -291,15 +305,17 @@ When creating a new tool, add validation in 3 steps:
 ### 2. Import and call `guard_target`
 
 ```python
+from langchain_core.tools import ToolException, tool
+
 from fackel.tooling import TargetType, guard_target
 
 @tool(args_schema=MyInput)
-def my_tool(target: str) -> dict:
+def my_tool(target: str) -> str:
     """Docstring for the LLM."""
-    target, err = guard_target(target, "my_tool", TargetType.DOMAIN)
-    if err:
-        return err
+    target = guard_target(target, "my_tool", TargetType.DOMAIN)
     # ... safe to proceed
+
+my_tool.handle_tool_error = True
 ```
 
 ### 3. For HOST_OR_URL tools that need a URL
@@ -308,9 +324,7 @@ If your tool wraps a binary that requires a URL, add scheme auto-prepending
 after the guard:
 
 ```python
-target, err = guard_target(target, "my_tool", TargetType.HOST_OR_URL)
-if err:
-    return err
+target = guard_target(target, "my_tool", TargetType.HOST_OR_URL)
 
 if not target.startswith(("http://", "https://")):
     target = f"https://{target}"

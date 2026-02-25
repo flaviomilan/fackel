@@ -116,11 +116,11 @@ class TestTriageResultWithRisk:
 class TestRunTriageFallback:
     """run_triage returns a valid fallback with risk_score on LLM failure."""
 
-    @patch("fackel.agents.triage.agent.ChatOpenAI")
-    def test_fallback_includes_risk_score(self, mock_llm_cls: MagicMock) -> None:
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.invoke.side_effect = RuntimeError("LLM down")
-        mock_llm_cls.return_value = mock_llm
+    @patch("fackel.agents.triage.agent.build")
+    def test_fallback_includes_risk_score(self, mock_build: MagicMock) -> None:
+        mock_agent = MagicMock()
+        mock_agent.invoke.side_effect = RuntimeError("LLM down")
+        mock_build.return_value = mock_agent
 
         result = run_triage([{"phase": "osint", "title": "Test", "detail": "data"}])
 
@@ -136,10 +136,10 @@ class TestRunTriageFallback:
 class TestTriageNodeRiskExtraction:
     """triage_node extracts risk_score into state dict."""
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.triage.agent.ChatOpenAI")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.triage.agent.run_triage")
     def test_triage_node_returns_risk_score(
-        self, mock_llm_cls: MagicMock, _mock_emit: MagicMock
+        self, mock_run_triage: MagicMock, _mock_emit: MagicMock
     ) -> None:
         from fackel.agents.orchestrator.nodes import triage_node
 
@@ -153,9 +153,7 @@ class TestTriageNodeRiskExtraction:
             ),
             summary="High exposure.",
         )
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.invoke.return_value = mock_result
-        mock_llm_cls.return_value = mock_llm
+        mock_run_triage.return_value = mock_result
 
         state = {
             "target": "example.com",
@@ -163,7 +161,7 @@ class TestTriageNodeRiskExtraction:
             "findings": [{"phase": "osint", "title": "DNS", "detail": "data"}],
         }
 
-        result = triage_node(state)
+        result = triage_node(state, {})
 
         assert "risk_score" in result
         risk = result["risk_score"]
@@ -171,10 +169,10 @@ class TestTriageNodeRiskExtraction:
         assert risk["exposure_type"] == "high"
         assert len(risk["factors"]) == 2
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.triage.agent.ChatOpenAI")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.triage.agent.run_triage")
     def test_triage_node_emits_risk_events(
-        self, mock_llm_cls: MagicMock, mock_emit: MagicMock
+        self, mock_run_triage: MagicMock, mock_emit: MagicMock
     ) -> None:
         from fackel.agents.orchestrator.nodes import triage_node
 
@@ -184,12 +182,10 @@ class TestTriageNodeRiskExtraction:
             risk_score=RiskScore(score=2.0, exposure_type="minimal", factors=[]),
             summary="Minimal exposure.",
         )
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.invoke.return_value = mock_result
-        mock_llm_cls.return_value = mock_llm
+        mock_run_triage.return_value = mock_result
 
         state = {"target": "example.com", "active_scan": False, "findings": []}
-        triage_node(state)
+        triage_node(state, {})
 
         # Check "done" event carries risk info
         done_calls = [c for c in mock_emit.call_args_list if c.args[1] == "done"]
@@ -198,10 +194,10 @@ class TestTriageNodeRiskExtraction:
         assert done_data["risk_score"] == 2.0
         assert done_data["risk_exposure_type"] == "minimal"
 
-    @patch("fackel.agents.orchestrator.nodes._emit")
-    @patch("fackel.agents.triage.agent.ChatOpenAI")
+    @patch("fackel.agents.orchestrator.streaming.emit")
+    @patch("fackel.agents.triage.agent.run_triage")
     def test_triage_detail_includes_risk(
-        self, mock_llm_cls: MagicMock, _mock_emit: MagicMock
+        self, mock_run_triage: MagicMock, _mock_emit: MagicMock
     ) -> None:
         from fackel.agents.orchestrator.nodes import triage_node
 
@@ -215,12 +211,10 @@ class TestTriageNodeRiskExtraction:
             ),
             summary="Moderate risk.",
         )
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.invoke.return_value = mock_result
-        mock_llm_cls.return_value = mock_llm
+        mock_run_triage.return_value = mock_result
 
         state = {"target": "example.com", "active_scan": True, "findings": []}
-        result = triage_node(state)
+        result = triage_node(state, {})
 
         finding = result["findings"][0]
         assert "4.5/10" in finding["detail"]
@@ -234,15 +228,15 @@ class TestTriageNodeRiskExtraction:
 class TestReportRiskScorePassthrough:
     """generate_report correctly injects risk_score into LLM context."""
 
-    @patch("fackel.agents.report.agent.ChatOpenAI")
-    def test_risk_score_in_llm_prompt(self, mock_llm_cls: MagicMock) -> None:
+    @patch("fackel.agents.report.agent.build_llm")
+    def test_risk_score_in_llm_prompt(self, mock_build_llm: MagicMock) -> None:
         from fackel.agents.report.agent import generate_report
 
         mock_response = MagicMock()
         mock_response.content = "# Report\nWith risk score."
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = mock_response
-        mock_llm_cls.return_value = mock_llm
+        mock_build_llm.return_value = mock_llm
 
         risk = {"score": 7.2, "exposure_type": "high", "factors": ["Direct IP (+2.0)"]}
 
@@ -261,15 +255,15 @@ class TestReportRiskScorePassthrough:
         assert "Direct IP (+2.0)" in human_msg
         assert result == "# Report\nWith risk score."
 
-    @patch("fackel.agents.report.agent.ChatOpenAI")
-    def test_no_risk_score_omits_section(self, mock_llm_cls: MagicMock) -> None:
+    @patch("fackel.agents.report.agent.build_llm")
+    def test_no_risk_score_omits_section(self, mock_build_llm: MagicMock) -> None:
         from fackel.agents.report.agent import generate_report
 
         mock_response = MagicMock()
         mock_response.content = "# Report"
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = mock_response
-        mock_llm_cls.return_value = mock_llm
+        mock_build_llm.return_value = mock_llm
 
         generate_report(
             target="example.com",
@@ -282,15 +276,15 @@ class TestReportRiskScorePassthrough:
         human_msg = call_args[1].content
         assert "Exposure Risk Score" not in human_msg
 
-    @patch("fackel.agents.report.agent.ChatOpenAI")
-    def test_empty_factors_still_shows_score(self, mock_llm_cls: MagicMock) -> None:
+    @patch("fackel.agents.report.agent.build_llm")
+    def test_empty_factors_still_shows_score(self, mock_build_llm: MagicMock) -> None:
         from fackel.agents.report.agent import generate_report
 
         mock_response = MagicMock()
         mock_response.content = "# Report"
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = mock_response
-        mock_llm_cls.return_value = mock_llm
+        mock_build_llm.return_value = mock_llm
 
         risk = {"score": 1.0, "exposure_type": "minimal", "factors": []}
 

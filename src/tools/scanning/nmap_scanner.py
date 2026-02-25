@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 import nmap
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
@@ -158,6 +158,147 @@ class NmapInput(BaseModel):
 _VALID_SCAN_TYPES = frozenset({"default", "quick", "deep"})
 
 
+def _build_scan_args(
+    scan_type: str,
+    ports: str,
+    skip_host_discovery: bool,
+) -> list[str]:
+    """Build nmap CLI arguments from scan parameters."""
+    if scan_type == "quick":
+        args = [
+            "-sV",
+            "--version-intensity",
+            "5",
+            "-T4",
+            "--max-retries",
+            "2",
+            "--host-timeout",
+            "5m",
+        ]
+    elif scan_type == "deep":
+        args = [
+            "-sV",
+            "--version-intensity",
+            "9",
+            "-sC",
+            "--script",
+            "vulners,vuln",
+            "-T3",
+            "--max-retries",
+            "3",
+            "--host-timeout",
+            "20m",
+        ]
+        if not ports.strip():
+            args.append("-p-")
+    else:  # default
+        args = [
+            "-sV",
+            "--version-intensity",
+            "7",
+            "-sC",
+            "--script",
+            "vulners,vuln",
+            "-T4",
+            "--max-retries",
+            "2",
+            "--host-timeout",
+            "10m",
+        ]
+
+    if ports.strip():
+        args.extend(["-p", ports.strip()])
+    if skip_host_discovery:
+        args.append("-Pn")
+    if _is_root():
+        args.extend(["-O", "--osscan-guess"])
+
+    return args
+
+
+def _parse_services(nm: Any, target: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Parse per-port service entries and summary counters from nmap results."""
+    services: list[dict[str, Any]] = []
+    open_ports = 0
+    filtered_ports = 0
+    total_vulns = 0
+
+    for proto in nm[target].all_protocols():
+        for port in sorted(nm[target][proto].keys()):
+            service = nm[target][proto][port]
+            state = service.get("state", "unknown")
+
+            if state == "open":
+                open_ports += 1
+            elif state == "filtered":
+                filtered_ports += 1
+
+            vulnerabilities = _extract_vulnerabilities(service)
+            total_vulns += len(vulnerabilities)
+
+            entry: dict[str, Any] = {
+                "port": port,
+                "protocol": proto,
+                "state": state,
+                "service": service.get("name", "unknown"),
+                "product": service.get("product", ""),
+                "version": service.get("version", ""),
+                "extrainfo": service.get("extrainfo", ""),
+                "cpe": service.get("cpe", ""),
+                "vulnerabilities": vulnerabilities,
+                "scripts": {},
+            }
+
+            if "script" in service:
+                for script_name, script_output in service["script"].items():
+                    if script_name not in ["vulners", "vulscan"]:
+                        entry["scripts"][script_name] = script_output[:500]
+
+            services.append(entry)
+
+    summary = {
+        "total_ports_scanned": len(services),
+        "open_ports": open_ports,
+        "filtered_ports": filtered_ports,
+        "total_vulnerabilities": total_vulns,
+    }
+    return services, summary
+
+
+def _build_scan_result(nm: Any, target: str) -> dict[str, Any]:
+    """Assemble the structured scan result dict from nmap output."""
+    result: dict[str, Any] = {
+        "target": target,
+        "state": nm[target].state(),
+        "hostnames": [],
+        "addresses": {},
+        "os_info": _parse_os_info(nm, target),
+        "host_scripts": _parse_hostscript(nm, target),
+        "services": [],
+        "summary": {},
+    }
+
+    if "hostnames" in nm[target]:
+        for hostname_entry in nm[target]["hostnames"]:
+            if hostname_entry.get("name"):
+                result["hostnames"].append(
+                    {
+                        "name": hostname_entry["name"],
+                        "type": hostname_entry.get("type", "unknown"),
+                    }
+                )
+
+    if "addresses" in nm[target]:
+        result["addresses"] = nm[target]["addresses"]
+
+    services, summary = _parse_services(nm, target)
+    result["services"] = services
+    summary["os_detected"] = len(result["os_info"].get("os_matches", [])) > 0
+    result["summary"] = summary
+
+    return result
+
+
 @tool(args_schema=NmapInput)
 def nmap_port_scan(
     host: str,
@@ -171,204 +312,46 @@ def nmap_port_scan(
     Use for depth analysis after naabu has identified open ports.  Combines
     service version detection, default scripts, and vulnerability scanning.
     """
-    target, err = guard_target(host, "nmap_port_scan", TargetType.HOST)
-    if err:
-        return err
+    target = guard_target(host, "nmap_port_scan", TargetType.HOST)
 
-    if binary_err := require_binary("nmap", "nmap_port_scan", host):
-        return binary_err
+    require_binary("nmap", "nmap_port_scan")
 
     if scan_type not in _VALID_SCAN_TYPES:
-        return format_tool_output(
-            "nmap_port_scan",
-            host,
-            "error",
-            error=f"invalid scan_type {scan_type!r} — allowed: {', '.join(sorted(_VALID_SCAN_TYPES))}",
+        raise ToolException(
+            f"nmap_port_scan: invalid scan_type {scan_type!r} — allowed: {', '.join(sorted(_VALID_SCAN_TYPES))}"
         )
 
     ports, ports_err = sanitize_ports(ports)
     if ports_err:
-        return format_tool_output("nmap_port_scan", host, "error", error=ports_err)
+        raise ToolException(f"nmap_port_scan: {ports_err}")
 
     try:
         nm = nmap.PortScanner()
-
-        # Build arguments based on scan_type
-        if scan_type == "quick":
-            args = [
-                "-sV",
-                "--version-intensity",
-                "5",
-                "-T4",
-                "--max-retries",
-                "2",
-                "--host-timeout",
-                "5m",
-            ]
-        elif scan_type == "deep":
-            args = [
-                "-sV",
-                "--version-intensity",
-                "9",
-                "-sC",
-                "--script",
-                "vulners,vuln",
-                "-T3",
-                "--max-retries",
-                "3",
-                "--host-timeout",
-                "20m",
-            ]
-            if not ports.strip():
-                args.extend(["-p-"])  # all 65535 ports
-        else:  # default
-            args = [
-                "-sV",
-                "--version-intensity",
-                "7",
-                "-sC",
-                "--script",
-                "vulners,vuln",
-                "-T4",
-                "--max-retries",
-                "2",
-                "--host-timeout",
-                "10m",
-            ]
-
-        # Add custom port range if specified (overrides deep -p-)
-        if ports.strip():
-            args.extend(["-p", ports.strip()])
-
-        # Skip host discovery if requested
-        if skip_host_discovery:
-            args.append("-Pn")
-
-        # Add OS detection if running with privileges
-        if _is_root():
-            args.extend(["-O", "--osscan-guess"])
-
-        arguments = " ".join(args)
-
+        arguments = " ".join(_build_scan_args(scan_type, ports, skip_host_discovery))
         nm.scan(hosts=target, arguments=arguments)
 
         if not nm.all_hosts():
-            return format_tool_output(
-                "nmap_port_scan",
-                host,
-                "error",
-                error="Host may be down or not responding. Try with -Pn to skip host discovery.",
+            raise ToolException(
+                "nmap_port_scan: Host may be down or not responding. Try with -Pn to skip host discovery."
             )
-
-        scan_result = {
-            "target": target,
-            "state": nm[target].state(),
-            "hostnames": [],
-            "addresses": {},
-            "os_info": {},
-            "host_scripts": {},
-            "services": [],
-            "summary": {},
-        }
-
-        # Extract hostnames
-        if "hostnames" in nm[target]:
-            for hostname_entry in nm[target]["hostnames"]:
-                if hostname_entry.get("name"):
-                    scan_result["hostnames"].append(
-                        {
-                            "name": hostname_entry["name"],
-                            "type": hostname_entry.get("type", "unknown"),
-                        }
-                    )
-
-        # Extract addresses
-        if "addresses" in nm[target]:
-            scan_result["addresses"] = nm[target]["addresses"]
-
-        # Extract OS information (if available)
-        scan_result["os_info"] = _parse_os_info(nm, target)
-
-        # Extract host-level scripts
-        scan_result["host_scripts"] = _parse_hostscript(nm, target)
-
-        # Extract service information
-        open_ports = 0
-        filtered_ports = 0
-        total_vulns = 0
-
-        for proto in nm[target].all_protocols():
-            for port in sorted(nm[target][proto].keys()):
-                service = nm[target][proto][port]
-                state = service.get("state", "unknown")
-
-                if state == "open":
-                    open_ports += 1
-                elif state == "filtered":
-                    filtered_ports += 1
-
-                # Extract vulnerabilities
-                vulnerabilities = _extract_vulnerabilities(service)
-                total_vulns += len(vulnerabilities)
-
-                entry = {
-                    "port": port,
-                    "protocol": proto,
-                    "state": state,
-                    "service": service.get("name", "unknown"),
-                    "product": service.get("product", ""),
-                    "version": service.get("version", ""),
-                    "extrainfo": service.get("extrainfo", ""),
-                    "cpe": service.get("cpe", ""),  # Common Platform Enumeration
-                    "vulnerabilities": vulnerabilities,
-                    "scripts": {},
-                }
-
-                # Extract non-vulnerability script results
-                if "script" in service:
-                    for script_name, script_output in service["script"].items():
-                        # Skip vuln scripts (already processed)
-                        if script_name not in ["vulners", "vulscan"]:
-                            entry["scripts"][script_name] = script_output[
-                                :500
-                            ]  # Truncate to 500 chars
-
-                scan_result["services"].append(entry)
-
-        # Add summary statistics
-        scan_result["summary"] = {
-            "total_ports_scanned": len(scan_result["services"]),
-            "open_ports": open_ports,
-            "filtered_ports": filtered_ports,
-            "total_vulnerabilities": total_vulns,
-            "os_detected": len(scan_result["os_info"].get("os_matches", [])) > 0,
-        }
 
         return format_tool_output(
             "nmap_port_scan",
             host,
             "ok",
-            data=scan_result,
+            data=_build_scan_result(nm, target),
         )
 
     except nmap.PortScannerError as e:
-        return format_tool_output(
-            "nmap_port_scan",
-            host,
-            "error",
-            error=f"Nmap execution error: {e}. Ensure Nmap is installed and accessible.",
-        )
+        raise ToolException(
+            f"nmap_port_scan: Nmap execution error: {e}. Ensure Nmap is installed and accessible."
+        ) from e
     except KeyError:
-        return format_tool_output(
-            "nmap_port_scan",
-            host,
-            "error",
-            error=f"Target {target} not found in scan results. Host may be down.",
-        )
+        raise ToolException(
+            f"nmap_port_scan: Target {target} not found in scan results. Host may be down."
+        ) from None
     except Exception as e:
-        return format_tool_output(
-            "nmap_port_scan",
-            host,
-            "error",
-            error=f"Unexpected error: {e}",
-        )
+        raise ToolException(f"nmap_port_scan: Unexpected error: {e}") from e
+
+
+nmap_port_scan.handle_tool_error = True

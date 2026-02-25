@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     format_tool_output,
+    get_tool_timeout,
     guard_target,
     parse_jsonl,
     require_binary,
@@ -38,12 +39,9 @@ def katana_crawl(target: str) -> dict[str, Any]:
     Uses ProjectDiscovery's katana to spider HTML, JavaScript, and API
     responses.  Complements feroxbuster with link-based discovery.
     """
-    if err := require_binary("katana", "katana_crawl", target):
-        return err
+    require_binary("katana", "katana_crawl")
 
-    target, verr = guard_target(target, "katana_crawl", TargetType.HOST_OR_URL)
-    if verr:
-        return verr
+    target = guard_target(target, "katana_crawl", TargetType.HOST_OR_URL)
 
     # katana needs a URL; if guard_target returned a bare host, add scheme
     if not target.startswith(("http://", "https://")):
@@ -61,9 +59,9 @@ def katana_crawl(target: str) -> dict[str, Any]:
         "120s",
     ]
     try:
-        code, out, stderr = run_command(cmd, timeout=_TIMEOUT)
+        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("katana_crawl", _TIMEOUT))
     except Exception as exc:
-        return format_tool_output("katana_crawl", target, "error", error=str(exc))
+        raise ToolException(f"katana_crawl: {exc}") from exc
 
     urls: list[str] = []
     for data in parse_jsonl(out):
@@ -77,11 +75,13 @@ def katana_crawl(target: str) -> dict[str, Any]:
             urls.append(url)
 
     if not urls:
+        if code:
+            raise ToolException(f"katana_crawl: {stderr or 'scan failed'}")
         return format_tool_output(
             "katana_crawl",
             target,
-            "error" if code else "ok",
-            error=stderr or "no results",
+            "ok",
+            data={"urls": [], "message": stderr or "no results"},
         )
 
     return format_tool_output(
@@ -90,3 +90,6 @@ def katana_crawl(target: str) -> dict[str, Any]:
         "ok",
         data={"urls": sorted(set(urls))},
     )
+
+
+katana_crawl.handle_tool_error = True

@@ -23,23 +23,28 @@ on those ports.
 
 ## Playbook
 
-1. **IPs first** — `naabu_scan` per unique IPv4 with `top_ports="1000"`.
-2. **Subdomains that add coverage** — If subdomains are listed, consider that
-   many may resolve to the same IP as the main domain or as each other.
-   Only scan a subdomain if it **might** resolve to a different server.
-   Subdomains behind a CDN (Cloudflare / AWS) often share IPs — skip duplicates.
-3. **Collect** — Merge all open ports found across hosts.
-4. **Depth with service detection** — `nmap_port_scan` per IP with `ports`
-   set to naabu's results (e.g. `ports="80,443,8080,8443"`). **Always** use
-   `scan_type="default"` (includes `-sV` version detection and `-sC` default
-   scripts) unless you have a specific reason to change it.
-5. **Interesting-port script scans** — For web ports (80, 443, 8080, 8443,
-   3000, 3443, 9090), nmap's default scripts already probe HTTP headers,
-   TLS certs, and common misconfigurations. For admin panels or management
-   ports, use `scan_type="deep"` to run extended vulners/vuln scripts.
-6. If naabu finds nothing, try `nmap_port_scan` with `skip_host_discovery=true`.
-7. Behind a CDN → `skip_cdn=true` on naabu.
-8. Scan each IP **individually** for clear attribution.
+> **Parallelism is critical.** When scanning multiple IPs, call tools on all
+> IPs simultaneously in a single batch.
+
+### Batch 1 — Naabu discovery (parallel, all IPs at once)
+
+Call `naabu_scan` for **all** IPv4 addresses in one step:
+- `naabu_scan(host=ip1, top_ports="1000")` + `naabu_scan(host=ip2, top_ports="1000")` + ...
+- Each call is independent — batch them all.
+- Behind a CDN → `skip_cdn=true`.
+
+### Batch 2 — Nmap deep scan (parallel, all IPs at once)
+
+After naabu results arrive, call `nmap_port_scan` for all IPs in one step:
+- `nmap_port_scan(host=ip1, ports="<naabu_ports>")` + `nmap_port_scan(host=ip2, ports="<naabu_ports>")` + ...
+- **Always** use `scan_type="default"` (includes `-sV` + `-sC`).
+- If naabu found nothing on an IP, try `nmap_port_scan(host=ip, skip_host_discovery=true)`.
+
+### Subdomains
+
+Only scan a subdomain if it **might** resolve to a different server.
+Subdomains behind a CDN (Cloudflare / AWS) often share IPs — skip duplicates.
+Batch any subdomain scans together with IP scans in the same step.
 
 ## Service Version Detection
 

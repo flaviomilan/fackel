@@ -66,7 +66,7 @@ class ScanState(TypedDict):
     tech_fingerprints: Annotated[list[dict[str, Any]], add]
     """HTTP tech fingerprints per target (server, technologies, CDN, WAF)."""
 
-    risk_score: dict
+    risk_score: dict[str, Any]
     """Exposure risk score: {score, exposure_type, factors}."""
 
     report: str

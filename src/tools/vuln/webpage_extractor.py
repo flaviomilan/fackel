@@ -6,10 +6,12 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from tools.circuit_breaker import circuit_breaker
+from tools.http_client import get_session
 
 _MAX_CONTENT_LENGTH = 2000
 _TIMEOUT = 10  # seconds
@@ -50,30 +52,35 @@ def extract_webpage_content(url: str) -> dict[str, Any]:
     Useful for reading page content to identify technologies, organisation info,
     or intel from discovered web endpoints.
     """
-    url, err = guard_target(url, "extract_webpage_content", TargetType.URL)
-    if err:
-        return err
+    url = guard_target(url, "extract_webpage_content", TargetType.URL)
 
     try:
-        resp = requests.get(url, headers=_SESSION_HEADERS, timeout=_TIMEOUT)
-        resp.raise_for_status()
-
-        content_type = resp.headers.get("content-type", "").lower()
-        if "text/html" not in content_type:
-            return format_tool_output(
-                "extract_webpage_content",
+        with circuit_breaker("webpage"):
+            resp = get_session().get(
                 url,
-                "error",
-                error=f"content is not HTML: {content_type}",
+                headers=_SESSION_HEADERS,
+                timeout=get_tool_timeout("extract_webpage_content", _TIMEOUT),
+            )
+            resp.raise_for_status()
+
+            content_type = resp.headers.get("content-type", "").lower()
+            if "text/html" not in content_type:
+                raise ToolException(f"extract_webpage_content: content is not HTML: {content_type}")
+
+            content = _extract_text(resp.text)
+            if len(content) > _MAX_CONTENT_LENGTH:
+                content = content[:_MAX_CONTENT_LENGTH] + "... (truncated)"
+
+            return format_tool_output(
+                "extract_webpage_content", url, "ok", data={"content": content}
             )
 
-        content = _extract_text(resp.text)
-        if len(content) > _MAX_CONTENT_LENGTH:
-            content = content[:_MAX_CONTENT_LENGTH] + "... (truncated)"
-
-        return format_tool_output("extract_webpage_content", url, "ok", data={"content": content})
-
+    except ToolException:
+        raise
     except requests.exceptions.RequestException as exc:
-        return format_tool_output("extract_webpage_content", url, "error", error=str(exc))
+        raise ToolException(f"extract_webpage_content: request failed: {exc}") from exc
     except Exception as exc:
-        return format_tool_output("extract_webpage_content", url, "error", error=str(exc))
+        raise ToolException(f"extract_webpage_content: {exc}") from exc
+
+
+extract_webpage_content.handle_tool_error = True

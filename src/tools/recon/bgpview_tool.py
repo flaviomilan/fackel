@@ -17,10 +17,12 @@ import re
 from typing import Any
 
 import requests
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from tools.circuit_breaker import circuit_breaker
+from tools.http_client import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -80,35 +82,24 @@ def bgp_lookup(ip: str) -> dict[str, Any]:
     Use alongside ipinfo to cross-reference ASN data and classify
     infrastructure as CDN, cloud, ISP, or direct-host.
     """
-    ip, err = guard_target(ip, "bgp_lookup", TargetType.IP)
-    if err:
-        return err
+    ip = guard_target(ip, "bgp_lookup", TargetType.IP)
 
-    try:
-        resp = requests.get(
-            f"{_API_BASE}/prefix-overview/data.json",
-            params={"resource": ip},
-            timeout=_TIMEOUT,
-            headers={"Accept": "application/json"},
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        return format_tool_output(
-            "bgp_lookup",
-            ip,
-            "error",
-            error=f"RIPEstat request failed: {exc}",
-        )
+    with circuit_breaker("ripestat"):
+        try:
+            resp = get_session().get(
+                f"{_API_BASE}/prefix-overview/data.json",
+                params={"resource": ip},
+                timeout=get_tool_timeout("bgp_lookup", _TIMEOUT),
+                headers={"Accept": "application/json"},
+            )
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise ToolException(f"bgp_lookup: request failed: {exc}") from exc
 
-    try:
-        body = resp.json()
-    except ValueError:
-        return format_tool_output(
-            "bgp_lookup",
-            ip,
-            "error",
-            error="RIPEstat returned non-JSON response.",
-        )
+        try:
+            body = resp.json()
+        except ValueError:
+            raise ToolException("bgp_lookup: returned non-JSON response") from None
 
     data = body.get("data", {})
     asns = data.get("asns", [])
@@ -138,3 +129,6 @@ def bgp_lookup(ip: str) -> dict[str, Any]:
             "rir": _parse_rir(block),
         },
     )
+
+
+bgp_lookup.handle_tool_error = True

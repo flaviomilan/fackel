@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     format_tool_output,
+    get_tool_timeout,
     guard_target,
     parse_jsonl,
     require_binary,
@@ -65,31 +66,28 @@ def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, An
     Detects CVEs, default credentials, exposed panels, technology fingerprints,
     DNS records (DMARC, SPF, DKIM), SSL/TLS config, and security headers.
     """
-    if err := require_binary("nuclei", "nuclei_scan", target):
-        return err
+    require_binary("nuclei", "nuclei_scan")
 
-    target, verr = guard_target(target, "nuclei_scan", TargetType.DOMAIN)
-    if verr:
-        return verr
+    target = guard_target(target, "nuclei_scan", TargetType.HOST_OR_URL)
 
     cmd = ["nuclei", "-u", target, "-jsonl", "-silent"]
 
     severity, sev_err = sanitize_severity(severity)
     if sev_err:
-        return format_tool_output("nuclei_scan", target, "error", error=sev_err)
+        raise ToolException(f"nuclei_scan: {sev_err}")
     if severity:
         cmd.extend(["-severity", severity])
 
     tags, tags_err = sanitize_tags(tags)
     if tags_err:
-        return format_tool_output("nuclei_scan", target, "error", error=tags_err)
+        raise ToolException(f"nuclei_scan: {tags_err}")
     if tags:
         cmd.extend(["-tags", tags])
 
     try:
-        code, out, stderr = run_command(cmd, timeout=_TIMEOUT)
+        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("nuclei_scan", _TIMEOUT))
     except Exception as exc:
-        return format_tool_output("nuclei_scan", target, "error", error=str(exc))
+        raise ToolException(f"nuclei_scan: {exc}") from exc
 
     findings: list[dict[str, Any]] = []
     for raw in parse_jsonl(out):
@@ -130,3 +128,6 @@ def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, An
         "ok",
         data={"total": len(findings), "findings": findings},
     )
+
+
+nuclei_scan.handle_tool_error = True

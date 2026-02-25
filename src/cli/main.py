@@ -2,122 +2,147 @@
 
 from __future__ import annotations
 
-import logging
 import time
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import typer
-from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.table import Table
 
-load_dotenv()
+from fackel.agents.orchestrator.streaming import set_event_callback, set_tool_approval
+
+from .renderer import EventRenderer
 
 app = typer.Typer(help="Fackel CLI")
 console = Console()
 
-
-# ── Phase labels ───────────────────────────────────────────────────────────
-
-_PHASE_LABELS = {
-    "osint": "OSINT",
-    "approval": "Approval",
-    "port_scan": "Port Scan",
-    "vuln_scan": "Vuln Scan",
-    "triage": "Triage",
-    "report": "Report",
-}
+_VERSION = "0.1.0"
 
 
-# ── HIL approval handler ──────────────────────────────────────────────────
+# ── Banner & header ───────────────────────────────────────────────────────
 
 
-def _approval_prompt(interrupt_data: dict) -> bool:
-    """Prompt the user to approve or reject active scanning."""
-    question = interrupt_data.get("question", "Proceed with active scanning?")
+def _print_banner() -> None:
+    """Display the Fackel startup banner."""
     console.print()
-    console.print(Panel(question, title="⚠ Approval Required", border_style="yellow"))
-    return typer.confirm("Approve?", default=True)
+    console.print(
+        Panel(
+            "[bold bright_red]🔥 FACKEL[/bold bright_red]"
+            f"  [dim]v{_VERSION}[/dim]\n"
+            "[dim]Autonomous OSINT & Security Intelligence[/dim]",
+            border_style="red",
+            padding=(0, 2),
+        )
+    )
 
 
-# ── Event renderer ─────────────────────────────────────────────────────────
+def _print_scan_header(target: str, *, active_scan: bool, approve_tools: bool) -> None:
+    """Display a structured scan configuration summary."""
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_column("Key", style="bold", width=12)
+    table.add_column("Value")
+    table.add_row("Target", f"[bold cyan]{target}[/bold cyan]")
+    mode = "[green]Active[/green]" if active_scan else "[yellow]Passive only[/yellow]"
+    table.add_row("Mode", mode)
+    if approve_tools:
+        table.add_row("Approval", "[yellow]Per-tool approval[/yellow]")
+    console.print(table)
+    console.print()
 
 
-def _make_event_callback(verbose: bool) -> Callable[[str, str, dict[str, Any]], None]:
-    """Return a callback that prints agent ReAct events to the terminal."""
+def _print_provider_status(
+    status_list: list[tuple[Any, bool]],
+) -> None:
+    """Print provider key configuration as a Rich table."""
+    table = Table(title="Provider Status", show_header=True, border_style="dim")
+    table.add_column("Provider", style="bold")
+    table.add_column("Variables", style="dim")
+    table.add_column("Status")
+    for spec, configured in status_list:
+        vars_str = ", ".join(spec.env_vars)
+        status = "[green]✓ configured[/green]" if configured else "[red]✗ missing[/red]"
+        table.add_row(spec.provider, vars_str, status)
+    console.print(table)
+    console.print()
 
-    def _callback(phase: str, event_type: str, data: dict[str, Any]) -> None:
-        label = _PHASE_LABELS.get(phase, phase)
 
-        if event_type == "start":
-            console.print()
-            console.print(Rule(f"▶ {label}", style="bold blue"))
+# ── HIL approval handlers ─────────────────────────────────────────────────
 
-        elif event_type == "tool_call":
-            tool = data.get("tool", "?")
-            args = data.get("args", {})
-            args_str = ", ".join(f"{k}={v}" for k, v in args.items() if v not in ("", None))
-            console.print(f"  🔧 {tool}({args_str})", style="dim")
 
-        elif event_type == "tool_error":
-            tool = data.get("tool", "?")
-            error = data.get("error", "unknown error")
-            # Show a single clean line; strip tool banners / multi-line noise.
-            first_line = (
-                error.strip().splitlines()[-1].strip() if error.strip() else "unknown error"
+def _make_approval_prompt(
+    renderer: EventRenderer,
+) -> tuple[Any, Any]:
+    """Create approval prompt closures that pause the Live area."""
+
+    def approval_prompt(interrupt_data: dict) -> bool:
+        renderer._persist_content()
+        renderer._stop_live()
+        question = interrupt_data.get("question", "Proceed with active scanning?")
+        console.print()
+        console.print(
+            Panel(
+                f"[bold yellow]{question}[/bold yellow]",
+                title="[bold yellow]⚠ Approval Required[/bold yellow]",
+                border_style="yellow",
+                padding=(1, 2),
+                expand=True,
             )
-            console.print(f"  [red]✗ {tool}: {first_line}[/red]", style="dim")
-
-        elif event_type == "tool_result":
-            if verbose:
-                tool = data.get("tool", "?")
-                content = data.get("content", "")
-                preview = content[:200] + "…" if len(content) > 200 else content
-                console.print(f"  ← {tool}: {preview}", style="dim")
-
-        elif event_type == "reasoning":
-            if verbose:
-                content = data.get("content", "")
-                for line in content.splitlines():
-                    console.print(f"  💭 {line}", style="dim italic")
-
-        elif event_type == "summary":
-            content = data.get("content", "")
-            if content:
-                console.print()
-                console.print(
-                    Panel(
-                        Markdown(content),
-                        title=f"📋 {label} Summary",
-                        border_style="cyan",
-                        padding=(1, 2),
-                    )
-                )
-
-        elif event_type == "evaluation":
-            score = data.get("score", 0)
-            completeness = data.get("completeness", "?")
-            recommendation = data.get("recommendation", "proceed")
-            style = (
-                "green"
-                if completeness == "complete"
-                else "yellow"
-                if completeness == "partial"
-                else "red"
-            )
+        )
+        approved = typer.confirm("  Approve?", default=True)
+        if approved:
             console.print(
-                f"  [{style}]📊 Quality: {completeness} "
-                f"(score: {score:.1f}) → {recommendation}[/{style}]",
+                "  [bold green]✓ Approved[/bold green]  "
+                "[dim]— proceeding with active scanning[/dim]",
             )
+        else:
+            console.print(
+                "  [bold red]✗ Rejected[/bold red]  [dim]— skipping active scanning[/dim]",
+            )
+        console.print()
+        return approved
 
-        elif event_type == "done":
-            console.print(f"  [green]✓ {label} complete[/green]")
+    def tool_approval_prompt(interrupt_data: dict) -> str:
+        renderer._persist_content()
+        renderer._stop_live()
+        description = interrupt_data.get("description", str(interrupt_data))
+        tool_name = interrupt_data.get("tool", "")
+        args = interrupt_data.get("args", {})
 
-    return _callback
+        body_parts: list[str] = []
+        if tool_name:
+            body_parts.append(f"[bold]Tool:[/bold]  [cyan]{tool_name}[/cyan]")
+        if args:
+            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+            body_parts.append(f"[bold]Args:[/bold]  [dim]{args_str}[/dim]")
+        if description and description != str(interrupt_data):
+            body_parts.append(f"\n{description}")
+
+        body = "\n".join(body_parts) if body_parts else description
+        console.print()
+        console.print(
+            Panel(
+                body,
+                title="[bold yellow]🔧 Tool Approval Required[/bold yellow]",
+                border_style="yellow",
+                padding=(1, 2),
+                expand=True,
+            )
+        )
+        approved = typer.confirm("  Approve tool execution?", default=True)
+        if approved:
+            tool_label = f"[cyan]{tool_name}[/cyan] " if tool_name else ""
+            console.print(f"  [bold green]✓ Approved[/bold green]  {tool_label}")
+        else:
+            tool_label = f"[cyan]{tool_name}[/cyan] " if tool_name else ""
+            console.print(f"  [bold red]✗ Rejected[/bold red]  {tool_label}")
+        console.print()
+        return "approve" if approved else "reject"
+
+    return approval_prompt, tool_approval_prompt
 
 
 @app.command()
@@ -135,35 +160,35 @@ def scan(
         help="Write full report to this file (default: auto-named in ./reports/)",
     ),
     verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show LLM reasoning and detailed logs"
+        False, "--verbose", "-v", help="Show LLM reasoning and tool output details"
     ),
     check_providers: bool = typer.Option(
         False, "--check-providers", help="Print provider key status before scan"
     ),
+    approve_tools: bool = typer.Option(
+        False,
+        "--approve-tools",
+        help="Require per-tool-call approval for active scanning tools",
+    ),
 ) -> None:
     """Run a full scan workflow and emit the final report."""
+    from dotenv import load_dotenv
+
     from fackel.agents.orchestrator import run
-    from fackel.agents.orchestrator.nodes import set_event_callback
+
+    load_dotenv()
+    from fackel.logging_config import configure_logging
     from fackel.provider_keys import get_provider_key_status
 
-    logging.basicConfig(
-        level=logging.WARNING,
-        format="%(asctime)s [%(name)s] %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    if verbose:
-        logging.getLogger("fackel").setLevel(logging.DEBUG)
+    configure_logging(verbose=verbose)
+
+    # ── Banner & header ────────────────────────────────────────────────
+    _print_banner()
 
     if check_providers:
-        typer.echo("Provider key status:")
-        for spec, configured in get_provider_key_status():
-            status = "configured" if configured else "missing"
-            vars_str = ", ".join(spec.env_vars)
-            typer.echo(f"  {spec.provider} ({vars_str}): {status}")
-        typer.echo("")
+        _print_provider_status(get_provider_key_status())
 
-    typer.echo(f"Target: {target}")
-    typer.echo(f"Active scan: {'yes' if active_scan else 'no'}")
+    _print_scan_header(target, active_scan=active_scan, approve_tools=approve_tools)
 
     # Show tools that will be skipped due to missing API keys.
     from fackel.provider_keys import get_unavailable_tool_names
@@ -176,25 +201,86 @@ def scan(
             console.print(f"  [dim]• {tool_name} — {provider} ({vars_str})[/dim]")
         console.print()
 
-    # Register real-time event callback
-    set_event_callback(_make_event_callback(verbose))
+    # ── Event callbacks ────────────────────────────────────────────────
+    renderer = EventRenderer(console, verbose=verbose)
+    set_event_callback(renderer.handle)
+    approval_prompt, tool_approval_prompt = _make_approval_prompt(renderer)
+
+    if approve_tools:
+        set_tool_approval(enabled=True, callback=tool_approval_prompt)
+        console.print("[yellow]⚠ Tool-level approval enabled for active scanning tools[/yellow]")
+        console.print()
+
     started_at = time.perf_counter()
 
+    result = _execute_scan(
+        renderer,
+        run,
+        target,
+        active_scan,
+        approval_prompt,
+        started_at,
+    )
+    _render_report(result, output, target, started_at)
+
+
+def _execute_scan(
+    renderer: EventRenderer,
+    run_fn: Any,
+    target: str,
+    active_scan: bool,
+    approval_prompt: Any,
+    started_at: float,
+) -> dict[str, Any]:
+    """Run the orchestrator and handle interrupts / errors."""
     try:
-        result = run(
+        return run_fn(
             target,
             active_scan=active_scan,
-            approval_callback=_approval_prompt,
+            approval_callback=approval_prompt,
         )
     except KeyboardInterrupt:
-        typer.echo("\nScan interrupted by user.", err=True)
+        renderer.shutdown()
+        elapsed = time.perf_counter() - started_at
+        console.print()
+        console.print(
+            Panel(
+                "[bold yellow]Scan interrupted by user[/bold yellow]\n"
+                f"[dim]Elapsed: {elapsed:.1f}s[/dim]",
+                title="[bold yellow]⚠ Interrupted[/bold yellow]",
+                border_style="yellow",
+                padding=(1, 2),
+                expand=True,
+            )
+        )
         raise typer.Exit(code=130) from None
     except Exception as exc:
-        typer.echo(f"\nScan failed: {exc}", err=True)
+        renderer.shutdown()
+        elapsed = time.perf_counter() - started_at
+        console.print()
+        console.print(
+            Panel(
+                f"[bold red]{exc}[/bold red]\n[dim]Elapsed: {elapsed:.1f}s[/dim]",
+                title="[bold red]✗ Scan Failed[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+                expand=True,
+            )
+        )
         raise typer.Exit(code=1) from exc
     finally:
+        renderer.shutdown()
         set_event_callback(None)
+        set_tool_approval(enabled=False)
 
+
+def _render_report(
+    result: dict[str, Any],
+    output: Path | None,
+    target: str,
+    started_at: float,
+) -> None:
+    """Display the LLM report on console and save the full report to disk."""
     report = result.get("report", "")
     duration = time.perf_counter() - started_at
 
@@ -202,13 +288,18 @@ def scan(
         typer.echo("\nError: no report generated.", err=True)
         raise typer.Exit(code=1)
 
-    # ── Console: show the LLM-synthesised report ───────────────────────
     console.print()
-    console.print(Rule("Final Report", style="bold green"))
+    console.print(Rule("📝 Final Report", style="bold green"))
     console.print(Markdown(report))
-    console.print(f"\n[dim]Completed in {duration:.1f}s[/dim]")
+    console.print()
+    console.print(
+        Panel(
+            f"[green]✓ Scan complete[/green]  [dim]{duration:.1f}s elapsed[/dim]",
+            border_style="green",
+            padding=(0, 2),
+        )
+    )
 
-    # ── Disk: save comprehensive markdown with all phase details ───────
     from fackel.report_writer import build_full_report
 
     full_md = build_full_report(result)
@@ -222,7 +313,7 @@ def scan(
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(full_md, encoding="utf-8")
-    console.print(f"\n[green]📄 Full report saved to {output}[/green]")
+    console.print(f"[green]📄 Full report saved to {output}[/green]")
 
 
 if __name__ == "__main__":
