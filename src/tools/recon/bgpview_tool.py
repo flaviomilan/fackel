@@ -49,15 +49,13 @@ def _parse_rir(block: dict[str, Any]) -> str:
     ``"Administered by ARIN"``.  We extract just the RIR name.
     """
     desc = block.get("desc", "")
-    # "ARIN (Status: ALLOCATED)" → "ARIN"
     match = re.match(r"(\w+)\s*\(", desc)
     if match:
         return match.group(1)
-    # "Administered by ARIN" → "ARIN"
     admin_match = re.search(r"Administered by (\w+)", desc)
     if admin_match:
         return admin_match.group(1)
-    return desc
+    return str(desc)
 
 
 def _parse_holder(holder: str) -> tuple[str, str]:

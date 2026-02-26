@@ -31,19 +31,14 @@ from langchain_openai import ChatOpenAI
 
 _DEFAULT_MODEL = "gpt-5-mini"
 
-# Default timeout for LLM API requests (seconds).
-# Long enough for complex tool-use chains; prevents indefinite hangs.
 LLM_REQUEST_TIMEOUT: int = 120
 
-# Transient network errors that tool calls should automatically retry.
 _RETRYABLE_ERRORS: tuple[type[Exception], ...] = (
     ConnectionError,
     TimeoutError,
     OSError,
 )
 
-# Active scanning tools that require human approval when HITL is enabled.
-# These tools perform intrusive actions on the target infrastructure.
 ACTIVE_SCAN_TOOLS: frozenset[str] = frozenset(
     {
         "naabu_scan",

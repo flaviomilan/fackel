@@ -27,7 +27,7 @@ from fackel.tooling import (
     sanitize_severity,
 )
 
-_TIMEOUT = 300  # seconds
+_TIMEOUT = 300
 
 
 class TestSSLInput(BaseModel):
@@ -92,15 +92,14 @@ def testssl_scan(
 
     cmd = [
         "testssl.sh",
-        "--jsonfile=-",  # JSON to stdout
+        "--jsonfile=-",
         "--warnings",
         "off",
         "--color",
         "0",
-        "--sneaky",  # less intrusive timing
+        "--sneaky",
     ]
 
-    # Map check names to testssl.sh flags.
     check_flags = {
         "protocols": "-p",
         "ciphers": "-E",
@@ -121,10 +120,8 @@ def testssl_scan(
     except Exception as exc:
         raise ToolException(f"testssl_scan: {exc}") from exc
 
-    # Parse JSON output (testssl.sh outputs a JSON array to stdout with --jsonfile=-).
     findings: list[dict[str, Any]] = []
 
-    # Validate and normalise severity filter.
     severity, sev_err = sanitize_severity(severity)
     if sev_err:
         raise ToolException(f"testssl_scan: {sev_err}")
@@ -138,7 +135,6 @@ def testssl_scan(
             if records:
                 records = records[0].get("findings", records)
     except json.JSONDecodeError:
-        # Fallback: try line-by-line JSONL
         records = []
         for line in out.splitlines():
             try:
@@ -167,7 +163,6 @@ def testssl_scan(
             }
         )
 
-    # Categorise findings for the summary.
     protocols = [f for f in findings if f["id"].startswith(("SSLv", "TLS", "NPN", "ALPN"))]
     vulns = [f for f in findings if f["severity"] in ("critical", "high", "medium")]
     cert_findings = [f for f in findings if "cert" in f["id"].lower()]

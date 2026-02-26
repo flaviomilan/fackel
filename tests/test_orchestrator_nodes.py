@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 from fackel.agents.orchestrator.nodes._helpers import (
-    IP_CLASS_HINTS,
-    make_finding,
     get_phase_evaluation,
+    make_finding,
     prepare_scan_targets,
 )
 from fackel.agents.orchestrator.nodes.report_and_gates import (
     route_after_osint,
     route_after_port_scan,
 )
-
-
-# ── make_finding ──────────────────────────────────────────────────────────
 
 
 class TestMakeFinding:
@@ -34,9 +30,6 @@ class TestMakeFinding:
     def test_confidence_default(self):
         f = make_finding("osint", "Title", "Detail")
         assert f["confidence"] == 1.0
-
-
-# ── get_phase_evaluation ─────────────────────────────────────────────────
 
 
 class TestGetPhaseEvaluation:
@@ -59,9 +52,6 @@ class TestGetPhaseEvaluation:
         assert result is None
 
 
-# ── prepare_scan_targets ──────────────────────────────────────────────────
-
-
 class TestPrepareScanTargets:
     """Verify target preparation with IPv6 filtering."""
 
@@ -81,7 +71,7 @@ class TestPrepareScanTargets:
             "discovered_subdomains": [],
             "target": "example.com",
         }
-        ips, subs = prepare_scan_targets(state)
+        ips, _subs = prepare_scan_targets(state)
         assert ips == ["1.2.3.4"]
 
     def test_empty_state(self):
@@ -89,9 +79,6 @@ class TestPrepareScanTargets:
         ips, subs = prepare_scan_targets(state)
         assert ips == []
         assert subs == []
-
-
-# ── Routing functions ─────────────────────────────────────────────────────
 
 
 class TestRouteAfterOsint:

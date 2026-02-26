@@ -76,7 +76,7 @@ class TestOtxPassiveDnsHappyPath:
 
         first = data["records"][0]
         assert first["address"] == "93.184.216.34"
-        assert first["hostname"] == "example.com"  # trailing dot stripped
+        assert first["hostname"] == "example.com"
         assert first["record_type"] == "A"
         assert first["first_seen"] == "2020-03-15"
         assert first["last_seen"] == "2025-01-10"

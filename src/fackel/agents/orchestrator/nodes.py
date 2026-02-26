@@ -52,10 +52,8 @@ __all__ = [
     "vuln_scan_node",
 ]
 
-# Maximum number of subdomains propagated to downstream agents.
 _SUBDOMAIN_CAP = 30
 
-# Default strategy text appended to vuln-scan prompts.
 _DEFAULT_VULN_SCAN_STRATEGY = (
     "\nScan the DOMAIN first (nuclei with empty severity for full template "
     "coverage). Then scan the most interesting subdomains (www, web apps, "
@@ -63,15 +61,11 @@ _DEFAULT_VULN_SCAN_STRATEGY = (
     "to scan more targets shallowly than fewer targets deeply."
 )
 
-# IP class → prompt hint for port-scan context.
 _IP_CLASS_HINTS: dict[str, str] = {
     "cdn": " → CDN proxy, skip deep scanning (ports are the CDN's, not the origin)",
     "cloud": " → cloud-hosted, scan normally",
     "direct_host": " → direct infrastructure, HIGH PRIORITY",
 }
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────
 
 
 def _make_finding(
@@ -121,9 +115,6 @@ def _emit_evaluation(phase: str, evaluation: Any) -> None:
             "recommendation": evaluation.recommendation,
         },
     )
-
-
-# ── OSINT node ─────────────────────────────────────────────────────────────
 
 
 def osint_node(state: ScanState) -> dict[str, Any]:
@@ -261,9 +252,6 @@ def _log_fingerprints(fingerprints: list[dict[str, Any]]) -> None:
     logger.info("osint: fingerprinted %d target(s):\n%s", len(fingerprints), "\n".join(lines))
 
 
-# ── Port Scan node ─────────────────────────────────────────────────────────
-
-
 def port_scan_node(state: ScanState) -> dict[str, Any]:
     """Run the port-scan ReAct agent on discovered IPs and subdomains."""
     from fackel.agents.port_scan.agent import build
@@ -349,9 +337,6 @@ def _append_ip_classification_context(
             "yields the CDN's ports/services, not the origin server. "
             "Prioritise direct_host and cloud IPs instead."
         )
-
-
-# ── Vuln Scan node ─────────────────────────────────────────────────────────
 
 
 def vuln_scan_node(state: ScanState) -> dict[str, Any]:
@@ -453,9 +438,6 @@ def _append_port_scan_strategy(parts: list[str], state: ScanState) -> None:
         parts.append(_DEFAULT_VULN_SCAN_STRATEGY)
 
 
-# ── Triage node ────────────────────────────────────────────────────────────
-
-
 def triage_node(state: ScanState) -> dict[str, Any]:
     """Analyse findings and identify unassessed areas via structured LLM output.
 
@@ -529,9 +511,6 @@ def _format_triage_summary(result: Any, risk: Any, unassessed: list[dict[str, An
     return "\n".join(parts)
 
 
-# ── Report node ────────────────────────────────────────────────────────────
-
-
 def report_node(state: ScanState) -> dict[str, Any]:
     """Generate the final pentest report via LLM."""
     from fackel.agents.report.agent import generate_report
@@ -547,9 +526,6 @@ def report_node(state: ScanState) -> dict[str, Any]:
     )
     emit("report", "done", {})
     return {"report": report}
-
-
-# ── Approval gate ──────────────────────────────────────────────────────────
 
 
 def approval_gate(state: ScanState) -> Command:
@@ -591,9 +567,6 @@ def approval_gate(state: ScanState) -> Command:
     if approved:
         return Command(goto="port_scan")
     return Command(goto="report")
-
-
-# ── Routing ────────────────────────────────────────────────────────────────
 
 
 def route_after_osint(state: ScanState) -> str:

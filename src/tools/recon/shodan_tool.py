@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import shodan
+import shodan  # type: ignore[import-untyped]
 from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
@@ -40,7 +40,6 @@ def shodan_lookup(query: str) -> dict[str, Any]:
     api = shodan.Shodan(api_key)
     try:
         if is_valid_ip(query):
-            # Direct host lookup — much richer data than search
             host = api.host(query.strip())
             services = []
             for item in host.get("data", []):
@@ -74,7 +73,6 @@ def shodan_lookup(query: str) -> dict[str, Any]:
                 },
             )
         else:
-            # Generic search
             result = api.search(query)
             matches = []
             for match in result.get("matches", []):

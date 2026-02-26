@@ -24,9 +24,9 @@ def _is_root() -> bool:
     return os.geteuid() == 0 if hasattr(os, "geteuid") else False
 
 
-def _parse_os_info(nm, host: str) -> dict[str, Any]:
+def _parse_os_info(nm: nmap.PortScanner, host: str) -> dict[str, Any]:
     """Extract OS detection information."""
-    os_info = {
+    os_info: dict[str, list[dict[str, Any]]] = {
         "os_matches": [],
         "os_classes": [],
     }
@@ -58,9 +58,9 @@ def _parse_os_info(nm, host: str) -> dict[str, Any]:
     return os_info
 
 
-def _parse_hostscript(nm, host: str) -> dict[str, Any]:
+def _parse_hostscript(nm: nmap.PortScanner, host: str) -> dict[str, Any]:
     """Extract host-level script results."""
-    scripts = {}
+    scripts: dict[str, str] = {}
 
     try:
         if "hostscript" in nm[host]:
@@ -75,12 +75,11 @@ def _parse_hostscript(nm, host: str) -> dict[str, Any]:
 
 def _extract_vulnerabilities(service: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract CVEs and vulnerabilities from service scripts."""
-    vulnerabilities = []
+    vulnerabilities: list[dict[str, Any]] = []
 
     if "script" not in service:
         return vulnerabilities
 
-    # Parse vulners output
     if "vulners" in service["script"]:
         vulners_output = service["script"]["vulners"]
         for match in re.finditer(r"(CVE-\d{4}-\d{4,7})\s*(\d+\.\d+)", vulners_output):
@@ -92,12 +91,10 @@ def _extract_vulnerabilities(service: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
 
-    # Parse vulscan output (if present)
     if "vulscan" in service["script"]:
         vulscan_output = service["script"]["vulscan"]
         for match in re.finditer(r"(CVE-\d{4}-\d{4,7})", vulscan_output):
             cve_id = match.group(1)
-            # Avoid duplicates
             if not any(v["id"] == cve_id for v in vulnerabilities):
                 vulnerabilities.append(
                     {
@@ -106,7 +103,6 @@ def _extract_vulnerabilities(service: dict[str, Any]) -> list[dict[str, Any]]:
                     }
                 )
 
-    # Parse vuln script results
     vuln_scripts = ["http-vuln-", "ssl-", "ssh-", "smb-vuln-", "smtp-vuln-"]
     for script_name, script_output in service.get("script", {}).items():
         if any(script_name.startswith(prefix) for prefix in vuln_scripts) and (
@@ -115,7 +111,7 @@ def _extract_vulnerabilities(service: dict[str, Any]) -> list[dict[str, Any]]:
             vulnerabilities.append(
                 {
                     "type": script_name.replace("http-vuln-", "").replace("smb-vuln-", ""),
-                    "description": script_output[:200],  # First 200 chars
+                    "description": script_output[:200],
                     "source": "nse_script",
                 }
             )
@@ -191,7 +187,7 @@ def _build_scan_args(
         ]
         if not ports.strip():
             args.append("-p-")
-    else:  # default
+    else:
         args = [
             "-sV",
             "--version-intensity",

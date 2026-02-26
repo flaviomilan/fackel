@@ -25,7 +25,6 @@ def _error_response(status: int) -> MagicMock:
     return resp
 
 
-# Sample SecurityTrails API responses
 _A_HISTORY = {
     "records": [
         {
@@ -78,7 +77,6 @@ class TestSecurityTrailsHappyPath:
     @patch("tools.recon.securitytrails_tool.get_session")
     def test_returns_all_record_types(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
-        # Three sequential calls: A, MX, NS
         mock_get.side_effect = [
             _ok_response(_A_HISTORY),
             _ok_response(_MX_HISTORY),
@@ -91,18 +89,15 @@ class TestSecurityTrailsHappyPath:
         assert result["tool"] == "securitytrails_history"
         data = result["data"]
 
-        # A records
         assert len(data["a_records"]) == 3
         assert data["a_records"][0]["value"] == "93.184.216.34"
         assert data["a_records"][0]["org"] == "Edgecast"
         assert data["a_records"][0]["first_seen"] == "2020-01-15"
         assert data["a_records"][1]["value"] == "104.21.36.250"
 
-        # MX records
         assert len(data["mx_records"]) == 1
         assert data["mx_records"][0]["value"] == "mail.example.com"
 
-        # NS records
         assert len(data["ns_records"]) == 1
         assert data["ns_records"][0]["value"] == "ns1.cloudflare.com"
 
@@ -114,7 +109,6 @@ class TestSecurityTrailsHappyPath:
 
         securitytrails_history.invoke({"domain": "example.com"})
 
-        # All three calls should use the APIKEY header
         for call in mock_get.call_args_list:
             assert call.kwargs["headers"]["APIKEY"] == "test-key-123"
 
@@ -165,7 +159,7 @@ class TestSecurityTrailsErrors:
         """If one record type fails, others still succeed."""
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = [
-            _error_response(429),  # A records rate-limited
+            _error_response(429),
             _ok_response(_MX_HISTORY),
             _ok_response(_NS_HISTORY),
         ]
@@ -173,10 +167,8 @@ class TestSecurityTrailsErrors:
         result = securitytrails_history.invoke({"domain": "example.com"})
 
         assert result["status"] == "ok"
-        # A records contain error entry
         assert len(result["data"]["a_records"]) == 1
         assert "error" in result["data"]["a_records"][0]
-        # MX and NS still populated
         assert len(result["data"]["mx_records"]) == 1
         assert len(result["data"]["ns_records"]) == 1
 

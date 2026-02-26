@@ -57,7 +57,7 @@ class TestClassifyIpByCloud:
             (14061, "DigitalOcean, LLC", "cloud"),
             (24940, "Hetzner Online GmbH", "cloud"),
             (16276, "OVH SAS", "cloud"),
-            (20473, "The Constant Company, LLC", "cloud"),  # Vultr
+            (20473, "The Constant Company, LLC", "cloud"),
             (8075, "Microsoft Corporation", "cloud"),
         ],
     )
@@ -122,7 +122,7 @@ class TestClassifyIpByDirectHost:
             hostname="server.otherdomain.com",
             target_domain="example.com",
         )
-        assert result == "isp"  # Falls through to ISP
+        assert result == "isp"
 
 
 class TestClassifyIpByIsp:
@@ -149,12 +149,10 @@ class TestClassifyIpPriority:
     """Classification priority: anycast > CDN ASN > CDN org > direct_host > cloud > ISP."""
 
     def test_anycast_overrides_cloud_asn(self) -> None:
-        # ASN 16509 is both CDN (CloudFront) and Cloud (AWS) — anycast wins
         result = classify_ip(org="Amazon.com", asn=16509, anycast=True)
         assert result == "cdn"
 
     def test_cdn_asn_overrides_cloud_org(self) -> None:
-        # If ASN is CDN but org says "Amazon", CDN wins
         result = classify_ip(org="Amazon.com", asn=13335)
         assert result == "cdn"
 
@@ -168,7 +166,6 @@ class TestClassifyIpPriority:
         assert result == "direct_host"
 
     def test_cdn_overrides_direct_host(self) -> None:
-        # Cloudflare PTR can match target — CDN still wins
         result = classify_ip(
             org="Cloudflare, Inc.",
             asn=13335,

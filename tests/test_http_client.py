@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.http_client import get_session, _session
+from tools.http_client import get_session
 
 
 class TestGetSession:
@@ -11,7 +11,6 @@ class TestGetSession:
     def test_returns_session_instance(self):
         import tools.http_client as mod
 
-        # Reset module state for clean test
         mod._session = None
         session = get_session()
         assert session is not None

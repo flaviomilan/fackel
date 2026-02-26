@@ -5,8 +5,6 @@ from langchain_core.tools import ToolException
 
 from fackel.tooling import TargetType, guard_target
 
-# ── TargetType.DOMAIN ──────────────────────────────────────────────────
-
 
 class TestGuardTargetDomain:
     """guard_target with TargetType.DOMAIN."""
@@ -53,9 +51,6 @@ class TestGuardTargetDomain:
             guard_target(value, "test_tool", TargetType.DOMAIN)
 
 
-# ── TargetType.IP ──────────────────────────────────────────────────────
-
-
 class TestGuardTargetIP:
     """guard_target with TargetType.IP."""
 
@@ -77,9 +72,6 @@ class TestGuardTargetIP:
             guard_target("example.com", "test_tool", TargetType.IP)
 
 
-# ── TargetType.HOST ────────────────────────────────────────────────────
-
-
 class TestGuardTargetHost:
     """guard_target with TargetType.HOST — domain or IP."""
 
@@ -92,9 +84,6 @@ class TestGuardTargetHost:
     def test_rejects_garbage(self) -> None:
         with pytest.raises(ToolException):
             guard_target("not a valid host!!!", "test_tool", TargetType.HOST)
-
-
-# ── TargetType.URL ─────────────────────────────────────────────────────
 
 
 class TestGuardTargetURL:
@@ -114,9 +103,6 @@ class TestGuardTargetURL:
     def test_rejects_bare_domain(self) -> None:
         with pytest.raises(ToolException, match=r"(?i)http"):
             guard_target("example.com", "test_tool", TargetType.URL)
-
-
-# ── TargetType.HOST_OR_URL ─────────────────────────────────────────────
 
 
 class TestGuardTargetHostOrURL:

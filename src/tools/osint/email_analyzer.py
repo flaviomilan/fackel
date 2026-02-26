@@ -16,7 +16,7 @@ from tools.http_client import get_session
 logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_TIMEOUT = 10  # seconds
+_TIMEOUT = 10
 
 
 class EmailAnalyzerInput(BaseModel):
@@ -39,7 +39,8 @@ def _check_breaches(email: str) -> list[dict[str, Any]]:
             timeout=_TIMEOUT,
         )
         if resp.status_code == 200:
-            return resp.json()
+            result: list[dict[str, Any]] = resp.json()
+            return result
     except Exception:
         logger.debug("HIBP lookup failed for %s", email, exc_info=True)
     return []
@@ -57,7 +58,8 @@ def _check_reputation(email: str) -> dict[str, Any] | None:
             timeout=_TIMEOUT,
         )
         if resp.status_code == 200:
-            return resp.json()
+            result: dict[str, Any] = resp.json()
+            return result
     except Exception:
         logger.debug("EmailRep lookup failed for %s", email, exc_info=True)
     return None

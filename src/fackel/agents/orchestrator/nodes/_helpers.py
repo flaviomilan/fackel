@@ -16,10 +16,8 @@ from ..state import Finding, ScanState
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of subdomains propagated to downstream agents.
 SUBDOMAIN_CAP = 30
 
-# Default strategy text appended to vuln-scan prompts.
 DEFAULT_VULN_SCAN_STRATEGY = (
     "\nScan the DOMAIN first (nuclei with empty severity for full template "
     "coverage). Then scan the most interesting subdomains (www, web apps, "
@@ -27,7 +25,6 @@ DEFAULT_VULN_SCAN_STRATEGY = (
     "to scan more targets shallowly than fewer targets deeply."
 )
 
-# IP class → prompt hint for port-scan context.
 IP_CLASS_HINTS: dict[str, str] = {
     "cdn": " → CDN proxy, skip deep scanning (ports are the CDN's, not the origin)",
     "cloud": " → cloud-hosted, scan normally",

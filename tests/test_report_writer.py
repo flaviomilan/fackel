@@ -27,7 +27,6 @@ class TestFormatEvaluation:
     def test_handles_non_float_score(self) -> None:
         """score that is a string should not crash."""
         ev = {"completeness": "partial", "score": "n/a", "recommendation": "retry"}
-        # Should not raise
         result = _format_evaluation(ev)
         assert "partial" in result
 

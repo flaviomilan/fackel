@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import re
 from unittest.mock import MagicMock, patch
-
-import pytest
-from langchain_core.tools import ToolException
 
 from tools.scanning.nmap_scanner import (
     _build_scan_args,
-    _build_scan_result,
     _extract_vulnerabilities,
     _is_root,
     _parse_hostscript,
@@ -18,9 +13,6 @@ from tools.scanning.nmap_scanner import (
     _parse_services,
     nmap_port_scan,
 )
-
-
-# ── Pure helper tests ──────────────────────────────────────────────────────
 
 
 class TestIsRoot:
@@ -192,7 +184,7 @@ class TestParseServices:
         )
         nm.__getitem__ = MagicMock(return_value=host_mock)
 
-        services, summary = _parse_services(nm, "192.168.1.1")
+        _services, summary = _parse_services(nm, "192.168.1.1")
         assert summary["open_ports"] == 2
         assert summary["total_ports_scanned"] == 2
 

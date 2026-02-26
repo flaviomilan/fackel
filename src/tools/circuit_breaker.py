@@ -44,12 +44,8 @@ from langchain_core.tools import ToolException
 
 logger = logging.getLogger(__name__)
 
-# ── Configuration ──────────────────────────────────────────────────────
-
-# Consecutive failures before the circuit opens.
 FAILURE_THRESHOLD: int = 3
 
-# Seconds before an open circuit transitions to half-open.
 RESET_TIMEOUT: float = 60.0
 
 
@@ -70,7 +66,6 @@ class _ServiceCircuit:
         self.last_failure_time: float = 0.0
 
 
-# Global registry: service_name → circuit state.
 _circuits: dict[str, _ServiceCircuit] = {}
 _lock = threading.Lock()
 
@@ -97,7 +92,6 @@ def circuit_breaker(service: str) -> Generator[None, None, None]:
         if cb.state is _CircuitState.OPEN:
             elapsed = time.monotonic() - cb.last_failure_time
             if elapsed >= RESET_TIMEOUT:
-                # Transition to half-open: allow one probe request.
                 cb.state = _CircuitState.HALF_OPEN
                 logger.info(
                     "circuit_breaker(%s): transitioning OPEN → HALF-OPEN after %.0fs",
@@ -111,11 +105,9 @@ def circuit_breaker(service: str) -> Generator[None, None, None]:
                     f"retry in {remaining:.0f}s after {cb.failure_count} consecutive failures)"
                 )
 
-    # Allow the request through (closed or half-open).
     try:
         yield
     except Exception:
-        # Record failure.
         with _lock:
             cb = _get_circuit(service)
             cb.failure_count += 1
@@ -128,7 +120,6 @@ def circuit_breaker(service: str) -> Generator[None, None, None]:
                     cb.failure_count,
                 )
             elif cb.state is _CircuitState.HALF_OPEN:
-                # Probe failed — reopen.
                 cb.state = _CircuitState.OPEN
                 logger.warning(
                     "circuit_breaker(%s): half-open probe failed — re-opening",
@@ -136,7 +127,6 @@ def circuit_breaker(service: str) -> Generator[None, None, None]:
                 )
         raise
     else:
-        # Success: reset circuit.
         with _lock:
             cb = _get_circuit(service)
             if cb.state is not _CircuitState.CLOSED:

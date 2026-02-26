@@ -28,8 +28,6 @@ from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
 
-# OpenAI API errors that _stream_once handles gracefully.
-# Imported lazily to avoid hard-coupling the orchestrator to the openai SDK.
 try:
     from openai import APIConnectionError, APITimeoutError, RateLimitError
 
@@ -41,19 +39,14 @@ try:
 except ImportError:  # pragma: no cover - openai always installed via langchain-openai
     _LLM_TRANSIENT_ERRORS = ()
 
-# Type alias for the optional event callback injected by the CLI.
 EventCallback = Callable[[str, str, dict[str, Any]], None] | None
 
-# Type alias for the tool approval callback (returns decision string).
 ToolApprovalCallback = Callable[[dict[str, Any]], str] | None
-
-# ── Module-level configuration slots ──────────────────────────────────────
 
 _event_callback: EventCallback = None
 _tool_approval_callback: ToolApprovalCallback = None
 _tool_approval_enabled: bool = False
 
-# Maximum ReAct iterations (tool calls) per agent invocation.
 MAX_AGENT_ITERATIONS = 40
 
 
@@ -97,9 +90,6 @@ def emit(phase: str, event_type: str, data: dict[str, Any]) -> None:
         _event_callback(phase, event_type, data)
 
 
-# ── Tool output validation ────────────────────────────────────────────────
-
-
 def validate_tool_output(msg: ToolMessage) -> ToolMessage:
     """Basic structural validation of tool results.
 
@@ -109,7 +99,6 @@ def validate_tool_output(msg: ToolMessage) -> ToolMessage:
 
     Logs warnings for malformed or error outputs without blocking the agent.
     """
-    # ToolException-based errors: LangChain sets msg.status = "error".
     if getattr(msg, "status", None) == "error":
         logger.debug("tool %s raised ToolException: %s", msg.name, msg.content)
         return msg
@@ -132,9 +121,6 @@ def validate_tool_output(msg: ToolMessage) -> ToolMessage:
     except (json.JSONDecodeError, TypeError, AttributeError):
         logger.debug("tool %s returned non-JSON output", msg.name)
     return msg
-
-
-# ── Content block emission ────────────────────────────────────────────────
 
 
 def emit_content_blocks(phase: str, msg: AIMessage) -> None:
@@ -163,9 +149,6 @@ def emit_content_blocks(phase: str, msg: AIMessage) -> None:
             emit(phase, "reasoning_trace", {"content": content})
 
 
-# ── Agent summary ─────────────────────────────────────────────────────────
-
-
 def agent_summary(messages: list[Any]) -> str:
     """Return the last AI message content, or a fallback."""
     for msg in reversed(messages):
@@ -177,9 +160,6 @@ def agent_summary(messages: list[Any]) -> str:
         ):
             return msg.content.strip()
     return "No findings."
-
-
-# ── Agent streamer ─────────────────────────────────────────────────────────
 
 
 class _AgentStreamer:
@@ -204,19 +184,14 @@ class _AgentStreamer:
         self._hit_limit = False
         self._has_checkpointer = getattr(agent, "checkpointer", None) is not None
 
-        # Build the inner-agent config.  Checkpointed agents need a
-        # unique ``thread_id``; we also merge any *callbacks* from the
-        # outer orchestrator config so LangSmith traces nest correctly.
         inner: dict[str, Any] = {}
         if self._has_checkpointer:
             inner.setdefault("configurable", {})["thread_id"] = str(uuid.uuid4())
 
         if config:
-            # Propagate callbacks for observability trace nesting.
             outer_callbacks = config.get("callbacks")
             if outer_callbacks:
                 inner["callbacks"] = outer_callbacks
-            # Propagate metadata / tags if present.
             if config.get("metadata"):
                 inner["metadata"] = config["metadata"]
             if config.get("tags"):
@@ -231,9 +206,8 @@ class _AgentStreamer:
         self._handle_interrupts()
         return self._messages
 
-    # Maximum retries for transient LLM API errors (rate-limit, timeout).
     _MAX_LLM_RETRIES = 1
-    _LLM_RETRY_DELAY = 5.0  # seconds
+    _LLM_RETRY_DELAY = 5.0
 
     def _stream_once(self, input_data: Any) -> None:
         """Run one streaming pass using dual updates + messages mode.
@@ -257,7 +231,7 @@ class _AgentStreamer:
                         self._on_node_update(event)
                     if self._hit_limit:
                         break
-                return  # success - exit retry loop
+                return
             except _LLM_TRANSIENT_ERRORS as exc:
                 if retries < self._MAX_LLM_RETRIES:
                     retries += 1
@@ -277,8 +251,6 @@ class _AgentStreamer:
                     )
                     time.sleep(delay)
                     continue
-                # Exhausted retries — log and let the scan continue with
-                # whatever messages were collected so far.
                 logger.error(
                     "%s: LLM API error after %d retries — continuing with partial data",
                     self._phase,
@@ -374,7 +346,6 @@ def _emit_tool_result_event(phase: str, msg: ToolMessage) -> None:
     is_error = False
     error_hint = ""
 
-    # ToolException-based errors: msg.status == "error", content is plain text.
     if getattr(msg, "status", None) == "error":
         is_error = True
         error_hint = str(msg.content)[:200] if msg.content else "unknown"

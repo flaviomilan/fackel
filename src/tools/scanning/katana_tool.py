@@ -17,7 +17,7 @@ from fackel.tooling import (
     run_command,
 )
 
-_TIMEOUT = 240  # seconds
+_TIMEOUT = 240
 
 
 class KatanaInput(BaseModel):
@@ -43,7 +43,6 @@ def katana_crawl(target: str) -> dict[str, Any]:
 
     target = guard_target(target, "katana_crawl", TargetType.HOST_OR_URL)
 
-    # katana needs a URL; if guard_target returned a bare host, add scheme
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
 
@@ -65,7 +64,6 @@ def katana_crawl(target: str) -> dict[str, Any]:
 
     urls: list[str] = []
     for data in parse_jsonl(out):
-        # Newer katana uses request.endpoint; older used top-level url
         req = data.get("request")
         if isinstance(req, dict):
             url = req.get("endpoint") or req.get("url")

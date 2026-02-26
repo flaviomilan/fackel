@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 from tools.scanning.graphql_scanner import (
@@ -13,9 +12,6 @@ from tools.scanning.graphql_scanner import (
     _probe_introspection,
     graphql_scan,
 )
-
-
-# ── Introspection probe ───────────────────────────────────────────────────
 
 
 class TestProbeIntrospection:
@@ -53,7 +49,7 @@ class TestProbeIntrospection:
         mock_resp.status_code = 403
         mock_session.return_value.post.return_value = mock_resp
 
-        enabled, issues, summary = _probe_introspection("https://example.com/graphql", {})
+        enabled, issues, _summary = _probe_introspection("https://example.com/graphql", {})
         assert enabled is False
         assert issues == []
 
@@ -63,12 +59,9 @@ class TestProbeIntrospection:
 
         mock_session.return_value.post.side_effect = requests.RequestException("timeout")
 
-        enabled, issues, summary = _probe_introspection("https://example.com/graphql", {})
+        enabled, issues, _summary = _probe_introspection("https://example.com/graphql", {})
         assert enabled is False
         assert issues == []
-
-
-# ── Alias batching probe ──────────────────────────────────────────────────
 
 
 class TestProbeAliasBatching:
@@ -94,9 +87,6 @@ class TestProbeAliasBatching:
 
         issues = _probe_alias_batching("https://example.com/graphql", {})
         assert issues == []
-
-
-# ── Array batching probe ──────────────────────────────────────────────────
 
 
 class TestProbeArrayBatching:
@@ -125,9 +115,6 @@ class TestProbeArrayBatching:
         assert issues == []
 
 
-# ── GET method probe ──────────────────────────────────────────────────────
-
-
 class TestProbeGetMethod:
     """Verify GET method query detection."""
 
@@ -144,9 +131,6 @@ class TestProbeGetMethod:
         )
         assert len(issues) == 1
         assert issues[0]["severity"] == "info"
-
-
-# ── Field suggestions probe ──────────────────────────────────────────────
 
 
 class TestProbeFieldSuggestions:
@@ -171,9 +155,6 @@ class TestProbeFieldSuggestions:
 
         issues = _probe_field_suggestions("https://example.com/graphql", {})
         assert issues == []
-
-
-# ── Full tool integration ─────────────────────────────────────────────────
 
 
 class TestGraphqlScan:

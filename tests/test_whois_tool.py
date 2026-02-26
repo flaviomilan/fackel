@@ -14,8 +14,6 @@ from tools.recon.whois import (
     whois_lookup,
 )
 
-# ── Sample RDAP response ─────────────────────────────────────────────
-
 SAMPLE_RDAP = {
     "ldhName": "example.info",
     "status": ["client transfer prohibited", "client delete prohibited"],
@@ -42,9 +40,6 @@ SAMPLE_RDAP = {
         {"eventAction": "last changed", "eventDate": "2025-08-30T11:23:03Z"},
     ],
 }
-
-
-# ── RDAP helper unit tests ───────────────────────────────────────────
 
 
 class TestExtractRdapRegistrar:
@@ -150,9 +145,6 @@ class TestRdapServerForTld:
             assert _rdap_server_for_tld("info") is None
 
 
-# ── Integration-level tests (whois_lookup tool) ──────────────────────
-
-
 class TestWhoisLookupTraditional:
     """When python-whois succeeds, RDAP should be skipped."""
 
@@ -186,7 +178,6 @@ class TestWhoisLookupTraditional:
 
         with patch("tools.recon.whois._rdap_query", return_value=None):
             result = whois_lookup.invoke({"domain": "example.info"})
-            # Falls through to RDAP which also fails → error
             assert isinstance(result, str)
 
 

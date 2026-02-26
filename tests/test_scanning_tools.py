@@ -4,16 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-from langchain_core.tools import ToolException
-
 from tools.scanning.feroxbuster_tool import feroxbuster_scan
 from tools.scanning.katana_tool import katana_crawl
 from tools.scanning.naabu_tool import naabu_scan
 from tools.scanning.wafw00f_tool import wafw00f_detect
-
-
-# ── Feroxbuster ────────────────────────────────────────────────────────────
 
 
 class TestFeroxbusterScan:
@@ -62,9 +56,6 @@ class TestFeroxbusterScan:
         assert "scan failed" in result
 
 
-# ── Katana crawl ───────────────────────────────────────────────────────────
-
-
 class TestKatanaCrawl:
     """Verify katana CLI construction and URL extraction."""
 
@@ -103,10 +94,7 @@ class TestKatanaCrawl:
     @patch("tools.scanning.katana_tool.run_command")
     @patch("tools.scanning.katana_tool.require_binary", return_value=None)
     def test_deduplicates_urls(self, _bin, mock_run):
-        jsonl = (
-            '{"url": "https://example.com/page"}\n'
-            '{"url": "https://example.com/page"}\n'
-        )
+        jsonl = '{"url": "https://example.com/page"}\n{"url": "https://example.com/page"}\n'
         mock_run.return_value = (0, jsonl, "")
         result = katana_crawl.invoke({"target": "example.com"})
         assert len(result["data"]["urls"]) == 1
@@ -117,9 +105,6 @@ class TestKatanaCrawl:
         mock_run.return_value = (1, "", "error occurred")
         result = katana_crawl.invoke({"target": "example.com"})
         assert "error occurred" in result
-
-
-# ── Naabu ──────────────────────────────────────────────────────────────────
 
 
 class TestNaabuScan:
@@ -194,9 +179,6 @@ class TestNaabuScan:
         mock_run.return_value = (1, "", "scan failed")
         result = naabu_scan.invoke({"host": "example.com"})
         assert "scan failed" in result
-
-
-# ── Wafw00f ────────────────────────────────────────────────────────────────
 
 
 class TestWafw00fDetect:

@@ -44,9 +44,6 @@ def format_tool_output(
     }
 
 
-# ── DRY helpers for subprocess-based tools ─────────────────────────────
-
-
 def require_binary(binary: str, tool_name: str) -> None:
     """Raise ``ToolException`` if *binary* is not on ``PATH``.
 

@@ -52,7 +52,7 @@ def urlscan_search(domain: str) -> dict[str, Any]:
         try:
             resp = get_session().get(
                 f"{_BASE_URL}/search/",
-                params={"q": f"domain:{domain}", "size": _MAX_RESULTS},
+                params={"q": f"domain:{domain}", "size": str(_MAX_RESULTS)},
                 headers={
                     "User-Agent": "Mozilla/5.0",
                     "Accept": "application/json",

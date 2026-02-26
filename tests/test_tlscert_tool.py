@@ -15,8 +15,6 @@ from tools.recon.tlscert_tool import (
     tlscert_lookup,
 )
 
-# ── Unit tests for internal helpers ────────────────────────────────────────
-
 
 class TestParseRdns:
     def test_flattens_subject_tuples(self) -> None:
@@ -76,7 +74,7 @@ class TestFingerprintSha256:
         result = _fingerprint_sha256(der)
         assert ":" in result
         parts = result.split(":")
-        assert len(parts) == 32  # SHA-256 = 32 bytes
+        assert len(parts) == 32
         assert all(len(p) == 2 for p in parts)
         assert result == result.upper()
 
@@ -112,7 +110,7 @@ class TestDecodeDerCert:
 
         assert result["subject"] == ((("commonName", "x.com"),),)
         mock_to_pem.assert_called_once_with(b"\x00\x01")
-        mock_decode.assert_called_once()  # temp file path passed
+        mock_decode.assert_called_once()
 
     @patch("tools.recon.tlscert_tool.ssl._ssl._test_decode_cert")
     @patch("tools.recon.tlscert_tool.ssl.DER_cert_to_PEM_cert")
@@ -124,11 +122,8 @@ class TestDecodeDerCert:
         with contextlib.suppress(ssl.SSLError):
             _decode_der_cert(b"\x00\x01")
 
-        # If we get here without an OSError the temp file was cleaned up.
         mock_decode.assert_called_once()
 
-
-# ── Integration tests for the tool (mocked TLS) ───────────────────────────
 
 _MOCK_CERT = {
     "subject": ((("commonName", "example.com"),),),
@@ -147,7 +142,7 @@ _MOCK_CERT = {
     "notAfter": "Apr  1 00:00:00 2025 GMT",
 }
 
-_MOCK_DER = b"\xde\xad\xbe\xef" * 8  # 32 bytes for testing
+_MOCK_DER = b"\xde\xad\xbe\xef" * 8
 
 
 def _build_mock_tls_socket(
@@ -227,8 +222,6 @@ class TestTlscertLookupHappyPath:
         raw_sock = _build_mock_raw_socket()
         mock_conn.return_value = raw_sock
 
-        # First context (verified) raises SSLCertVerificationError,
-        # second context (unverified) succeeds.
         ctx_verified = MagicMock()
         ctx_verified.wrap_socket.side_effect = ssl.SSLCertVerificationError(
             "certificate verify failed: unable to get local issuer certificate"
@@ -243,7 +236,6 @@ class TestTlscertLookupHappyPath:
         data = result["data"]
         assert data["subject_cn"] == "example.com"
         assert data["verified"] is False
-        # create_default_context called twice (verified + unverified)
         assert mock_ctx.call_count == 2
 
     @patch("tools.recon.tlscert_tool._decode_der_cert")
@@ -256,7 +248,6 @@ class TestTlscertLookupHappyPath:
         mock_decode: MagicMock,
     ) -> None:
         """With CERT_NONE, getpeercert() returns {} — DER bytes are parsed instead."""
-        # Simulate real CERT_NONE behaviour: getpeercert() → {}, binary → DER
         tls_sock = MagicMock()
         tls_sock.getpeercert.side_effect = lambda binary_form=False: (
             _MOCK_DER if binary_form else {}
@@ -333,7 +324,6 @@ class TestTlscertLookupErrors:
     @patch("tools.recon.tlscert_tool.socket.create_connection")
     def test_no_cert_returned(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         tls_sock = _build_mock_tls_socket(cert=None)
-        # Override to return None for non-binary
         tls_sock.getpeercert.side_effect = lambda binary_form=False: (
             _MOCK_DER if binary_form else None
         )

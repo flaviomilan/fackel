@@ -73,7 +73,6 @@ def _fetch_history(
         for val in values:
             ip_or_host = val.get("ip", "") or val.get("host", "") or val.get("nameserver", "")
             if not ip_or_host:
-                # fallback: some records have the value directly
                 ip_or_host = val.get("value", str(val))
             records.append(
                 {

@@ -76,9 +76,6 @@ def approval_gate(state: ScanState) -> Command:  # type: ignore[type-arg]
     return Command(goto="report")
 
 
-# ── Routing ────────────────────────────────────────────────────────────────
-
-
 def route_after_osint(state: ScanState) -> str:
     """Decide next step: approval gate (active) or straight to report (passive)."""
     if not state.get("active_scan"):

@@ -52,7 +52,7 @@ class TlsCertInput(BaseModel):
     )
 
 
-def _parse_rdns(rdns_tuples: tuple) -> dict[str, str]:
+def _parse_rdns(rdns_tuples: tuple[tuple[tuple[str, str], ...], ...]) -> dict[str, str]:
     """Flatten an RDN sequence from ``getpeercert()`` into a plain dict.
 
     ``ssl.SSLSocket.getpeercert()`` returns subject/issuer as nested tuples:
@@ -122,7 +122,7 @@ def _decode_der_cert(der_cert: bytes) -> dict[str, Any]:
     try:
         with os.fdopen(fd, "w") as f:
             f.write(pem)
-        return ssl._ssl._test_decode_cert(path)  # type: ignore[attr-defined]
+        return ssl._ssl._test_decode_cert(path)  # type: ignore[attr-defined,no-any-return]
     finally:
         os.unlink(path)
 
@@ -137,7 +137,6 @@ def _connect_and_get_cert(
     On total failure ``cert_dict`` is None and ``protocol_or_error`` carries
     the error message.
     """
-    # --- Attempt 1: default (verified) context ---
     ctx = ssl.create_default_context()
     try:
         cert, der_cert, proto = _do_handshake(hostname, port, ctx)
@@ -154,13 +153,11 @@ def _connect_and_get_cert(
     except (TimeoutError, OSError, ssl.SSLError) as exc:
         return None, None, f"TLS connection to {hostname}:{port} failed: {exc}", False
 
-    # --- Attempt 2: unverified context (self-signed / expired / missing CA) ---
     ctx_noverify = ssl.create_default_context()
     ctx_noverify.check_hostname = False
     ctx_noverify.verify_mode = ssl.CERT_NONE
     try:
         cert, der_cert, proto = _do_handshake(hostname, port, ctx_noverify)
-        # With CERT_NONE, getpeercert() returns {}, but DER bytes are available.
         if not cert and der_cert:
             cert = _decode_der_cert(der_cert)
         if cert:
@@ -185,7 +182,6 @@ def tlscert_lookup(hostname: str, port: int = _DEFAULT_PORT) -> dict[str, Any]:
     cert, der_cert, protocol_version, verified = _connect_and_get_cert(hostname, port)
 
     if cert is None:
-        # _connect_and_get_cert returns an error string in protocol_version on failure
         raise ToolException(f"tlscert_lookup: {protocol_version}")
 
     subject = _parse_rdns(cert.get("subject", ()))

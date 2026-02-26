@@ -38,16 +38,12 @@ from .nodes import (
 )
 from .state import ScanState
 
-# Persistent checkpointer — enables state persistence, resume-after-failure,
-# and replay across graph nodes.  Path is configurable via FACKEL_CHECKPOINT_DB
-# env-var; defaults to ~/.fackel/checkpoints.db.
 _DEFAULT_CHECKPOINT_DIR = Path.home() / ".fackel"
 _CHECKPOINT_DB = os.getenv(
     "FACKEL_CHECKPOINT_DB",
     str(_DEFAULT_CHECKPOINT_DIR / "checkpoints.db"),
 )
 
-# Ensure the checkpoint directory exists.
 Path(_CHECKPOINT_DB).parent.mkdir(parents=True, exist_ok=True)
 
 _checkpointer = SqliteSaver(sqlite3.connect(_CHECKPOINT_DB, check_same_thread=False))
@@ -66,15 +62,12 @@ def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
 
     graph.set_entry_point("osint")
 
-    # After OSINT: active + IPs → approval gate; else → report
     graph.add_conditional_edges(
         "osint",
         route_after_osint,
         {"approval_gate": "approval_gate", "report": "report"},
     )
 
-    # approval_gate returns Command(goto=...) — no explicit edges needed.
-    # port_scan → judge-routed → vuln_scan | triage
     graph.add_conditional_edges(
         "port_scan",
         route_after_port_scan,

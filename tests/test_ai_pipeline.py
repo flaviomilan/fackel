@@ -16,8 +16,6 @@ from fackel.agents.triage.agent import (
     run_triage,
 )
 
-# ── Structured context serialization ───────────────────────────────────────
-
 
 class TestSerializeStructuredContext:
     """_serialize_structured_context produces Markdown from state data."""
@@ -100,7 +98,6 @@ class TestSerializeStructuredContext:
             tech_fingerprints=fps,
             phase_evaluations=[],
         )
-        # Should only contain 10 hosts
         assert result.count("server=nginx") == 10
 
     def test_skips_non_dict_phase_evaluations(self) -> None:
@@ -109,11 +106,7 @@ class TestSerializeStructuredContext:
             tech_fingerprints=[],
             phase_evaluations=["not a dict", None, 42],
         )
-        # Should still produce a header but no items
         assert "Phase Quality" in result
-
-
-# ── run_triage receives structured context ─────────────────────────────────
 
 
 class TestRunTriageStructuredContext:
@@ -144,7 +137,6 @@ class TestRunTriageStructuredContext:
             ],
         )
 
-        # Verify the agent received structured context in the message
         call_args = mock_agent.invoke.call_args[0][0]
         human_msg = call_args["messages"][0].content
         assert "direct_host" in human_msg
@@ -164,12 +156,8 @@ class TestRunTriageStructuredContext:
         mock_agent.invoke.return_value = {"structured_response": mock_result, "messages": []}
         mock_build.return_value = mock_agent
 
-        # Should not raise when no structured context is passed
         result = run_triage([])
         assert result.summary == "No data."
-
-
-# ── triage_node passes structured state to run_triage ──────────────────────
 
 
 class TestTriageNodeStructuredPassthrough:
@@ -210,14 +198,10 @@ class TestTriageNodeStructuredPassthrough:
 
         triage_node(state, {})
 
-        # run_triage should have received structured context kwargs
         call_kwargs = mock_run_triage.call_args[1]
         assert call_kwargs["ip_classifications"] == state["ip_classifications"]
         assert call_kwargs["tech_fingerprints"] == state["tech_fingerprints"]
         assert call_kwargs["phase_evaluations"] == state["phase_evaluations"]
-
-
-# ── osint_node LAAJ evaluation ─────────────────────────────────────────────
 
 
 class TestOsintNodeLAAJ:
@@ -236,7 +220,6 @@ class TestOsintNodeLAAJ:
 
         from fackel.agents.orchestrator.nodes import osint_node
 
-        # Mock agent returning dual stream_mode=["updates", "messages"] events.
         mock_agent = MagicMock()
         mock_agent.checkpointer = None
         mock_agent.stream.return_value = iter(
@@ -249,7 +232,6 @@ class TestOsintNodeLAAJ:
         )
         mock_build.return_value = mock_agent
 
-        # Mock evaluator — good quality
         mock_evaluation = MagicMock()
         mock_evaluation.completeness = "complete"
         mock_evaluation.score = 0.8
@@ -265,12 +247,10 @@ class TestOsintNodeLAAJ:
         state = {"target": "example.com", "active_scan": True}
         result = osint_node(state, {})
 
-        # Should include phase_evaluations
         assert "phase_evaluations" in result
         assert len(result["phase_evaluations"]) == 1
         assert result["phase_evaluations"][0]["phase"] == "osint"
 
-        # evaluate_phase was called for osint
         mock_eval.assert_called_once()
         assert mock_eval.call_args[0][0] == "osint"
 
@@ -285,7 +265,6 @@ class TestOsintNodeLAAJ:
     ) -> None:
         from fackel.agents.orchestrator.nodes import osint_node
 
-        # Mock agent stream
         call_count = 0
 
         def mock_stream(*args, **kwargs):
@@ -307,7 +286,6 @@ class TestOsintNodeLAAJ:
         mock_agent.stream.side_effect = mock_stream
         mock_build.return_value = mock_agent
 
-        # Mock evaluator — empty quality triggers retry
         mock_evaluation = MagicMock()
         mock_evaluation.completeness = "empty"
         mock_evaluation.score = 0.1
@@ -324,10 +302,8 @@ class TestOsintNodeLAAJ:
         state = {"target": "example.com", "active_scan": True}
         osint_node(state, {})
 
-        # Agent should have been streamed twice (initial + retry)
         assert call_count == 2
 
-        # Check a "retry" event was emitted
         retry_events = [
             c for c in mock_emit.call_args_list if len(c.args) >= 2 and c.args[1] == "retry"
         ]
@@ -365,7 +341,6 @@ class TestOsintNodeLAAJ:
         mock_agent.stream.side_effect = mock_stream
         mock_build.return_value = mock_agent
 
-        # Good evaluation — no retry
         mock_evaluation = MagicMock()
         mock_evaluation.completeness = "complete"
         mock_evaluation.score = 0.9
@@ -380,7 +355,6 @@ class TestOsintNodeLAAJ:
         state = {"target": "example.com", "active_scan": True}
         osint_node(state, {})
 
-        # Should only stream once — no retry
         assert call_count == 1
 
     @patch("fackel.agents.orchestrator.streaming.emit")
@@ -415,7 +389,6 @@ class TestOsintNodeLAAJ:
         mock_agent.stream.side_effect = mock_stream
         mock_build.return_value = mock_agent
 
-        # Partial evaluation — score >= 0.3, no retry
         mock_evaluation = MagicMock()
         mock_evaluation.completeness = "partial"
         mock_evaluation.score = 0.5
@@ -430,7 +403,6 @@ class TestOsintNodeLAAJ:
         state = {"target": "example.com", "active_scan": True}
         osint_node(state, {})
 
-        # Should not retry on partial
         assert call_count == 1
 
     @patch("fackel.agents.orchestrator.streaming.emit")
@@ -468,7 +440,6 @@ class TestOsintNodeLAAJ:
         state = {"target": "example.com", "active_scan": True}
         osint_node(state, {})
 
-        # Verify evaluation event was emitted
         eval_events = [
             c for c in mock_emit.call_args_list if len(c.args) >= 2 and c.args[1] == "evaluation"
         ]

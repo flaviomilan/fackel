@@ -23,9 +23,6 @@ console = Console()
 _VERSION = "0.1.0"
 
 
-# ── Banner & header ───────────────────────────────────────────────────────
-
-
 def _print_banner() -> None:
     """Display the Fackel startup banner."""
     console.print()
@@ -70,15 +67,12 @@ def _print_provider_status(
     console.print()
 
 
-# ── HIL approval handlers ─────────────────────────────────────────────────
-
-
 def _make_approval_prompt(
     renderer: EventRenderer,
 ) -> tuple[Any, Any]:
     """Create approval prompt closures that pause the Live area."""
 
-    def approval_prompt(interrupt_data: dict) -> bool:
+    def approval_prompt(interrupt_data: dict[str, Any]) -> bool:
         renderer._persist_content()
         renderer._stop_live()
         question = interrupt_data.get("question", "Proceed with active scanning?")
@@ -105,7 +99,7 @@ def _make_approval_prompt(
         console.print()
         return approved
 
-    def tool_approval_prompt(interrupt_data: dict) -> str:
+    def tool_approval_prompt(interrupt_data: dict[str, Any]) -> str:
         renderer._persist_content()
         renderer._stop_live()
         description = interrupt_data.get("description", str(interrupt_data))
@@ -182,7 +176,6 @@ def scan(
 
     configure_logging(verbose=verbose)
 
-    # ── Banner & header ────────────────────────────────────────────────
     _print_banner()
 
     if check_providers:
@@ -190,7 +183,6 @@ def scan(
 
     _print_scan_header(target, active_scan=active_scan, approve_tools=approve_tools)
 
-    # Show tools that will be skipped due to missing API keys.
     from fackel.provider_keys import get_unavailable_tool_names
 
     unavailable = get_unavailable_tool_names()
@@ -201,7 +193,6 @@ def scan(
             console.print(f"  [dim]• {tool_name} — {provider} ({vars_str})[/dim]")
         console.print()
 
-    # ── Event callbacks ────────────────────────────────────────────────
     renderer = EventRenderer(console, verbose=verbose)
     set_event_callback(renderer.handle)
     approval_prompt, tool_approval_prompt = _make_approval_prompt(renderer)
@@ -234,11 +225,12 @@ def _execute_scan(
 ) -> dict[str, Any]:
     """Run the orchestrator and handle interrupts / errors."""
     try:
-        return run_fn(
+        result: dict[str, Any] = run_fn(
             target,
             active_scan=active_scan,
             approval_callback=approval_prompt,
         )
+        return result
     except KeyboardInterrupt:
         renderer.shutdown()
         elapsed = time.perf_counter() - started_at
