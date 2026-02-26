@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.1 (2026-02-26)
+
+### Bug Fixes
+
+- Files
+  ([`379fa1e`](https://github.com/flaviomilan/fackel/commit/379fa1e6562ad13a30506bcb966681d09c3da0d9))
+
+
 ## v1.3.0 (2026-02-26)
 
 ### Bug Fixes
