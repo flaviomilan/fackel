@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-02-26)
+
+### Chores
+
+- Remove unused code
+  ([`7f51cf2`](https://github.com/flaviomilan/fackel/commit/7f51cf23a8db7c9fbab6ce87089add3553b8f61a))
+
+### Features
+
+- Adding new tools
+  ([`d5509f5`](https://github.com/flaviomilan/fackel/commit/d5509f56f660786125be756de586053bb45b76f3))
+
+
 ## v1.1.0 (2026-02-26)
 
 ### Bug Fixes
