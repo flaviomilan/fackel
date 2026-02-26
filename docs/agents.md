@@ -45,7 +45,7 @@ def build(model_name: str | None = None, *, approve_tools: bool = False) -> Comp
 ```
 
 Key points:
-- **Model factory** — `build_llm("agent_name")` centralises model creation with `ChatOpenAI`, reads `FACKEL_MODEL_{AGENT_NAME}` env var, falls back to `gpt-5-mini`, and applies a standard timeout.
+- **Model factory** — `build_llm("agent_name")` centralises model creation, resolves `FACKEL_PROVIDER_{AGENT_NAME}` and `FACKEL_MODEL_{AGENT_NAME}` env vars, dispatches to the appropriate provider (OpenAI, Ollama, etc.), and applies a standard timeout.
 - **Prompt composition** — `load_prompt()` combines `soul.md` (shared identity) with `skills/<name>.md` (task-specific).
 - **Tool filtering** — `filter_tools()` removes tools whose API keys are missing.
 - **Agent naming** — `name="agent_name"` gives each agent an identifiable name in LangSmith traces.
@@ -291,7 +291,7 @@ professional Markdown penetration test report.
 
 ### Type: single LLM call (no tools)
 
-Uses a single `ChatOpenAI` invocation with all accumulated context serialised as
+Uses a single LLM invocation (via `build_llm`) with all accumulated context serialised as
 input.
 
 ### Input context
@@ -333,7 +333,7 @@ pipeline routing.
 
 ### Type: structured LLM output
 
-Uses `ChatOpenAI.with_structured_output(PhaseEvaluation)`.
+Uses `build_llm("judge").with_structured_output(PhaseEvaluation)`.
 
 ### Output model
 

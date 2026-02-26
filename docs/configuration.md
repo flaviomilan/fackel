@@ -29,33 +29,54 @@ model selection, API keys, CLI options, and infrastructure setup.
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | OpenAI API key (or compatible provider). Used by all agents. |
+| `OPENAI_API_KEY` | OpenAI API key (or compatible provider). Required when using the `openai` provider. |
 
-This is the **only** required variable. Everything else has sensible defaults or
-degrades gracefully.
+When using the default `openai` provider, this is the **only** required variable.
+Everything else has sensible defaults or degrades gracefully.
+
+### LLM provider selection
+
+Each agent reads its provider from a dedicated environment variable, defaulting to
+`openai`. This allows different pipeline stages to use different providers.
+
+| Variable | Agent | Default |
+|----------|-------|---------|
+| `FACKEL_PROVIDER_OSINT` | OSINT ReAct agent | `openai` |
+| `FACKEL_PROVIDER_PORT_SCAN` | Port scan ReAct agent | `openai` |
+| `FACKEL_PROVIDER_VULN_SCAN` | Vulnerability scan ReAct agent | `openai` |
+| `FACKEL_PROVIDER_TRIAGE` | Triage structured output | `openai` |
+| `FACKEL_PROVIDER_REPORT` | Report synthesis | `openai` |
+| `FACKEL_PROVIDER_JUDGE` | Phase quality evaluator | `openai` |
+
+Supported providers:
+
+| Provider | LangChain class | Install | Default model |
+|----------|----------------|---------|---------------|
+| `openai` | `ChatOpenAI` | included | `gpt-5-mini` |
+| `ollama` | `ChatOllama` | `pip install fackel[ollama]` | `llama3.2` |
+
+Ollama-specific configuration:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FACKEL_OLLAMA_BASE_URL` | Ollama server URL | `http://localhost:11434` |
 
 ### Model selection
 
 Each agent reads its model from a dedicated environment variable, falling back to
-`gpt-5-mini` (defined in `src/fackel/agents/config.py`).
+the provider-specific default (defined in `src/fackel/agents/config.py`).
 
-| Variable | Agent | Default |
-|----------|-------|---------|
-| `FACKEL_MODEL_OSINT` | OSINT ReAct agent | `gpt-5-mini` |
-| `FACKEL_MODEL_PORT_SCAN` | Port scan ReAct agent | `gpt-5-mini` |
-| `FACKEL_MODEL_VULN_SCAN` | Vulnerability scan ReAct agent | `gpt-5-mini` |
-| `FACKEL_MODEL_TRIAGE` | Triage structured output | `gpt-5-mini` |
-| `FACKEL_MODEL_REPORT` | Report synthesis | `gpt-5-mini` |
-| `FACKEL_MODEL_JUDGE` | Phase quality evaluator | `gpt-5-mini` |
+| Variable | Agent | Default (OpenAI) | Default (Ollama) |
+|----------|-------|-------------------|-------------------|
+| `FACKEL_MODEL_OSINT` | OSINT ReAct agent | `gpt-5-mini` | `llama3.2` |
+| `FACKEL_MODEL_PORT_SCAN` | Port scan ReAct agent | `gpt-5-mini` | `llama3.2` |
+| `FACKEL_MODEL_VULN_SCAN` | Vulnerability scan ReAct agent | `gpt-5-mini` | `llama3.2` |
+| `FACKEL_MODEL_TRIAGE` | Triage structured output | `gpt-5-mini` | `llama3.2` |
+| `FACKEL_MODEL_REPORT` | Report synthesis | `gpt-5-mini` | `llama3.2` |
+| `FACKEL_MODEL_JUDGE` | Phase quality evaluator | `gpt-5-mini` | `llama3.2` |
 
 The naming convention is `FACKEL_MODEL_{AGENT_NAME}` where `AGENT_NAME` is
-uppercase. The lookup function:
-
-```python
-def get_model(agent_name: str) -> str:
-    env_var = f"FACKEL_MODEL_{agent_name.upper()}"
-    return os.getenv(env_var, "gpt-5-mini")
-```
+uppercase.
 
 #### Examples
 
@@ -66,20 +87,31 @@ export FACKEL_MODEL_REPORT=gpt-4o
 # Use a cheaper model for OSINT (mostly tool orchestration)
 export FACKEL_MODEL_OSINT=gpt-4o-mini
 
-# Use Claude for all agents
-export FACKEL_MODEL_OSINT=claude-sonnet-4-20250514
-export FACKEL_MODEL_PORT_SCAN=claude-sonnet-4-20250514
-export FACKEL_MODEL_VULN_SCAN=claude-sonnet-4-20250514
-export FACKEL_MODEL_TRIAGE=claude-sonnet-4-20250514
-export FACKEL_MODEL_REPORT=claude-sonnet-4-20250514
-export FACKEL_MODEL_JUDGE=claude-sonnet-4-20250514
+# Use Ollama for OSINT, OpenAI for everything else
+export FACKEL_PROVIDER_OSINT=ollama
+export FACKEL_MODEL_OSINT=llama3.2
+
+# Use Ollama for all agents
+export FACKEL_PROVIDER_OSINT=ollama
+export FACKEL_PROVIDER_PORT_SCAN=ollama
+export FACKEL_PROVIDER_VULN_SCAN=ollama
+export FACKEL_PROVIDER_TRIAGE=ollama
+export FACKEL_PROVIDER_REPORT=ollama
+export FACKEL_PROVIDER_JUDGE=ollama
+
+# Mix providers: Ollama for recon, OpenAI for analysis and reporting
+export FACKEL_PROVIDER_OSINT=ollama
+export FACKEL_MODEL_OSINT=llama3.2
+export FACKEL_PROVIDER_PORT_SCAN=ollama
+export FACKEL_MODEL_PORT_SCAN=llama3.2
+export FACKEL_MODEL_REPORT=gpt-4o
 ```
 
-#### Using non-OpenAI providers
+#### Using OpenAI-compatible providers
 
-Fackel uses LangChain's `ChatOpenAI`, which supports any OpenAI-compatible API.
-Set `OPENAI_API_BASE` (or `OPENAI_BASE_URL`) alongside the model name to use
-alternative providers.
+The `openai` provider uses LangChain's `ChatOpenAI`, which supports any
+OpenAI-compatible API. Set `OPENAI_API_BASE` (or `OPENAI_BASE_URL`) alongside
+the model name to use alternative providers via the OpenAI-compatible interface.
 
 ### Provider API keys
 

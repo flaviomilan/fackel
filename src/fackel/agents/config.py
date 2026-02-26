@@ -1,7 +1,13 @@
 """Centralized model configuration and middleware for all agents.
 
-Each agent reads from ``FACKEL_MODEL_{AGENT}`` env-var, defaulting to
-``gpt-5-mini``.  One place to change, one convention to remember.
+Each agent reads from ``FACKEL_MODEL_{AGENT}`` and ``FACKEL_PROVIDER_{AGENT}``
+env-vars.  Provider defaults to ``openai``, model defaults to
+``gpt-5-mini`` for OpenAI or ``llama3.2`` for Ollama.
+
+Supported providers (extensible via :data:`_PROVIDER_FACTORIES`):
+
+- **openai** — ``ChatOpenAI`` (default).
+- **ollama** — ``ChatOllama`` for locally-hosted models.
 
 Middleware stack (applied to every ReAct agent):
 
@@ -27,9 +33,14 @@ from langchain.agents.middleware.types import (
     ModelRequest,
     ModelResponse,
 )
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
 
-_DEFAULT_MODEL = "gpt-5-mini"
+_DEFAULT_PROVIDER = "openai"
+
+_DEFAULT_MODELS: dict[str, str] = {
+    "openai": "gpt-5-mini",
+    "ollama": "llama3.2",
+}
 
 LLM_REQUEST_TIMEOUT: int = 120
 
@@ -53,15 +64,70 @@ ACTIVE_SCAN_TOOLS: frozenset[str] = frozenset(
     }
 )
 
+# ---------------------------------------------------------------------------
+# Provider factory registry
+# ---------------------------------------------------------------------------
+
+
+def _build_openai(model: str, temperature: float | None, timeout: int) -> BaseChatModel:
+    """Create a ``ChatOpenAI`` instance."""
+    from langchain_openai import ChatOpenAI
+
+    kwargs: dict[str, Any] = {"model": model, "request_timeout": timeout}
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return ChatOpenAI(**kwargs)
+
+
+def _build_ollama(model: str, temperature: float | None, timeout: int) -> BaseChatModel:
+    """Create a ``ChatOllama`` instance for locally-hosted models."""
+    try:
+        from langchain_ollama import ChatOllama
+    except ImportError as exc:
+        raise ImportError(
+            "langchain-ollama is required for the Ollama provider. "
+            "Install it with: pip install langchain-ollama"
+        ) from exc
+
+    base_url = os.getenv("FACKEL_OLLAMA_BASE_URL", "http://localhost:11434")
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "base_url": base_url,
+        "timeout": timeout,
+    }
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return ChatOllama(**kwargs)
+
+
+_PROVIDER_FACTORIES: dict[str, Callable[[str, float | None, int], BaseChatModel]] = {
+    "openai": _build_openai,
+    "ollama": _build_ollama,
+}
+
+
+def get_provider(agent_name: str) -> str:
+    """Return the LLM provider for *agent_name*.
+
+    Looks up ``FACKEL_PROVIDER_{AGENT_NAME}`` (upper-cased) in the
+    environment, falling back to :data:`_DEFAULT_PROVIDER`.
+    """
+    env_var = f"FACKEL_PROVIDER_{agent_name.upper()}"
+    return os.getenv(env_var, _DEFAULT_PROVIDER).lower()
+
 
 def get_model(agent_name: str) -> str:
     """Return the LLM model name for *agent_name*.
 
     Looks up ``FACKEL_MODEL_{AGENT_NAME}`` (upper-cased) in the
-    environment, falling back to :data:`_DEFAULT_MODEL`.
+    environment, falling back to the provider-specific default model.
     """
     env_var = f"FACKEL_MODEL_{agent_name.upper()}"
-    return os.getenv(env_var, _DEFAULT_MODEL)
+    explicit = os.getenv(env_var)
+    if explicit:
+        return explicit
+    provider = get_provider(agent_name)
+    return _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
 
 
 def build_llm(
@@ -70,18 +136,21 @@ def build_llm(
     model_name: str | None = None,
     temperature: float | None = None,
     request_timeout: int | None = None,
-) -> ChatOpenAI:
-    """Build a ``ChatOpenAI`` with standard configuration.
+) -> BaseChatModel:
+    """Build a chat model for the configured provider.
 
-    Centralises model selection, timeout, and LangSmith tracing in one
-    place so agents stay DRY.  When ``LANGCHAIN_TRACING_V2=true`` and
-    ``LANGCHAIN_API_KEY`` are set, LangChain automatically traces all
-    LLM calls to LangSmith — no explicit callback required.
+    Centralises provider selection, model selection, timeout, and
+    LangSmith tracing in one place so agents stay DRY.
+
+    Provider resolution: ``FACKEL_PROVIDER_{AGENT}`` env-var, defaulting
+    to ``openai``.  Model resolution: ``FACKEL_MODEL_{AGENT}`` env-var,
+    defaulting to the provider-specific default (see :data:`_DEFAULT_MODELS`).
 
     Parameters
     ----------
     agent_name:
-        Logical name used to resolve ``FACKEL_MODEL_{AGENT}`` env-var.
+        Logical name used to resolve ``FACKEL_PROVIDER_{AGENT}`` and
+        ``FACKEL_MODEL_{AGENT}`` env-vars.
     model_name:
         Explicit model override; bypasses env-var lookup.
     temperature:
@@ -89,13 +158,18 @@ def build_llm(
     request_timeout:
         Per-request timeout in seconds (default :data:`LLM_REQUEST_TIMEOUT`).
     """
-    kwargs: dict[str, Any] = {
-        "model": model_name or get_model(agent_name),
-        "request_timeout": request_timeout or LLM_REQUEST_TIMEOUT,
-    }
-    if temperature is not None:
-        kwargs["temperature"] = temperature
-    return ChatOpenAI(**kwargs)
+    provider = get_provider(agent_name)
+    model = model_name or get_model(agent_name)
+    timeout = request_timeout or LLM_REQUEST_TIMEOUT
+
+    factory = _PROVIDER_FACTORIES.get(provider)
+    if factory is None:
+        supported = ", ".join(sorted(_PROVIDER_FACTORIES))
+        raise ValueError(
+            f"Unknown LLM provider '{provider}' for agent '{agent_name}'. "
+            f"Supported providers: {supported}"
+        )
+    return factory(model, temperature, timeout)
 
 
 def default_middleware(

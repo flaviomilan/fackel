@@ -563,7 +563,7 @@ Before submitting or approving code changes, verify:
 - [ ] `guard_target()` on all tool functions that accept targets
 - [ ] `handle_tool_error = True` attribute on all tool functions
 - [ ] `format_tool_output()` for all tool return values
-- [ ] `build_llm()` for agent model construction (never direct `ChatOpenAI`)
+- [ ] `build_llm()` for agent model construction (never direct `ChatOpenAI` / `ChatOllama`)
 - [ ] `name` parameter on all `create_agent()` calls
 
 > **If a change does not clearly improve quality, do not make it.**

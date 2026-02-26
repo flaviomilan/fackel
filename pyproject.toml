@@ -33,6 +33,9 @@ dependencies = [
 fackel = "cli.main:app"
 
 [project.optional-dependencies]
+ollama = [
+  "langchain-ollama>=0.3",
+]
 dev = [
   "ruff>=0.4",
   "mypy>=1.9",

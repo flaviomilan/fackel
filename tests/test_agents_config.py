@@ -1,24 +1,56 @@
-"""Tests for agents/config — model configuration and middleware."""
+"""Tests for agents/config — model configuration, provider resolution, and middleware."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from fackel.agents.config import (
+    _PROVIDER_FACTORIES,
     ACTIVE_SCAN_TOOLS,
     ParallelToolCalls,
+    build_llm,
     default_middleware,
     get_model,
+    get_provider,
 )
+
+
+class TestGetProvider:
+    """Verify provider resolution from environment."""
+
+    def test_default_provider(self, monkeypatch):
+        monkeypatch.delenv("FACKEL_PROVIDER_OSINT", raising=False)
+        assert get_provider("osint") == "openai"
+
+    def test_custom_provider_from_env(self, monkeypatch):
+        monkeypatch.setenv("FACKEL_PROVIDER_OSINT", "ollama")
+        assert get_provider("osint") == "ollama"
+
+    def test_provider_normalised_to_lowercase(self, monkeypatch):
+        monkeypatch.setenv("FACKEL_PROVIDER_REPORT", "Ollama")
+        assert get_provider("report") == "ollama"
+
+    def test_uppercased_agent_name(self, monkeypatch):
+        monkeypatch.setenv("FACKEL_PROVIDER_PORT_SCAN", "ollama")
+        assert get_provider("port_scan") == "ollama"
 
 
 class TestGetModel:
     """Verify model name resolution from environment."""
 
-    def test_default_model(self, monkeypatch):
+    def test_default_model_openai(self, monkeypatch):
         monkeypatch.delenv("FACKEL_MODEL_OSINT", raising=False)
+        monkeypatch.delenv("FACKEL_PROVIDER_OSINT", raising=False)
         model = get_model("osint")
         assert model == "gpt-5-mini"
+
+    def test_default_model_ollama(self, monkeypatch):
+        monkeypatch.delenv("FACKEL_MODEL_OSINT", raising=False)
+        monkeypatch.setenv("FACKEL_PROVIDER_OSINT", "ollama")
+        model = get_model("osint")
+        assert model == "llama3.2"
 
     def test_custom_model_from_env(self, monkeypatch):
         monkeypatch.setenv("FACKEL_MODEL_OSINT", "gpt-4o")
@@ -29,6 +61,56 @@ class TestGetModel:
         monkeypatch.setenv("FACKEL_MODEL_PORT_SCAN", "claude-3-opus")
         model = get_model("port_scan")
         assert model == "claude-3-opus"
+
+
+class TestBuildLlm:
+    """Verify build_llm dispatches to the correct provider factory."""
+
+    def test_openai_provider_calls_factory(self, monkeypatch):
+        monkeypatch.delenv("FACKEL_PROVIDER_OSINT", raising=False)
+        monkeypatch.delenv("FACKEL_MODEL_OSINT", raising=False)
+        mock_model = MagicMock()
+        with patch.dict(_PROVIDER_FACTORIES, {"openai": MagicMock(return_value=mock_model)}):
+            result = build_llm("osint")
+        assert result is mock_model
+
+    def test_ollama_provider_calls_factory(self, monkeypatch):
+        monkeypatch.setenv("FACKEL_PROVIDER_OSINT", "ollama")
+        monkeypatch.delenv("FACKEL_MODEL_OSINT", raising=False)
+        mock_model = MagicMock()
+        with patch.dict(_PROVIDER_FACTORIES, {"ollama": MagicMock(return_value=mock_model)}):
+            result = build_llm("osint")
+        assert result is mock_model
+
+    def test_explicit_model_overrides_env(self, monkeypatch):
+        monkeypatch.delenv("FACKEL_PROVIDER_OSINT", raising=False)
+        monkeypatch.setenv("FACKEL_MODEL_OSINT", "gpt-4o")
+        factory = MagicMock(return_value=MagicMock())
+        with patch.dict(_PROVIDER_FACTORIES, {"openai": factory}):
+            build_llm("osint", model_name="gpt-5")
+        factory.assert_called_once_with("gpt-5", None, 120)
+
+    def test_unknown_provider_raises(self, monkeypatch):
+        monkeypatch.setenv("FACKEL_PROVIDER_OSINT", "not_a_provider")
+        with pytest.raises(ValueError, match="Unknown LLM provider"):
+            build_llm("osint")
+
+    def test_temperature_and_timeout_forwarded(self, monkeypatch):
+        monkeypatch.delenv("FACKEL_PROVIDER_OSINT", raising=False)
+        monkeypatch.delenv("FACKEL_MODEL_OSINT", raising=False)
+        factory = MagicMock(return_value=MagicMock())
+        with patch.dict(_PROVIDER_FACTORIES, {"openai": factory}):
+            build_llm("osint", temperature=0.5, request_timeout=30)
+        factory.assert_called_once_with("gpt-5-mini", 0.5, 30)
+
+    def test_per_agent_provider_isolation(self, monkeypatch):
+        """Different agents can use different providers simultaneously."""
+        monkeypatch.setenv("FACKEL_PROVIDER_OSINT", "ollama")
+        monkeypatch.setenv("FACKEL_PROVIDER_REPORT", "openai")
+        monkeypatch.delenv("FACKEL_PROVIDER_PORT_SCAN", raising=False)
+        assert get_provider("osint") == "ollama"
+        assert get_provider("report") == "openai"
+        assert get_provider("port_scan") == "openai"  # default
 
 
 class TestParallelToolCalls:

@@ -39,6 +39,24 @@ try:
 except ImportError:  # pragma: no cover - openai always installed via langchain-openai
     _LLM_TRANSIENT_ERRORS = ()
 
+try:
+    from httpx import ConnectError as HttpxConnectError
+    from httpx import ReadTimeout as HttpxReadTimeout
+
+    _OLLAMA_TRANSIENT_ERRORS: tuple[type[Exception], ...] = (
+        HttpxConnectError,
+        HttpxReadTimeout,
+    )
+except ImportError:  # pragma: no cover
+    _OLLAMA_TRANSIENT_ERRORS = ()
+
+_ALL_LLM_TRANSIENT_ERRORS: tuple[type[Exception], ...] = (
+    *_LLM_TRANSIENT_ERRORS,
+    *_OLLAMA_TRANSIENT_ERRORS,
+    ConnectionError,
+    TimeoutError,
+)
+
 EventCallback = Callable[[str, str, dict[str, Any]], None] | None
 
 ToolApprovalCallback = Callable[[dict[str, Any]], str] | None
@@ -212,10 +230,11 @@ class _AgentStreamer:
     def _stream_once(self, input_data: Any) -> None:
         """Run one streaming pass using dual updates + messages mode.
 
-        Catches transient OpenAI API errors (rate-limit, timeout,
-        connection) and retries once with back-off.  If the retry also
-        fails, the error is logged and an event emitted so the scan can
-        continue with whatever messages were already collected.
+        Catches transient LLM API errors (rate-limit, timeout,
+        connection) across all supported providers and retries once
+        with back-off.  If the retry also fails, the error is logged
+        and an event emitted so the scan can continue with whatever
+        messages were already collected.
         """
         retries = 0
         while True:
@@ -232,7 +251,7 @@ class _AgentStreamer:
                     if self._hit_limit:
                         break
                 return
-            except _LLM_TRANSIENT_ERRORS as exc:
+            except _ALL_LLM_TRANSIENT_ERRORS as exc:
                 if retries < self._MAX_LLM_RETRIES:
                     retries += 1
                     delay = self._LLM_RETRY_DELAY * retries
