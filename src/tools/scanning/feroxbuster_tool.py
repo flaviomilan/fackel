@@ -46,7 +46,7 @@ def feroxbuster_scan(target: str) -> dict[str, Any]:
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
 
-    cmd = ["feroxbuster", "-u", target, "--json", "-q", "--no-state"]
+    cmd = ["feroxbuster", "-u", target, "--json", "--silent", "--no-state"]
     try:
         code, out, stderr = run_command(cmd, timeout=get_tool_timeout("feroxbuster_scan", _TIMEOUT))
     except Exception as exc:

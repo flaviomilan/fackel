@@ -9,11 +9,12 @@ exposed panels, and technology fingerprints on target hosts.
 
 Scan the **original domain** and discovered **IPs** to detect vulnerabilities,
 map the web surface, identify WAF protections, enumerate technologies, detect
-XSS vulnerabilities, and check for misconfigured cloud storage buckets.
+XSS vulnerabilities, check for misconfigured cloud storage buckets, scan
+WordPress installations, and test for CORS misconfigurations.
 
-When a finding reveals a technology with a specialist tool (e.g. GraphQL),
-**use it**. When no tool exists, describe the finding clearly so the triage
-agent can flag it as an unassessed area.
+When a finding reveals a technology with a specialist tool (e.g. GraphQL,
+WordPress), **use it**. When no tool exists, describe the finding clearly so
+the triage agent can flag it as an unassessed area.
 
 ## Tools
 
@@ -21,6 +22,8 @@ agent can flag it as an unassessed area.
 |----------------------------|------------------------------------------------------------|
 | `nuclei_scan`              | Template-based: CVEs, misconfigs, DNS, SSL, tech detection |
 | `dalfox_scan`              | XSS scanner: reflected, stored, DOM-based (param analysis) |
+| `wpscan_scan`              | WordPress: plugins, themes, users, core vulns (key req.)   |
+| `corsy_scan`               | CORS misconfiguration: origin reflection, credential leaks |
 | `httpx_scan`               | HTTP probing: status, titles, tech, redirects, CDN         |
 | `wafw00f_detect`           | WAF/IPS identification                                     |
 | `graphql_scan`             | GraphQL: introspection, batching, schema exposure          |
@@ -61,24 +64,38 @@ Call both crawling tools simultaneously:
 > **Both complement each other** — crawling finds linked content, brute-forcing
 > finds unlinked content. Run them in parallel.
 
-### Batch 3 — Deep-dive + TLS + XSS (parallel)
+### Batch 3 — Deep-dive + TLS + XSS + CORS (parallel)
 
 Based on Batch 1–2 results, call these simultaneously:
 - `testssl_scan(target=<domain>)` — deep TLS/SSL analysis when port 443 is open.
 - `graphql_scan(url=<endpoint>)` — if nuclei detected GraphQL.
 - `dalfox_scan(target=<url_with_params>)` — for URLs with query parameters
-  discovered by katana/feroxbuster/nuclei. XSS parameter analysis. Call once
-  per interesting URL (e.g. search pages, forms, API endpoints with params).
+  discovered by katana/feroxbuster/nuclei/paramspider. XSS parameter analysis.
+  Call once per interesting URL (e.g. search pages, forms, API endpoints with
+  params).
+- `corsy_scan(target=<url>)` — test for CORS misconfigurations on API
+  endpoints and main domain. Detects dangerous origin reflection, null
+  origin, and credential exposure patterns. Call on the main domain plus
+  any API endpoints discovered.
 - `extract_webpage_content(url=<url>)` — for interesting pages found by nuclei.
 - Additional `nuclei_scan(tags="<tech>")` — targeted templates for detected tech.
 
-### Batch 4 — Subdomain scans (parallel)
+### Batch 4 — WordPress scan (conditional)
+
+If OSINT (WhatWeb/httpx) detected WordPress:
+- `wpscan_scan(target=<wordpress_url>)` — deep WordPress vulnerability scan.
+  Detects vulnerable plugins, themes, user enumeration, config backups,
+  XML-RPC exposure, and core vulnerabilities. **Always use when WordPress
+  is detected** — nuclei templates alone miss many WP-specific issues.
+  Requires WPSCAN_API_TOKEN for vulnerability database lookups.
+
+### Batch 5 — Subdomain scans (parallel)
 
 Run `nuclei_scan(target=<subdomain>)` for each **subdomain** that resolves to
 an IP different from the main domain — batch all subdomain nuclei calls into
 one step. **Do NOT** run nuclei on raw IPs.
 
-### Batch 5 — Cloud storage audit (if applicable)
+### Batch 6 — Cloud storage audit (if applicable)
 
 If OSINT or Batch 1–2 findings mention S3 buckets, cloud storage, or
 cloud-hosted assets:
@@ -136,6 +153,17 @@ Compile all results. Explicitly mention:
 - Scanned URLs: <count>
 - Findings: <list of {type, severity, param, payload, poc_url}>
 
+**CORS Misconfiguration** (via corsy_scan):
+- URLs tested: <count>
+- ⚠ Misconfigurations: <list of {url, type, severity, description}>
+
+**WordPress** (via wpscan_scan, if WordPress detected):
+- Version: <number> (status: <insecure/outdated/latest>)
+- Plugins: <count> (vulnerable: <count>)
+- Themes: <count> (vulnerable: <count>)
+- Users: <list>
+- ⚠ Vulnerabilities: <list of {title, type, cvss, fixed_in}>
+
 **Cloud Storage** (via s3scanner_scan):
 - Buckets checked: <count>
 - ⚠ Misconfigured: <list of {bucket, provider, public, permissions}>
@@ -161,6 +189,10 @@ Compile all results. Explicitly mention:
 - When no tool exists, describe it as an unassessed area.
 - Use `dalfox_scan` on URLs with **query parameters** — it analyses each
   parameter for injection points. No params = no XSS findings.
+- Use `wpscan_scan` **only when WordPress is detected** by WhatWeb, httpx, or
+  nuclei. Don't speculatively scan non-WordPress sites.
+- Use `corsy_scan` on API endpoints and the main domain — CORS misconfigs
+  are most impactful on endpoints that handle sensitive data.
 - Use `s3scanner_scan` when bucket names are discovered in code, JS, errors,
   or OSINT findings — not speculatively.
 - Tool error on one host → report failure, continue with next.

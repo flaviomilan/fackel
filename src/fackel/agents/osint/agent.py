@@ -17,6 +17,8 @@ from fackel.agents.prompts import load_prompt
 from fackel.provider_keys import filter_tools
 from tools.osint.email_analyzer import analyze_email
 from tools.osint.job_search import job_search
+from tools.osint.trufflehog_tool import trufflehog_scan
+from tools.recon.amass_tool import amass_enum
 from tools.recon.bgpview_tool import bgp_lookup
 from tools.recon.censys_tool import censys_lookup
 from tools.recon.cloudbrute_tool import cloudbrute_enum
@@ -26,14 +28,18 @@ from tools.recon.dnsdumpster_tool import dnsdumpster_lookup
 from tools.recon.fofa_tool import fofa_search
 from tools.recon.gau_tool import gau_urls
 from tools.recon.ipinfo_tool import ipinfo_lookup
+from tools.recon.linkfinder_tool import linkfinder_extract
 from tools.recon.otx_tool import otx_passive_dns
+from tools.recon.paramspider_tool import paramspider_crawl
 from tools.recon.reverse_dns_tool import reverse_dns_lookup
 from tools.recon.securitytrails_tool import securitytrails_history
 from tools.recon.shodan_tool import shodan_lookup
 from tools.recon.subfinder_tool import subfinder_enum
+from tools.recon.subzy_tool import subzy_check
 from tools.recon.tlscert_tool import tlscert_lookup
 from tools.recon.urlscan_tool import urlscan_search
 from tools.recon.virustotal_tool import virustotal_subdomain_enum
+from tools.recon.whatweb_tool import whatweb_scan
 from tools.recon.whois import whois_lookup
 from tools.scanning.httpx_tool import httpx_scan
 
@@ -49,16 +55,22 @@ TOOLS = [
     virustotal_subdomain_enum,
     crtsh_subdomain_enum,
     subfinder_enum,
+    amass_enum,
+    subzy_check,
     gau_urls,
+    paramspider_crawl,
     reverse_dns_lookup,
     ipinfo_lookup,
     bgp_lookup,
     cloudbrute_enum,
     httpx_scan,
+    whatweb_scan,
+    linkfinder_extract,
     tlscert_lookup,
     securitytrails_history,
     urlscan_search,
     otx_passive_dns,
+    trufflehog_scan,
     job_search,
     analyze_email,
 ]

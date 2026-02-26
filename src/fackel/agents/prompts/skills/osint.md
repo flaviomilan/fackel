@@ -10,16 +10,20 @@ fingerprinting. Map the target's external footprint without intrusive probes.
 Given a target (domain or IP), discover associated infrastructure using
 passive techniques: DNS resolution, WHOIS data, Shodan/Censys/FOFA
 historical scan databases, subdomain enumeration via multiple sources
-(subfinder, DNSDumpster, crt.sh, VirusTotal), reverse DNS / reverse IP lookups
-for shared hosting detection, historical DNS records via SecurityTrails
-(previous IPs, hosting migrations, nameserver changes), Urlscan.io for cached
-scan results (URLs, page content, JS endpoints, technologies), AlienVault OTX
-for community-sourced passive DNS, passive URL discovery via gau (Wayback
-Machine, Common Crawl), cloud infrastructure enumeration via CloudBrute
-(AWS/Azure/GCP/DigitalOcean bucket and app discovery), job posting analysis
-for tech stack discovery, email analysis when addresses are found, and HTTP
-fingerprinting via httpx for tech stack, server headers, WAF detection, and
-redirect analysis.
+(subfinder, Amass, DNSDumpster, crt.sh, VirusTotal), subdomain takeover
+detection via Subzy, reverse DNS / reverse IP lookups for shared hosting
+detection, historical DNS records via SecurityTrails (previous IPs, hosting
+migrations, nameserver changes), Urlscan.io for cached scan results (URLs,
+page content, JS endpoints, technologies), AlienVault OTX for
+community-sourced passive DNS, passive URL discovery via gau (Wayback
+Machine, Common Crawl), parameter discovery via ParamSpider for feeding XSS
+scanners, technology fingerprinting via WhatWeb (CMS, frameworks, libraries),
+JavaScript endpoint extraction via LinkFinder, cloud infrastructure
+enumeration via CloudBrute (AWS/Azure/GCP/DigitalOcean bucket and app
+discovery), secret leak scanning via TruffleHog (Git repositories), job
+posting analysis for tech stack discovery, email analysis when addresses are
+found, and HTTP fingerprinting via httpx for tech stack, server headers, WAF
+detection, and redirect analysis.
 
 ## Tools
 
@@ -33,18 +37,24 @@ redirect analysis.
 | `virustotal_subdomain_enum` | Passive subdomain discovery via VirusTotal (API key req.)       |
 | `crtsh_subdomain_enum`      | Subdomain enum via Certificate Transparency logs — most reliable|
 | `subfinder_enum`            | Aggregate 40+ passive sources for subdomain discovery           |
+| `amass_enum`                | OWASP Amass — deep subdomain enum via CT, APIs, scraping        |
+| `subzy_check`               | Subdomain takeover detection — dangling CNAMEs, unclaimed svcs  |
 | `reverse_dns_lookup`        | PTR records + reverse IP for shared hosting detection           |
 | `ipinfo_lookup`             | IP geolocation, ASN, org, anycast flag via ipinfo.io (free)     |
 | `bgp_lookup`                | ASN details, CIDR prefix, RIR allocation via RIPEstat (free)    |
 | `httpx_scan`                | HTTP fingerprinting — tech stack, server header, redirects, WAF |
+| `whatweb_scan`              | Web tech fingerprinting — CMS, frameworks, JS libs, server      |
+| `linkfinder_extract`        | Extract API endpoints and paths from JavaScript files            |
+| `paramspider_crawl`         | Discover URLs with query params from web archives (for XSS)     |
 | `tlscert_lookup`            | TLS certificate inspection — SANs, issuer, fingerprint, validity|
 | `securitytrails_history`    | Historical A/MX/NS records — old IPs, hosting migrations (key) |
 | `urlscan_search`            | Cached scan results — URLs, IPs, server, tech, JS endpoints    |
 | `otx_passive_dns`           | Community passive DNS — historical resolutions (key req.)      |
-| `job_search`                | Job posting search to identify tech stack and internal tools    |
+| `trufflehog_scan`           | Scan Git repos for leaked API keys, passwords, tokens            |
 | `fofa_search`               | Passive asset search — hosts, services, tech — like Shodan (key) |
 | `gau_urls`                  | Passive URL discovery — Wayback Machine, Common Crawl, OTX       |
 | `cloudbrute_enum`           | Cloud resource discovery — S3, Azure, GCP, DigitalOcean buckets  |
+| `job_search`                | Job posting search to identify tech stack and internal tools    |
 | `analyze_email`             | Email breach exposure (HIBP), reputation, service registrations |
 
 > Parameter details (types, defaults, constraints) are defined in each tool's
@@ -66,10 +76,13 @@ Call both simultaneously — they are independent:
 
 Call **all available** subdomain tools in one batch:
 - `subfinder_enum(domain, all_sources=true)` — aggregates 40+ passive sources.
+- `amass_enum(domain)` — OWASP Amass — CT, APIs, scraping for deeper coverage.
 - `crtsh_subdomain_enum(domain)` — Certificate Transparency logs.
 - `dnsdumpster_lookup(domain)` — DNS/MX/NS/TXT records + subdomains.
 - `virustotal_subdomain_enum(domain)` — if API key available.
 
+**Amass** and **subfinder** complement each other — Amass has broader source
+coverage while subfinder is faster. Run both for maximum subdomain discovery.
 If one fails (API key missing, rate limit, timeout), the others still return.
 **Never skip all subdomain tools because one failed.**
 
@@ -92,27 +105,44 @@ for all IPs in one batch (if API keys available). Pure passive data — no
 contact with target. FOFA is another passive scan engine like Shodan/Censys —
 use it alongside them for wider coverage.
 
-### Batch 5 — HTTP + TLS + historical (parallel)
+### Batch 5 — HTTP + TLS + tech fingerprint + historical (parallel)
 
 Call these simultaneously on the **main domain**:
 - `httpx_scan(domain, tech_detect=true)` — technology fingerprinting.
+- `whatweb_scan(target=<domain>)` — deep technology fingerprinting (CMS,
+  frameworks, JS libraries, analytics). Complements httpx with broader
+  plugin-based detection (WordPress version, jQuery version, etc.).
 - `tlscert_lookup(hostname)` — certificate metadata + SAN subdomain discovery.
 - `securitytrails_history(domain)` — historical A/MX/NS records (if API key).
 - `urlscan_search(domain)` — cached community scan results.
 - `otx_passive_dns(domain)` — passive DNS from AlienVault OTX (if API key).
 
-### Batch 6 — URL discovery + tech stack + email + cloud (parallel)
+### Batch 6 — URL discovery + params + JS endpoints + secrets + cloud (parallel)
 
 - `gau_urls(target=<domain>)` — passive URL discovery from Wayback Machine,
   Common Crawl, OTX, and URLScan. Reveals forgotten endpoints, admin panels,
   API paths, old versions, and backup files.
+- `paramspider_crawl(target=<domain>)` — discover URLs with query parameters
+  from web archives. Feed results to dalfox_scan for targeted XSS testing.
+- `linkfinder_extract(target=<main_js_url>)` — extract API endpoints from
+  JavaScript files. Use on JS bundles found by httpx/katana/gau. SPAs hide
+  their entire API surface in JS — this tool uncovers it.
+- `trufflehog_scan(target=<github_url>)` — scan public Git repositories for
+  leaked API keys, passwords, and tokens. Use the company/org's GitHub URL.
 - `job_search(company_name)` — job postings for tech stack intelligence.
 - `analyze_email(email)` — only if email addresses were discovered.
 - `cloudbrute_enum(keyword=<company_or_domain_prefix>)` — enumerate cloud
   resources (S3 buckets, Azure apps, GCP storage, DO Spaces). Use the
   company/brand name as keyword, not the full domain.
 
-### Batch 7 — Subdomain deep-dive (parallel)
+### Batch 7 — Subdomain takeover check (after subdomain enum)
+
+After collecting subdomains from Batch 2:
+- `subzy_check(target=<domain>)` — test discovered subdomains for takeover
+  vulnerabilities. Checks for dangling CNAMEs pointing to unclaimed S3
+  buckets, Heroku apps, GitHub Pages, etc. **Critical security check.**
+
+### Batch 8 — Subdomain deep-dive (parallel)
 
 For up to **5 interesting subdomains** (www, api, app, admin, staging):
 - `httpx_scan(subdomain)` + `tlscert_lookup(subdomain)` in one batch per sub.
@@ -173,6 +203,24 @@ httpx, tlscert, and Shodan/Censys.
 - **Passive URL Discovery** (gau):
   - Total URLs found: <count>
   - Interesting endpoints: <admin paths, API routes, config files>
+- **Parameter Discovery** (ParamSpider):
+  - Parameterized URLs: <count>
+  - Unique parameters: <list> (feed to dalfox_scan for XSS testing)
+- **JavaScript Endpoints** (LinkFinder):
+  - API routes: <list of /api/* paths>
+  - External URLs: <list of absolute URLs to other services>
+- **Subdomain Takeover** (Subzy):
+  - Vulnerable: <list of {subdomain, cname, service}>
+  - ⚠ Takeover possible: <subdomain> → <dangling CNAME> (service: <name>)
+- **Technology Fingerprint** (WhatWeb):
+  - CMS: <name + version>
+  - Frameworks: <list>
+  - JavaScript libraries: <list>
+  - Server: <name + version>
+- **Secret Leaks** (TruffleHog):
+  - Scanned: <target>
+  - Leaked secrets: <count> (verified: <count>)
+  - ⚠ Active credentials: <list of {detector, file, commit}>
 - **Cloud Resources** (CloudBrute):
   - <provider>: <resource_url> (status: <status>)
   - ⚠ Public buckets/apps found: <list>

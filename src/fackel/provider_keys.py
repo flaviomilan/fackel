@@ -29,6 +29,7 @@ PROVIDER_KEYS: tuple[ProviderKeySpec, ...] = (
     ProviderKeySpec("VirusTotal", ("VIRUSTOTAL_API_KEY",), ("virustotal_subdomain_enum",)),
     ProviderKeySpec("Censys", ("CENSYS_API_ID", "CENSYS_API_SECRET"), ("censys_lookup",)),
     ProviderKeySpec("FOFA", ("FOFA_EMAIL", "FOFA_KEY"), ("fofa_search",)),
+    ProviderKeySpec("WPScan", ("WPSCAN_API_TOKEN",), ("wpscan_scan",)),
     ProviderKeySpec("SecurityTrails", ("SECURITYTRAILS_API_KEY",), ("securitytrails_history",)),
     ProviderKeySpec("AlienVaultOTX", ("OTX_API_KEY",), ("otx_passive_dns",)),
     ProviderKeySpec("HaveIBeenPwned", ("HIBP_API_KEY",), ("analyze_email",), hard_fail=False),
