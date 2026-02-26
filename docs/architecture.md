@@ -45,7 +45,7 @@ phases, and streams events to the CLI.
 │                                                                  │
 │  ┌──────────┐     ┌──────────────┐     ┌────────────┐            │
 │  │  osint   │────▶│approval_gate │────▶│ port_scan  │            │
-│  │(18 tools)│     │  (HitL)      │     │ (2 tools)  │            │
+│  │(21 tools)│     │  (HitL)      │     │ (2 tools)  │            │
 │  └──────────┘     └──────────────┘     └─────┬──────┘            │
 │       │                                      │                   │
 │       │ (no active scan)         ┌───────────▼────────────┐      │
@@ -54,7 +54,7 @@ phases, and streams events to the CLI.
 │       │                             │                  │         │
 │       │                    ┌────────▼───┐    ┌────────▼────┐     │
 │       │                    │ vuln_scan  │    │   triage    │     │
-│       │                    │ (8 tools)  │    │ (structured)│     │
+│       │                    │ (10 tools) │    │ (structured)│     │
 │       │                    └────────┬───┘    └──────┬──────┘     │
 │       │                             │               │            │
 │       │                    ┌────────▼───┐           │            │

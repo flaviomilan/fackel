@@ -60,20 +60,47 @@ docker compose up -d
 
 ### External binaries
 
-Several tools shell out to Go-based or native binaries. Install the ones you
-need:
+Several tools shell out to Go-based or native binaries. Use the automated
+installer to set everything up:
+
+```bash
+# Install all external binaries
+./scripts/install-tools.sh
+
+# Core tools only (nmap, naabu, nuclei, httpx, subfinder)
+./scripts/install-tools.sh --minimal
+
+# Audit — check what's installed/missing
+./scripts/install-tools.sh --check
+```
+
+Or install manually:
 
 ```bash
 # Go-based tools (require 'go' in PATH)
+go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 go install github.com/projectdiscovery/httpx/cmd/httpx@latest
 go install github.com/projectdiscovery/katana/cmd/katana@latest
-go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
-go install github.com/epi052/feroxbuster@latest
+go install github.com/lc/gau/v2/cmd/gau@latest
+go install github.com/hahwul/dalfox/v2@latest
+go install github.com/0xsha/CloudBrute@latest   # symlink CloudBrute → cloudbrute
+go install github.com/sa7mon/S3Scanner@latest    # symlink S3Scanner → s3scanner
+
+# Rust-based tools
+cargo install feroxbuster
+
+# Python-based tools
+pipx install wafw00f   # or: pip install wafw00f
 
 # System packages
-sudo apt install nmap wafw00f whois     # Debian/Ubuntu
-brew install nmap wafw00f whois         # macOS
+sudo apt install nmap whois     # Debian/Ubuntu
+brew install nmap whois         # macOS
+
+# testssl.sh (git clone + symlink)
+git clone --depth 1 https://github.com/drwetter/testssl.sh.git ~/.local/share/testssl
+ln -sf ~/.local/share/testssl/testssl.sh ~/.local/bin/testssl.sh
 ```
 
 ---
@@ -102,9 +129,9 @@ src/
 │   │   │   ├── state.py        # ScanState TypedDict + reducers
 │   │   │   ├── main.py         # run() entry point
 │   │   │   └── evaluator.py    # LLM-as-a-judge (PhaseEvaluation)
-│   │   ├── osint/agent.py      # OSINT ReAct agent (18 tools)
+│   │   ├── osint/agent.py      # OSINT ReAct agent (21 tools)
 │   │   ├── port_scan/agent.py  # Port scan ReAct agent (2 tools)
-│   │   ├── vuln_scan/agent.py  # Vuln scan ReAct agent (8 tools)
+│   │   ├── vuln_scan/agent.py  # Vuln scan ReAct agent (10 tools)
 │   │   ├── triage/agent.py     # Triage structured output
 │   │   └── report/agent.py     # Report synthesis
 │   ├── tooling/

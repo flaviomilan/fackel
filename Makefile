@@ -51,3 +51,15 @@ pre-commit-all:
 clean:
 	rm -rf dist/ build/ *.egg-info src/*.egg-info .mypy_cache .ruff_cache .pytest_cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+## Install all external tool binaries (Go, system, Python, Rust, git)
+setup-tools:
+	./scripts/install-tools.sh
+
+## Install core external binaries only (nmap, naabu, nuclei, httpx, subfinder)
+setup-tools-minimal:
+	./scripts/install-tools.sh --minimal
+
+## Audit which external tool binaries are installed/missing
+check-tools:
+	./scripts/install-tools.sh --check

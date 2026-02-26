@@ -19,9 +19,12 @@ from tools.osint.email_analyzer import analyze_email
 from tools.osint.job_search import job_search
 from tools.recon.bgpview_tool import bgp_lookup
 from tools.recon.censys_tool import censys_lookup
+from tools.recon.cloudbrute_tool import cloudbrute_enum
 from tools.recon.crtsh_tool import crtsh_subdomain_enum
 from tools.recon.dns_resolver import dns_resolve
 from tools.recon.dnsdumpster_tool import dnsdumpster_lookup
+from tools.recon.fofa_tool import fofa_search
+from tools.recon.gau_tool import gau_urls
 from tools.recon.ipinfo_tool import ipinfo_lookup
 from tools.recon.otx_tool import otx_passive_dns
 from tools.recon.reverse_dns_tool import reverse_dns_lookup
@@ -41,13 +44,16 @@ TOOLS = [
     whois_lookup,
     shodan_lookup,
     censys_lookup,
+    fofa_search,
     dnsdumpster_lookup,
     virustotal_subdomain_enum,
     crtsh_subdomain_enum,
     subfinder_enum,
+    gau_urls,
     reverse_dns_lookup,
     ipinfo_lookup,
     bgp_lookup,
+    cloudbrute_enum,
     httpx_scan,
     tlscert_lookup,
     securitytrails_history,

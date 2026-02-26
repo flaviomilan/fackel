@@ -27,7 +27,7 @@ choose which tools to call, interpret results, and decide next steps.
 ```
 Target → OSINT → Approval Gate → Port Scan → Vuln Scan → Triage → Report
            ↕          ↕              ↕            ↕          ↕        ↕
-       18 tools  Human-in-     2 tools      8 tools    LLM-as-   LLM
+       21 tools  Human-in-     2 tools      10 tools   LLM-as-   LLM
        (passive)  the-Loop      (active)     (active)   a-judge  synthesis
 ```
 
@@ -59,10 +59,24 @@ Target → OSINT → Approval Gate → Port Scan → Vuln Scan → Triage → Re
 | Python 3.12+ | Required |
 | [`uv`](https://docs.astral.sh/uv/) or `pip` | Package manager |
 | OpenAI API key | Or any compatible provider (Azure, Anthropic via LangChain) |
+| Go ≥ 1.21 | For most scanning binaries (optional — only needed for active scanning) |
 | `naabu`, `nmap` | For port scanning (active scan) |
 | `nuclei`, `httpx`, `katana`, `subfinder` | For vulnerability scanning (optional) |
 
 See [docs/tools.md](docs/tools.md) for the full list of required binaries per tool.
+
+#### Automated tool install
+
+```bash
+# Install all external binaries automatically
+./scripts/install-tools.sh
+
+# Core tools only (nmap, naabu, nuclei, httpx, subfinder)
+./scripts/install-tools.sh --minimal
+
+# Audit — check which tools are installed/missing
+./scripts/install-tools.sh --check
+```
 
 ### Install
 
@@ -231,9 +245,9 @@ With `-v` (verbose), LLM reasoning is also shown:
 
 | Agent | Type | Tools | Purpose |
 |-------|------|-------|---------|
-| **OSINT** | ReAct | 18 tools | Passive reconnaissance — DNS, WHOIS, subdomains, reverse DNS, Shodan/Censys, IP enrichment, TLS certs, historical DNS, job search, email analysis |
+| **OSINT** | ReAct | 21 tools | Passive reconnaissance — DNS, WHOIS, subdomains, reverse DNS, Shodan/Censys/FOFA, IP enrichment, TLS certs, historical DNS, passive URL discovery (gau), cloud resource enumeration (CloudBrute), job search, email analysis |
 | **Port Scan** | ReAct | 2 tools | Active scanning — discover open ports (`naabu`) and fingerprint services (`nmap`) |
-| **Vuln Scan** | ReAct | 8 tools | Vulnerability scanning — Nuclei templates, HTTP tech detection, WAF detection, web crawling, TLS analysis |
+| **Vuln Scan** | ReAct | 10 tools | Vulnerability scanning — Nuclei templates, XSS detection (DalFox), HTTP tech detection, WAF detection, web crawling, S3 bucket audit, TLS analysis |
 | **Triage** | Structured LLM | *(none)* | Gap analysis — identify technologies found but not assessed, flag coverage gaps |
 | **Report** | LLM chain | *(none)* | Synthesize all findings, evaluations, and gaps into a Markdown pentest report |
 | **Judge** | Structured LLM | *(none)* | Quality evaluator — scores each phase (0.0–1.0) and recommends routing |
@@ -262,6 +276,9 @@ See [docs/agents.md](docs/agents.md) for detailed agent documentation.
 | `securitytrails_history` | DOMAIN | `SECURITYTRAILS_API_KEY` | OSINT |
 | `urlscan_search` | DOMAIN | — | OSINT |
 | `otx_passive_dns` | DOMAIN | `OTX_API_KEY` | OSINT |
+| `fofa_search` | *(custom)* | `FOFA_EMAIL` + `FOFA_KEY` | OSINT |
+| `gau_urls` | DOMAIN | `gau` binary | OSINT |
+| `cloudbrute_enum` | *(keyword)* | `cloudbrute` binary | OSINT |
 | `job_search` | *(free text)* | — | OSINT |
 | `analyze_email` | *(email)* | `HIBP_API_KEY` / `EMAILREP_API_KEY` | OSINT |
 | `naabu_scan` | HOST | `naabu` binary | Port Scan |
@@ -272,6 +289,8 @@ See [docs/agents.md](docs/agents.md) for detailed agent documentation.
 | `feroxbuster_scan` | HOST_OR_URL | `feroxbuster` binary | Vuln Scan |
 | `katana_crawl` | HOST_OR_URL | `katana` binary | Vuln Scan |
 | `testssl_scan` | HOST | `testssl.sh` binary | Vuln Scan |
+| `dalfox_scan` | HOST_OR_URL | `dalfox` binary | Vuln Scan |
+| `s3scanner_scan` | *(bucket name)* | `s3scanner` binary | Vuln Scan |
 | `extract_webpage_content` | URL | — | Vuln Scan |
 
 See [docs/tools.md](docs/tools.md) for complete tool reference with input schemas and validation rules.
@@ -307,6 +326,7 @@ export FACKEL_MODEL_REPORT=gpt-4o
 | `SHODAN_API_KEY` | No | `shodan_lookup` |
 | `VIRUSTOTAL_API_KEY` | No | `virustotal_subdomain_enum` |
 | `CENSYS_API_ID` / `CENSYS_API_SECRET` | No | `censys_lookup` |
+| `FOFA_EMAIL` / `FOFA_KEY` | No | `fofa_search` |
 | `SECURITYTRAILS_API_KEY` | No | `securitytrails_history` |
 | `OTX_API_KEY` | No | `otx_passive_dns` |
 | `HIBP_API_KEY` | No | `analyze_email` (graceful degradation) |
@@ -422,9 +442,9 @@ src/
 │   │   │       ├── vuln_scan.py     # Vuln scan node + evaluator
 │   │   │       ├── triage.py        # Triage node
 │   │   │       └── report_and_gates.py  # Report node + approval gate
-│   │   ├── osint/agent.py           # OSINT ReAct agent (18 tools)
+│   │   ├── osint/agent.py           # OSINT ReAct agent (21 tools)
 │   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
-│   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (8 tools)
+│   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (10 tools)
 │   │   ├── triage/agent.py          # Triage structured output
 │   │   └── report/agent.py          # Report synthesis
 │   ├── tooling/

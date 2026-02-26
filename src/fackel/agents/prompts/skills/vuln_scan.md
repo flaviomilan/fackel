@@ -8,7 +8,8 @@ exposed panels, and technology fingerprints on target hosts.
 ## Task
 
 Scan the **original domain** and discovered **IPs** to detect vulnerabilities,
-map the web surface, identify WAF protections, and enumerate technologies.
+map the web surface, identify WAF protections, enumerate technologies, detect
+XSS vulnerabilities, and check for misconfigured cloud storage buckets.
 
 When a finding reveals a technology with a specialist tool (e.g. GraphQL),
 **use it**. When no tool exists, describe the finding clearly so the triage
@@ -17,13 +18,15 @@ agent can flag it as an unassessed area.
 ## Tools
 
 | Tool                       | Purpose                                                    |
-|----------------------------|------------------------------------------------------------||
+|----------------------------|------------------------------------------------------------|
 | `nuclei_scan`              | Template-based: CVEs, misconfigs, DNS, SSL, tech detection |
+| `dalfox_scan`              | XSS scanner: reflected, stored, DOM-based (param analysis) |
 | `httpx_scan`               | HTTP probing: status, titles, tech, redirects, CDN         |
 | `wafw00f_detect`           | WAF/IPS identification                                     |
 | `graphql_scan`             | GraphQL: introspection, batching, schema exposure          |
 | `feroxbuster_scan`         | Directory/content brute-forcing for hidden paths           |
 | `katana_crawl`             | Web crawling: URL discovery, JS routes, API endpoints      |
+| `s3scanner_scan`           | S3 bucket permission audit: public read/write/list         |
 | `testssl_scan`             | Deep TLS/SSL: protocols, ciphers, cert chain, known vulns  |
 | `extract_webpage_content`  | Extract text from a web page for analysis                  |
 
@@ -58,11 +61,14 @@ Call both crawling tools simultaneously:
 > **Both complement each other** — crawling finds linked content, brute-forcing
 > finds unlinked content. Run them in parallel.
 
-### Batch 3 — Deep-dive + TLS (parallel)
+### Batch 3 — Deep-dive + TLS + XSS (parallel)
 
-Based on Batch 1 results, call these simultaneously:
+Based on Batch 1–2 results, call these simultaneously:
 - `testssl_scan(target=<domain>)` — deep TLS/SSL analysis when port 443 is open.
 - `graphql_scan(url=<endpoint>)` — if nuclei detected GraphQL.
+- `dalfox_scan(target=<url_with_params>)` — for URLs with query parameters
+  discovered by katana/feroxbuster/nuclei. XSS parameter analysis. Call once
+  per interesting URL (e.g. search pages, forms, API endpoints with params).
 - `extract_webpage_content(url=<url>)` — for interesting pages found by nuclei.
 - Additional `nuclei_scan(tags="<tech>")` — targeted templates for detected tech.
 
@@ -72,7 +78,16 @@ Run `nuclei_scan(target=<subdomain>)` for each **subdomain** that resolves to
 an IP different from the main domain — batch all subdomain nuclei calls into
 one step. **Do NOT** run nuclei on raw IPs.
 
-### 5. Summary
+### Batch 5 — Cloud storage audit (if applicable)
+
+If OSINT or Batch 1–2 findings mention S3 buckets, cloud storage, or
+cloud-hosted assets:
+- `s3scanner_scan(bucket=<name>, provider=<aws|gcp|digitalocean>)` —
+  check bucket permissions (public read/write/list). Call once per bucket.
+- Focus on bucket names found in source code, JS files, error messages,
+  or nuclei findings.
+
+### 6. Summary
 
 Compile all results. Explicitly mention:
 - Technologies **investigated** with a specialist tool and what was found.
@@ -117,6 +132,14 @@ Compile all results. Explicitly mention:
 - Crawled URLs: <count> | Hidden paths: <count>
 - Notable: <admin panels, backup files, API endpoints found>
 
+**XSS Analysis** (via dalfox_scan):
+- Scanned URLs: <count>
+- Findings: <list of {type, severity, param, payload, poc_url}>
+
+**Cloud Storage** (via s3scanner_scan):
+- Buckets checked: <count>
+- ⚠ Misconfigured: <list of {bucket, provider, public, permissions}>
+
 **Tech Stack:** <from all sources>
 
 #### <IP Address>
@@ -136,5 +159,9 @@ Compile all results. Explicitly mention:
 - Don't skip info-severity — it reveals the technology stack.
 - When nuclei finds tech with a matching tool, **use that tool**.
 - When no tool exists, describe it as an unassessed area.
+- Use `dalfox_scan` on URLs with **query parameters** — it analyses each
+  parameter for injection points. No params = no XSS findings.
+- Use `s3scanner_scan` when bucket names are discovered in code, JS, errors,
+  or OSINT findings — not speculatively.
 - Tool error on one host → report failure, continue with next.
 - Note when WAF may have affected scan results.
