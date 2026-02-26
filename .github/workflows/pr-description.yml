@@ -1,0 +1,74 @@
+name: PR Description
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  generate-description:
+    name: Generate PR description
+    runs-on: ubuntu-latest
+    # Skip if PR body already has content beyond the template placeholders
+    if: >-
+      !contains(github.event.pull_request.body, '## How')
+      || contains(github.event.pull_request.body, '<!-- Brief description')
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv pip install openai --system
+
+      - name: Collect PR context
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE=${{ github.event.pull_request.base.sha }}
+          HEAD=${{ github.event.pull_request.head.sha }}
+
+          # Commit messages (conventional commits)
+          echo "commits<<COMMITS_EOF" >> "$GITHUB_OUTPUT"
+          git log --oneline --no-merges "${BASE}..${HEAD}" >> "$GITHUB_OUTPUT"
+          echo "COMMITS_EOF" >> "$GITHUB_OUTPUT"
+
+          # Diff stat (files changed summary)
+          echo "diffstat<<DIFFSTAT_EOF" >> "$GITHUB_OUTPUT"
+          git diff --stat "${BASE}..${HEAD}" >> "$GITHUB_OUTPUT"
+          echo "DIFFSTAT_EOF" >> "$GITHUB_OUTPUT"
+
+          # Truncated diff for context (max ~12 000 chars to stay within token limits)
+          echo "diff<<DIFF_EOF" >> "$GITHUB_OUTPUT"
+          git diff "${BASE}..${HEAD}" -- '*.py' '*.yml' '*.toml' '*.md' \
+            | head -c 12000 >> "$GITHUB_OUTPUT"
+          echo "DIFF_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Generate description
+        id: description
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_COMMITS: ${{ steps.context.outputs.commits }}
+          PR_DIFFSTAT: ${{ steps.context.outputs.diffstat }}
+          PR_DIFF: ${{ steps.context.outputs.diff }}
+        run: |
+          python scripts/generate-pr-description.py > /tmp/pr_body.md
+
+      - name: Update PR body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --body-file /tmp/pr_body.md

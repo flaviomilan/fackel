@@ -63,3 +63,11 @@ setup-tools-minimal:
 ## Audit which external tool binaries are installed/missing
 check-tools:
 	./scripts/install-tools.sh --check
+
+## Generate PR description for current branch (dry-run)
+pr-describe:
+	./scripts/pr-describe.sh --dry-run
+
+## Generate and apply PR description for current branch
+pr-describe-apply:
+	./scripts/pr-describe.sh
