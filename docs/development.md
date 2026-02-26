@@ -35,7 +35,8 @@ standards, adding tools and agents, testing, linting, and project conventions.
 | Python | ≥ 3.12 |
 | [uv](https://github.com/astral-sh/uv) | Latest |
 | Docker & Compose | For infrastructure stack |
-| Go | For `httpx`, `katana`, `nuclei`, `naabu` binaries |
+| Go | For `httpx`, `katana`, `nuclei`, `naabu`, `amass`, `subzy` binaries |
+| Ruby (gem) | For `wpscan`, `whatweb` binaries |
 | Nmap | For `nmap_scan` tool |
 
 ## Environment setup
@@ -87,12 +88,22 @@ go install github.com/lc/gau/v2/cmd/gau@latest
 go install github.com/hahwul/dalfox/v2@latest
 go install github.com/0xsha/CloudBrute@latest   # symlink CloudBrute → cloudbrute
 go install github.com/sa7mon/S3Scanner@latest    # symlink S3Scanner → s3scanner
+go install github.com/owasp-amass/amass/v4/...@master
+go install github.com/PentestPad/subzy@latest
 
 # Rust-based tools
 cargo install feroxbuster
 
 # Python-based tools
 pipx install wafw00f   # or: pip install wafw00f
+pipx install paramspider
+pipx install trufflehog
+pipx install corsy
+pipx install linkfinder
+
+# Ruby-based tools (require gem)
+gem install wpscan
+gem install whatweb     # or: apt install whatweb
 
 # System packages
 sudo apt install nmap whois     # Debian/Ubuntu
@@ -129,9 +140,9 @@ src/
 │   │   │   ├── state.py        # ScanState TypedDict + reducers
 │   │   │   ├── main.py         # run() entry point
 │   │   │   └── evaluator.py    # LLM-as-a-judge (PhaseEvaluation)
-│   │   ├── osint/agent.py      # OSINT ReAct agent (21 tools)
+│   │   ├── osint/agent.py      # OSINT ReAct agent (27 tools)
 │   │   ├── port_scan/agent.py  # Port scan ReAct agent (2 tools)
-│   │   ├── vuln_scan/agent.py  # Vuln scan ReAct agent (10 tools)
+│   │   ├── vuln_scan/agent.py  # Vuln scan ReAct agent (12 tools)
 │   │   ├── triage/agent.py     # Triage structured output
 │   │   └── report/agent.py     # Report synthesis
 │   ├── tooling/
@@ -144,10 +155,10 @@ src/
 │   └── report_writer.py        # Full archival report builder
 ├── tools/
 │   ├── circuit_breaker.py      # Per-service circuit breaker for HTTP tools
-│   ├── recon/                  # 16 passive reconnaissance tools
-│   ├── osint/                  # 2 open-source intelligence tools
+│   ├── recon/                  # 22 passive reconnaissance tools
+│   ├── osint/                  # 3 open-source intelligence tools
 │   ├── scanning/               # 7 active scanning tools
-│   └── vuln/                   # 3 vulnerability assessment tools
+│   └── vuln/                   # 5 vulnerability assessment tools
 ├── cli/
 │   └── main.py                 # Typer CLI entrypoint
 └── tests/

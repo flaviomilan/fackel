@@ -27,7 +27,7 @@ choose which tools to call, interpret results, and decide next steps.
 ```
 Target → OSINT → Approval Gate → Port Scan → Vuln Scan → Triage → Report
            ↕          ↕              ↕            ↕          ↕        ↕
-       21 tools  Human-in-     2 tools      10 tools   LLM-as-   LLM
+       27 tools  Human-in-     2 tools      12 tools   LLM-as-   LLM
        (passive)  the-Loop      (active)     (active)   a-judge  synthesis
 ```
 
@@ -60,6 +60,7 @@ Target → OSINT → Approval Gate → Port Scan → Vuln Scan → Triage → Re
 | [`uv`](https://docs.astral.sh/uv/) or `pip` | Package manager |
 | OpenAI API key | Or any compatible provider (Azure, Anthropic via LangChain) |
 | Go ≥ 1.21 | For most scanning binaries (optional — only needed for active scanning) |
+| Ruby (gem) | For `wpscan`, `whatweb` (optional) |
 | `naabu`, `nmap` | For port scanning (active scan) |
 | `nuclei`, `httpx`, `katana`, `subfinder` | For vulnerability scanning (optional) |
 
@@ -126,7 +127,7 @@ fackel example.com --check-providers --no-active-scan
 
 ```
                      ┌─────────────────┐
-                     │   osint_node    │ ← 18 passive tools
+                     │   osint_node    │ ← 27 passive tools
                      │  (ReAct agent)  │   dns, whois, subdomains, etc.
                      └────────┬────────┘
                               │
@@ -245,9 +246,9 @@ With `-v` (verbose), LLM reasoning is also shown:
 
 | Agent | Type | Tools | Purpose |
 |-------|------|-------|---------|
-| **OSINT** | ReAct | 21 tools | Passive reconnaissance — DNS, WHOIS, subdomains, reverse DNS, Shodan/Censys/FOFA, IP enrichment, TLS certs, historical DNS, passive URL discovery (gau), cloud resource enumeration (CloudBrute), job search, email analysis |
+| **OSINT** | ReAct | 27 tools | Passive reconnaissance — DNS, WHOIS, subdomains (subfinder, crt.sh, VirusTotal, Amass), reverse DNS, Shodan/Censys/FOFA, IP enrichment, TLS certs, historical DNS, passive URL discovery (gau), cloud resource enumeration (CloudBrute), web tech fingerprinting (WhatWeb), parameter discovery (ParamSpider), JS endpoint extraction (LinkFinder), subdomain takeover (Subzy), secret scanning (TruffleHog), job search, email analysis |
 | **Port Scan** | ReAct | 2 tools | Active scanning — discover open ports (`naabu`) and fingerprint services (`nmap`) |
-| **Vuln Scan** | ReAct | 10 tools | Vulnerability scanning — Nuclei templates, XSS detection (DalFox), HTTP tech detection, WAF detection, web crawling, S3 bucket audit, TLS analysis |
+| **Vuln Scan** | ReAct | 12 tools | Vulnerability scanning — Nuclei templates, XSS detection (DalFox), HTTP tech detection, WAF detection, web crawling, S3 bucket audit, TLS analysis, WordPress scanning (WPScan), CORS misconfiguration (Corsy) |
 | **Triage** | Structured LLM | *(none)* | Gap analysis — identify technologies found but not assessed, flag coverage gaps |
 | **Report** | LLM chain | *(none)* | Synthesize all findings, evaluations, and gaps into a Markdown pentest report |
 | **Judge** | Structured LLM | *(none)* | Quality evaluator — scores each phase (0.0–1.0) and recommends routing |
@@ -292,6 +293,14 @@ See [docs/agents.md](docs/agents.md) for detailed agent documentation.
 | `dalfox_scan` | HOST_OR_URL | `dalfox` binary | Vuln Scan |
 | `s3scanner_scan` | *(bucket name)* | `s3scanner` binary | Vuln Scan |
 | `extract_webpage_content` | URL | — | Vuln Scan |
+| `amass_enum` | DOMAIN | `amass` binary | OSINT |
+| `subzy_check` | DOMAIN | `subzy` binary | OSINT |
+| `paramspider_crawl` | DOMAIN | `paramspider` binary | OSINT |
+| `whatweb_scan` | HOST_OR_URL | `whatweb` binary | OSINT |
+| `linkfinder_extract` | HOST_OR_URL | `linkfinder` binary | OSINT |
+| `trufflehog_scan` | *(repo URL)* | `trufflehog` binary | OSINT |
+| `wpscan_scan` | HOST_OR_URL | `wpscan` binary + `WPSCAN_API_TOKEN` | Vuln Scan |
+| `corsy_scan` | HOST_OR_URL | `corsy` binary | Vuln Scan |
 
 See [docs/tools.md](docs/tools.md) for complete tool reference with input schemas and validation rules.
 
@@ -331,6 +340,7 @@ export FACKEL_MODEL_REPORT=gpt-4o
 | `OTX_API_KEY` | No | `otx_passive_dns` |
 | `HIBP_API_KEY` | No | `analyze_email` (graceful degradation) |
 | `EMAILREP_API_KEY` | No | `analyze_email` (graceful degradation) |
+| `WPSCAN_API_TOKEN` | No | `wpscan_scan` |
 
 Tools with missing API keys (and `hard_fail=True`) are **automatically removed**
 from agents, preventing the LLM from attempting calls that would fail.
@@ -442,9 +452,9 @@ src/
 │   │   │       ├── vuln_scan.py     # Vuln scan node + evaluator
 │   │   │       ├── triage.py        # Triage node
 │   │   │       └── report_and_gates.py  # Report node + approval gate
-│   │   ├── osint/agent.py           # OSINT ReAct agent (21 tools)
+│   │   ├── osint/agent.py           # OSINT ReAct agent (27 tools)
 │   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
-│   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (10 tools)
+│   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (12 tools)
 │   │   ├── triage/agent.py          # Triage structured output
 │   │   └── report/agent.py          # Report synthesis
 │   ├── tooling/
@@ -457,10 +467,10 @@ src/
 │   └── report_writer.py             # Full archival report builder
 └── tools/
     ├── circuit_breaker.py           # Per-service circuit breaker
-    ├── recon/                       # 16 passive reconnaissance tools
-    ├── osint/                       # 2 open-source intelligence tools
+    ├── recon/                       # 22 passive reconnaissance tools
+    ├── osint/                       # 3 open-source intelligence tools
     ├── scanning/                    # 7 active scanning tools
-    └── vuln/                        # 3 vulnerability assessment tools
+    └── vuln/                        # 5 vulnerability assessment tools
 ```
 
 ---

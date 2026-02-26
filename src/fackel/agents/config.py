@@ -45,6 +45,8 @@ ACTIVE_SCAN_TOOLS: frozenset[str] = frozenset(
         "nmap_port_scan",
         "nuclei_scan",
         "dalfox_scan",
+        "wpscan_scan",
+        "corsy_scan",
         "feroxbuster_scan",
         "katana_crawl",
         "testssl_scan",

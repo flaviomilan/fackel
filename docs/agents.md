@@ -71,7 +71,7 @@ without sending any probe packets.
 
 **Model env var:** `FACKEL_MODEL_OSINT`
 
-### Tools (21)
+### Tools (27)
 
 | Tool | Purpose |
 |------|---------||
@@ -96,6 +96,12 @@ without sending any probe packets.
 | `otx_passive_dns` | Passive DNS records via AlienVault OTX |
 | `job_search` | Job posting search for tech stack discovery |
 | `analyze_email` | Email breach exposure and reputation scoring |
+| `amass_enum` | Deep subdomain enumeration via OWASP Amass (40+ sources) |
+| `subzy_check` | Subdomain takeover detection (dangling CNAMEs) |
+| `paramspider_crawl` | URL parameter discovery from web archives |
+| `whatweb_scan` | Web technology fingerprinting (CMS, frameworks, JS libs) |
+| `linkfinder_extract` | JavaScript endpoint and API route extraction |
+| `trufflehog_scan` | Git repository secret/credential leak scanning |
 
 ### Playbook (from `skills/osint.md`)
 
@@ -119,7 +125,12 @@ without sending any probe packets.
 14. **Job search** — `job_search` with company name for tech stack intelligence
 15. **Email analysis** — `analyze_email` if email addresses discovered
 16. **Cloud enumeration** — `cloudbrute_enum` with company/brand keyword for S3/Azure/GCP/DO resources
-17. **Structured summary** — emit findings with evidence citations
+17. **Web tech fingerprinting** — `whatweb_scan` for CMS, frameworks, server software
+18. **Parameter discovery** — `paramspider_crawl` for hidden URL parameters from web archives
+19. **JS endpoint extraction** — `linkfinder_extract` for API routes in JavaScript files
+20. **Secret scanning** — `trufflehog_scan` on GitHub repos/orgs for leaked credentials
+21. **Subdomain takeover** — `subzy_check` for dangling CNAME records on discovered subdomains
+22. **Structured summary** — emit findings with evidence citations
 
 ### Node post-processing
 
@@ -178,7 +189,7 @@ and technology fingerprints.
 
 **Model env var:** `FACKEL_MODEL_VULN_SCAN`
 
-### Tools (10)
+### Tools (12)
 
 | Tool | Purpose |
 |------|---------||
@@ -192,6 +203,8 @@ and technology fingerprints.
 | `s3scanner_scan` | S3 bucket permission audit — public read/write/list |
 | `testssl_scan` | TLS/SSL protocol, cipher, and vulnerability analysis |
 | `extract_webpage_content` | Web page content extraction |
+| `wpscan_scan` | WordPress vulnerability scanner (plugins, themes, users, core) |
+| `corsy_scan` | CORS misconfiguration detection |
 
 ### Playbook (from `skills/vuln_scan.md`)
 
@@ -203,8 +216,10 @@ and technology fingerprints.
 6. **TLS analysis** — `testssl_scan` for protocol/cipher vulnerabilities
 7. **Cloud storage** — `s3scanner_scan` if bucket names found in code, JS, or findings
 8. **Page content** — `extract_webpage_content` for interesting pages
-9. **Subdomain scans** — run `nuclei_scan` per subdomain
-10. **Structured summary** — emit findings with evidence
+9. **CORS testing** — `corsy_scan` on API endpoints for CORS misconfigurations
+10. **WordPress** — `wpscan_scan` if WordPress is detected (conditional)
+11. **Subdomain scans** — run `nuclei_scan` per subdomain
+12. **Structured summary** — emit findings with evidence
 
 ### Adaptive strategy
 
@@ -422,7 +437,7 @@ that can only return errors.
 |----------|----------|-------|-----------|
 | Shodan | `SHODAN_API_KEY` | `shodan_lookup` | Yes |
 | VirusTotal | `VIRUSTOTAL_API_KEY` | `virustotal_subdomain_enum` | Yes |
-| Censys | `CENSYS_API_ID`, `CENSYS_API_SECRET` | `censys_lookup` | Yes |
+| Censys | `CENSYS_API_ID`, `CENSYS_API_SECRET` | `censys_lookup` | Yes |\n| WPScan | `WPSCAN_API_TOKEN` | `wpscan_scan` | Yes |
 | HaveIBeenPwned | `HIBP_API_KEY` | `analyze_email` | No (graceful) |
 | EmailRep | `EMAILREP_API_KEY` | `analyze_email` | No (graceful) |
 

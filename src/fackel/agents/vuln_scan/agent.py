@@ -19,14 +19,18 @@ from tools.scanning.httpx_tool import httpx_scan
 from tools.scanning.katana_tool import katana_crawl
 from tools.scanning.s3scanner_tool import s3scanner_scan
 from tools.scanning.wafw00f_tool import wafw00f_detect
+from tools.vuln.corsy_tool import corsy_scan
 from tools.vuln.dalfox_tool import dalfox_scan
 from tools.vuln.nuclei_tool import nuclei_scan
 from tools.vuln.testssl_tool import testssl_scan
 from tools.vuln.webpage_extractor import extract_webpage_content
+from tools.vuln.wpscan_tool import wpscan_scan
 
 TOOLS = [
     nuclei_scan,
     dalfox_scan,
+    wpscan_scan,
+    corsy_scan,
     httpx_scan,
     wafw00f_detect,
     graphql_scan,

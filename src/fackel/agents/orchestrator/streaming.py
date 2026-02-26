@@ -47,7 +47,7 @@ _event_callback: EventCallback = None
 _tool_approval_callback: ToolApprovalCallback = None
 _tool_approval_enabled: bool = False
 
-MAX_AGENT_ITERATIONS = 40
+MAX_AGENT_ITERATIONS = 50
 
 
 def set_event_callback(cb: EventCallback) -> None:

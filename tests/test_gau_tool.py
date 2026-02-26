@@ -73,5 +73,11 @@ class TestGauUrls:
         assert "gau_urls" in result
 
     def test_rejects_url_target(self):
-        result = gau_urls.invoke({"target": "https://example.com/path"})
-        assert "gau_urls" in result
+        """URL is accepted after host extraction (guard_target strips scheme/path)."""
+        with (
+            patch("tools.recon.gau_tool.require_binary"),
+            patch("tools.recon.gau_tool.run_command") as mock_run,
+        ):
+            mock_run.return_value = (0, "", "")
+            result = gau_urls.invoke({"target": "https://example.com/path"})
+            assert result["status"] == "ok"

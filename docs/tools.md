@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete reference for all 27 tool wrappers in Fackel. Each tool is a
+Complete reference for all 35 tool wrappers in Fackel. Each tool is a
 LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema,
 `ToolException`-based error handling, and standardised output envelope.
 
@@ -30,6 +30,13 @@ LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema,
   - [otx_passive_dns](#otx_passive_dns)
   - [job_search](#job_search)
   - [analyze_email](#analyze_email)
+  - [trufflehog_scan](#trufflehog_scan)
+- [Recon tools (extended)](#recon-tools-extended)
+  - [amass_enum](#amass_enum)
+  - [subzy_check](#subzy_check)
+  - [paramspider_crawl](#paramspider_crawl)
+  - [whatweb_scan](#whatweb_scan)
+  - [linkfinder_extract](#linkfinder_extract)
 - [Port scan tools](#port-scan-tools)
   - [naabu_scan](#naabu_scan)
   - [nmap_port_scan](#nmap_port_scan)
@@ -42,6 +49,8 @@ LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema,
   - [katana_crawl](#katana_crawl)
   - [testssl_scan](#testssl_scan)
   - [extract_webpage_content](#extract_webpage_content)
+  - [wpscan_scan](#wpscan_scan)
+  - [corsy_scan](#corsy_scan)
 - [External binaries](#external-binaries)
 - [Shared utilities](#shared-utilities)
 
@@ -155,8 +164,15 @@ specification of the validation system.
 | `katana_crawl` | `HOST_OR_URL` | Domain, IP, URL | — |
 | `testssl_scan` | `HOST` | Domain, IP | URLs |
 | `extract_webpage_content` | `URL` | Full URL | Bare domains/IPs |
+| `amass_enum` | `DOMAIN` | Domain | IPs, URLs |
+| `subzy_check` | `DOMAIN` | Domain | IPs, URLs |
+| `paramspider_crawl` | `DOMAIN` | Domain | IPs, URLs |
+| `whatweb_scan` | `HOST_OR_URL` | Domain, IP, URL | — |
+| `linkfinder_extract` | `HOST_OR_URL` | Domain, IP, URL | — |
+| `wpscan_scan` | `HOST_OR_URL` | Domain, IP, URL | — |
+| `corsy_scan` | `HOST_OR_URL` | Domain, IP, URL | — |
 
-Tools not listed (`shodan_lookup`, `job_search`, `analyze_email`) have custom
+Tools not listed (`shodan_lookup`, `job_search`, `analyze_email`, `trufflehog_scan`) have custom
 or no target validation (free-text inputs).
 
 > **Note:** `httpx_scan` is shared between the **OSINT** and **Vuln Scan** agents.
@@ -542,6 +558,128 @@ assets that may expose sensitive data.
 
 ---
 
+### trufflehog_scan
+
+Scan a Git repository or GitHub organisation for leaked secrets and credentials.
+Detects API keys, tokens, passwords, and other sensitive data committed to source
+control. Supports both individual repositories and full organisation scans.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | GitHub repo URL (e.g. `https://github.com/org/repo`) or org URL (e.g. `https://github.com/org`). |
+| `only_verified` | `bool` | `True` | Only report secrets that TruffleHog has verified are still active. |
+
+**Returns:**
+- `findings` — list of `{detector, source_file, source_line, raw_secret, verified}`
+- `count` — number of secrets found
+
+**Requires:** `trufflehog` binary
+
+---
+
+## Recon tools (extended)
+
+### amass_enum
+
+Deep subdomain enumeration using OWASP Amass. Complements `subfinder_enum`
+with additional data sources and active techniques.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | Root domain (e.g. `example.com`). |
+| `passive` | `bool` | `True` | Passive mode only (no DNS brute-force). Set `False` for active enumeration. |
+| `timeout_minutes` | `int` | `5` | Maximum enumeration time in minutes (clamped to 1–30). |
+
+**Returns:**
+- `subdomains` — sorted, deduplicated list of `{name, ips}` entries
+- `count` — number of unique subdomains found
+
+**Requires:** `amass` binary
+
+---
+
+### subzy_check
+
+Check subdomains for potential subdomain takeover vulnerabilities. Detects
+dangling CNAME records pointing to unclaimed cloud services (S3, GitHub Pages,
+Heroku, Azure, etc.).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | Domain name to check — a single subdomain (e.g. `old.example.com`) or root domain. |
+| `concurrency` | `int` | `10` | Number of concurrent checks (clamped to 1–50). |
+
+**Returns:**
+- `vulnerable` — list of `{subdomain, cname, service}` entries flagged as takeover-vulnerable
+- `not_vulnerable` — list of `{subdomain, status}` entries confirmed safe
+- `total_checked` — number of subdomains checked
+- `vulnerable_count` — number of vulnerable subdomains
+
+**Requires:** `subzy` binary
+
+> **Active scanning tool** — included in `ACTIVE_SCAN_TOOLS` for human-in-the-loop
+> gating when `approve_tools=True`.
+
+---
+
+### paramspider_crawl
+
+Discover URL parameters for a domain from web archive sources (Wayback Machine).
+Extracts unique parameter names from historically observed URLs — useful for
+identifying hidden inputs, debug parameters, and potential injection points.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | Domain name (e.g. `example.com`). |
+| `exclude` | `str` | `"png,jpg,gif,jpeg,swf,woff,svg,pdf,css"` | Comma-separated file extensions to exclude from results. |
+
+**Returns:**
+- `urls` — sorted list of discovered URLs containing parameters
+- `params` — sorted list of unique parameter names
+- `count` — total number of parameterised URLs
+
+**Requires:** `paramspider` binary
+
+---
+
+### whatweb_scan
+
+Identify web technologies, CMS platforms, JavaScript libraries, server software,
+and frameworks using WhatWeb fingerprinting. Returns detailed technology
+information with version numbers where available.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | Domain, IP, or URL to fingerprint. |
+| `aggression` | `int` | `1` | Scan aggressiveness: 1 = stealthy (default), 2 = medium, 3 = aggressive. Clamped to 1–3. |
+
+**Returns:**
+- `technologies` — list of `{name, version, detail}` for each detected technology
+- `target_url` — URL that was scanned
+
+**Requires:** `whatweb` binary (Ruby gem)
+
+---
+
+### linkfinder_extract
+
+Extract API endpoints and URLs from JavaScript files and HTML pages using
+LinkFinder. Discovers JS-defined routes, API paths, and hidden endpoints not
+visible through regular crawling.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | URL or domain to analyse (e.g. `https://example.com`). Scheme auto-added if missing. |
+
+**Returns:**
+- `absolute_urls` — list of fully-qualified URLs found in JavaScript
+- `relative_paths` — list of relative paths and routes
+- `total` — total number of unique endpoints discovered
+
+**Requires:** `linkfinder` binary (Python package)
+
+---
+
 ## Port scan tools
 
 ### naabu_scan
@@ -765,6 +903,49 @@ Extract relevant text content from a web page, stripping HTML boilerplate.
 
 ---
 
+### wpscan_scan
+
+Scan a WordPress site for vulnerabilities in core, plugins, themes, and users.
+Identifies outdated components, known CVEs, weak configurations, and user
+enumeration opportunities.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | WordPress site URL or domain. Scheme auto-added if missing. |
+| `enumerate` | `str` | `"vp,vt,u"` | WPScan enumerate options: `vp` (vulnerable plugins), `vt` (vulnerable themes), `u` (users). |
+
+**Returns:**
+- `version` — WordPress version information (or `null`)
+- `plugins` — list of `{slug, version, vulnerabilities}`
+- `themes` — list of `{slug, version, vulnerabilities}`
+- `users` — list of enumerated usernames
+- `vulnerability_count` — total number of vulnerabilities found
+
+**Requires:** `wpscan` binary (Ruby gem) + `WPSCAN_API_TOKEN` environment variable
+
+> **Active scanning tool** — included in `ACTIVE_SCAN_TOOLS` for human-in-the-loop
+> gating when `approve_tools=True`.
+
+---
+
+### corsy_scan
+
+Detect CORS (Cross-Origin Resource Sharing) misconfigurations on a target URL.
+Tests for wildcard origins, null origin trusting, credential leakage, and other
+CORS policy weaknesses that could enable cross-origin attacks.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | URL or domain to test. Scheme auto-added if missing. |
+
+**Returns:**
+- `issues` — list of `{url, type, description, severity}`
+- `count` — number of CORS issues found
+
+**Requires:** `corsy` binary (Python package)
+
+---
+
 ## External binaries
 
 Fackel wraps several security tools via subprocess. Install the ones you need:
@@ -785,6 +966,14 @@ Fackel wraps several security tools via subprocess. Install the ones you need:
 | `wafw00f` | `wafw00f_detect` | `pip install wafw00f` |
 | `testssl.sh` | `testssl_scan` | `git clone https://github.com/drwetter/testssl.sh.git` |
 | `whois` | `whois_lookup` | `apt install whois` / `brew install whois` |
+| `amass` | `amass_enum` | `go install github.com/owasp-amass/amass/v4/...@master` |
+| `subzy` | `subzy_check` | `go install github.com/PentestPad/subzy@latest` |
+| `paramspider` | `paramspider_crawl` | `pipx install paramspider` |
+| `whatweb` | `whatweb_scan` | `gem install whatweb` / `apt install whatweb` |
+| `linkfinder` | `linkfinder_extract` | `pipx install linkfinder` |
+| `trufflehog` | `trufflehog_scan` | `pipx install trufflehog` |
+| `wpscan` | `wpscan_scan` | `gem install wpscan` |
+| `corsy` | `corsy_scan` | `pipx install corsy` |
 
 > **Automated install:** Run `./scripts/install-tools.sh` to install all binaries
 > automatically, or `./scripts/install-tools.sh --check` to audit which are present.
