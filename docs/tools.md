@@ -487,6 +487,61 @@ Analyse an email address for breach exposure (HIBP) and reputation (EmailRep).
 
 ---
 
+### fofa_search
+
+Search FOFA for internet-connected assets — passive reconnaissance alongside
+Shodan and Censys. Discovers hosts, open ports, services, technologies, and
+certificates indexed by FOFA's global scan engine.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `query` | `str` | *(required)* | FOFA query string. Use `domain=` for domain searches, `ip=` for IP lookups, or raw FOFA dork syntax. |
+
+**Returns:**
+- `results` — list of `{host, ip, port, protocol, server, title, domain, organization, banner}`
+- `total` — total number of results in FOFA
+
+**Requires:** `FOFA_EMAIL` + `FOFA_KEY` environment variables
+
+---
+
+### gau_urls
+
+Fetch known URLs for a domain from passive historical sources (Wayback Machine,
+Common Crawl, AlienVault OTX, URLScan). Discovers forgotten endpoints, admin
+panels, API paths, and old versions that may still be live.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | Domain name to fetch known URLs for (e.g. `example.com`). Purely passive — no packets sent to the target. |
+
+**Returns:**
+- `urls` — sorted, deduplicated list of discovered URLs
+- `count` — total number of unique URLs found
+
+**Requires:** `gau` binary
+
+---
+
+### cloudbrute_enum
+
+Enumerate cloud resources (storage buckets, apps, databases) across AWS, Azure,
+GCP, and DigitalOcean for a given target keyword. Discovers misconfigured cloud
+assets that may expose sensitive data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `keyword` | `str` | *(required)* | Target keyword or company name (e.g. `acme-corp`). CloudBrute generates permutations. |
+| `cloud` | `str` | `""` | Cloud provider: `aws`, `azure`, `gcp`, `digitalocean`, or empty for all. |
+
+**Returns:**
+- `resources` — list of `{provider, url, status}`
+- `count` — total number of resources found
+
+**Requires:** `cloudbrute` binary
+
+---
+
 ## Port scan tools
 
 ### naabu_scan
@@ -548,6 +603,27 @@ community-maintained template engine.
 - `findings` — list of `{template_id, matcher_name, name, severity, matched_at, type, host, ip, tags, description, extracted_results, curl_command}`
 
 **Requires:** `nuclei` binary
+
+---
+
+### dalfox_scan
+
+Scan a URL for XSS vulnerabilities using DalFox. Analyses URL parameters for
+reflected, stored, and DOM-based XSS. Tests with multiple payloads and evasion
+techniques. Returns confirmed vulnerabilities with proof-of-concept payloads.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target` | `str` | *(required)* | URL to scan for XSS. URLs with query parameters are ideal — DalFox analyses each parameter for injection points. |
+
+**Returns:**
+- `findings` — list of `{type, severity, poc_url, param, payload, message, cwe}`
+- `count` — number of confirmed XSS vulnerabilities
+
+**Requires:** `dalfox` binary
+
+> **Active scanning tool** — included in `ACTIVE_SCAN_TOOLS` for human-in-the-loop
+> gating when `approve_tools=True`.
 
 ---
 
@@ -637,6 +713,24 @@ Crawl a web target to discover URLs, endpoints, and JavaScript routes.
 
 ---
 
+### s3scanner_scan
+
+Scan an S3-compatible bucket for permission misconfigurations. Checks whether
+a bucket exists, is publicly listable, publicly writable, or allows
+authenticated access. Covers AWS S3, GCP Cloud Storage, and DigitalOcean Spaces.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bucket` | `str` | *(required)* | S3 bucket name to scan (e.g. `example-backup`, `acme-uploads`). |
+| `provider` | `str` | `"aws"` | Cloud storage provider: `aws`, `gcp`, or `digitalocean`. |
+
+**Returns:**
+- `results` — list of `{bucket, exists, public, permissions: {read, write, read_acp, write_acp, full_control}, num_objects, size, region}`
+
+**Requires:** `s3scanner` binary
+
+---
+
 ### testssl_scan
 
 Deep TLS/SSL analysis: protocols, ciphers, certificate chain, and known
@@ -677,16 +771,23 @@ Fackel wraps several security tools via subprocess. Install the ones you need:
 
 | Binary | Tool(s) | Install |
 |--------|---------|---------|
+| `subfinder` | `subfinder_enum` | `go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest` |
 | `naabu` | `naabu_scan` | `go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest` |
 | `nmap` | `nmap_port_scan` | `apt install nmap` / `brew install nmap` |
 | `nuclei` | `nuclei_scan` | `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest` |
 | `httpx` | `httpx_scan` | `go install github.com/projectdiscovery/httpx/cmd/httpx@latest` |
-| `subfinder` | `subfinder_enum` | `go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest` |
 | `katana` | `katana_crawl` | `go install github.com/projectdiscovery/katana/cmd/katana@latest` |
+| `gau` | `gau_urls` | `go install github.com/lc/gau/v2/cmd/gau@latest` |
+| `dalfox` | `dalfox_scan` | `go install github.com/hahwul/dalfox/v2@latest` |
+| `cloudbrute` | `cloudbrute_enum` | `go install github.com/0xsha/CloudBrute@latest` |
+| `s3scanner` | `s3scanner_scan` | `go install github.com/sa7mon/S3Scanner@latest` |
 | `feroxbuster` | `feroxbuster_scan` | `cargo install feroxbuster` or package manager |
 | `wafw00f` | `wafw00f_detect` | `pip install wafw00f` |
 | `testssl.sh` | `testssl_scan` | `git clone https://github.com/drwetter/testssl.sh.git` |
 | `whois` | `whois_lookup` | `apt install whois` / `brew install whois` |
+
+> **Automated install:** Run `./scripts/install-tools.sh` to install all binaries
+> automatically, or `./scripts/install-tools.sh --check` to audit which are present.
 
 **Missing binary handling:** Tools use `require_binary()` — if the binary is not
 found in `$PATH`, the tool raises `ToolException`. With `handle_tool_error = True`,

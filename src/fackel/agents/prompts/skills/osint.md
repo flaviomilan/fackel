@@ -8,15 +8,18 @@ fingerprinting. Map the target's external footprint without intrusive probes.
 ## Task
 
 Given a target (domain or IP), discover associated infrastructure using
-passive techniques: DNS resolution, WHOIS data, Shodan/Censys
+passive techniques: DNS resolution, WHOIS data, Shodan/Censys/FOFA
 historical scan databases, subdomain enumeration via multiple sources
 (subfinder, DNSDumpster, crt.sh, VirusTotal), reverse DNS / reverse IP lookups
 for shared hosting detection, historical DNS records via SecurityTrails
 (previous IPs, hosting migrations, nameserver changes), Urlscan.io for cached
 scan results (URLs, page content, JS endpoints, technologies), AlienVault OTX
-for community-sourced passive DNS, job posting analysis for tech stack
-discovery, email analysis when addresses are found, and HTTP fingerprinting
-via httpx for tech stack, server headers, WAF detection, and redirect analysis.
+for community-sourced passive DNS, passive URL discovery via gau (Wayback
+Machine, Common Crawl), cloud infrastructure enumeration via CloudBrute
+(AWS/Azure/GCP/DigitalOcean bucket and app discovery), job posting analysis
+for tech stack discovery, email analysis when addresses are found, and HTTP
+fingerprinting via httpx for tech stack, server headers, WAF detection, and
+redirect analysis.
 
 ## Tools
 
@@ -39,6 +42,9 @@ via httpx for tech stack, server headers, WAF detection, and redirect analysis.
 | `urlscan_search`            | Cached scan results — URLs, IPs, server, tech, JS endpoints    |
 | `otx_passive_dns`           | Community passive DNS — historical resolutions (key req.)      |
 | `job_search`                | Job posting search to identify tech stack and internal tools    |
+| `fofa_search`               | Passive asset search — hosts, services, tech — like Shodan (key) |
+| `gau_urls`                  | Passive URL discovery — Wayback Machine, Common Crawl, OTX       |
+| `cloudbrute_enum`           | Cloud resource discovery — S3, Azure, GCP, DigitalOcean buckets  |
 | `analyze_email`             | Email breach exposure (HIBP), reputation, service registrations |
 
 > Parameter details (types, defaults, constraints) are defined in each tool's
@@ -79,10 +85,12 @@ For each **unique IPv4** from Batch 1, call all three in a single batch:
 `ipinfo_lookup(ip1)` + `ipinfo_lookup(ip2)` +
 `bgp_lookup(ip1)` + `bgp_lookup(ip2)`.
 
-### Batch 4 — Shodan + Censys (parallel, per IP)
+### Batch 4 — Shodan + Censys + FOFA (parallel, per IP)
 
-Call `shodan_lookup(ip)` and `censys_lookup(ip)` for all IPs in one batch
-(if API keys available). Pure passive data — no contact with target.
+Call `shodan_lookup(ip)`, `censys_lookup(ip)`, and `fofa_search(query="ip=<ip>")`
+for all IPs in one batch (if API keys available). Pure passive data — no
+contact with target. FOFA is another passive scan engine like Shodan/Censys —
+use it alongside them for wider coverage.
 
 ### Batch 5 — HTTP + TLS + historical (parallel)
 
@@ -93,10 +101,16 @@ Call these simultaneously on the **main domain**:
 - `urlscan_search(domain)` — cached community scan results.
 - `otx_passive_dns(domain)` — passive DNS from AlienVault OTX (if API key).
 
-### Batch 6 — Tech stack + email (parallel, if applicable)
+### Batch 6 — URL discovery + tech stack + email + cloud (parallel)
 
+- `gau_urls(target=<domain>)` — passive URL discovery from Wayback Machine,
+  Common Crawl, OTX, and URLScan. Reveals forgotten endpoints, admin panels,
+  API paths, old versions, and backup files.
 - `job_search(company_name)` — job postings for tech stack intelligence.
 - `analyze_email(email)` — only if email addresses were discovered.
+- `cloudbrute_enum(keyword=<company_or_domain_prefix>)` — enumerate cloud
+  resources (S3 buckets, Azure apps, GCP storage, DO Spaces). Use the
+  company/brand name as keyword, not the full domain.
 
 ### Batch 7 — Subdomain deep-dive (parallel)
 
@@ -150,11 +164,19 @@ httpx, tlscert, and Shodan/Censys.
     - ⚠ Direct-origin candidates: <old IPs not matching current IPs>
   - MX records: <list of {host, first_seen, last_seen}>
   - NS records: <list of {host, first_seen, last_seen}>
+- **FOFA** (per IP, if API key available):
+  - <IP>: services=<list>, tech=<list>, banners=<excerpts>
 - **Urlscan.io** (top results):
   - <url>: ip=<ip>, server=<server>, title=<title>, asn=<asn>
 - **AlienVault OTX** (passive DNS):
   - <address> → <hostname>, type=<record_type>, first=<date>, last=<date>
-- **Tech Stack** (from job postings):
+- **Passive URL Discovery** (gau):
+  - Total URLs found: <count>
+  - Interesting endpoints: <admin paths, API routes, config files>
+- **Cloud Resources** (CloudBrute):
+  - <provider>: <resource_url> (status: <status>)
+  - ⚠ Public buckets/apps found: <list>
+- **Tech Stack** (from job postings + FOFA + httpx):
   - <technologies found>
 - **Email Intelligence**:
   - <email>: breaches=<count>, reputation=<score>

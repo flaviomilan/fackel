@@ -71,7 +71,7 @@ without sending any probe packets.
 
 **Model env var:** `FACKEL_MODEL_OSINT`
 
-### Tools (18)
+### Tools (21)
 
 | Tool | Purpose |
 |------|---------||
@@ -79,13 +79,16 @@ without sending any probe packets.
 | `whois_lookup` | Registration data — registrar, dates, nameservers |
 | `shodan_lookup` | Passive service/banner data from Shodan |
 | `censys_lookup` | Host/service search via Censys |
+| `fofa_search` | Passive asset search engine — hosts, ports, services, tech |
 | `dnsdumpster_lookup` | Subdomain enum + DNS/MX/NS/TXT records |
 | `virustotal_subdomain_enum` | Passive subdomain discovery |
 | `crtsh_subdomain_enum` | Subdomain enum via Certificate Transparency |
 | `subfinder_enum` | Aggregate 40+ passive sources for subdomains |
+| `gau_urls` | Passive URL discovery — Wayback Machine, Common Crawl, OTX |
 | `reverse_dns_lookup` | PTR records + reverse IP for shared hosting |
 | `ipinfo_lookup` | IP geolocation, ASN, organisation via ipinfo.io |
 | `bgp_lookup` | ASN/prefix lookup via RIPEstat for BGP context |
+| `cloudbrute_enum` | Cloud resource discovery — S3, Azure, GCP, DO buckets/apps |
 | `httpx_scan` | HTTP probing + technology fingerprinting |
 | `tlscert_lookup` | TLS certificate inspection + SAN subdomain discovery |
 | `securitytrails_history` | Historical DNS records — reveals old IPs and hosting changes |
@@ -107,14 +110,16 @@ without sending any probe packets.
 5. **IP enrichment** — `ipinfo_lookup` per IP for geolocation, ASN, and anycast detection
 6. **BGP context** — `bgp_lookup` per IP for ASN holder, prefix, and RIR allocation
 7. **TLS certificates** — `tlscert_lookup` for certificate metadata and SAN-based subdomain discovery
-8. **Shodan / Censys** — passive service data for each IP (if API keys available)
+8. **Shodan / Censys / FOFA** — passive service data for each IP (if API keys available)
 9. **Historical DNS** — `securitytrails_history` for old IPs that may bypass CDN (if API key available)
 10. **URLScan** — `urlscan_search` for cached scan results and technology fingerprints
 11. **Passive DNS** — `otx_passive_dns` for AlienVault OTX passive DNS records (if API key available)
 12. **HTTP probing** — `httpx_scan` for technology detection and HTTP surface mapping
-13. **Job search** — `job_search` with company name for tech stack intelligence
-14. **Email analysis** — `analyze_email` if email addresses discovered
-15. **Structured summary** — emit findings with evidence citations
+13. **URL discovery** — `gau_urls` for passive URL discovery from Wayback Machine, Common Crawl, OTX
+14. **Job search** — `job_search` with company name for tech stack intelligence
+15. **Email analysis** — `analyze_email` if email addresses discovered
+16. **Cloud enumeration** — `cloudbrute_enum` with company/brand keyword for S3/Azure/GCP/DO resources
+17. **Structured summary** — emit findings with evidence citations
 
 ### Node post-processing
 
@@ -173,16 +178,18 @@ and technology fingerprints.
 
 **Model env var:** `FACKEL_MODEL_VULN_SCAN`
 
-### Tools (8)
+### Tools (10)
 
 | Tool | Purpose |
-|------|---------|
+|------|---------||
 | `nuclei_scan` | Vulnerability/misconfiguration templates (community-maintained) |
+| `dalfox_scan` | XSS vulnerability scanner — reflected, stored, DOM-based |
 | `httpx_scan` | HTTP probing and technology fingerprinting |
 | `wafw00f_detect` | Web Application Firewall detection |
 | `graphql_scan` | GraphQL endpoint security testing |
 | `feroxbuster_scan` | Recursive directory/content discovery |
 | `katana_crawl` | Web crawling for URL/endpoint discovery |
+| `s3scanner_scan` | S3 bucket permission audit — public read/write/list |
 | `testssl_scan` | TLS/SSL protocol, cipher, and vulnerability analysis |
 | `extract_webpage_content` | Web page content extraction |
 
@@ -192,10 +199,12 @@ and technology fingerprints.
 2. **HTTP surface + WAF** — `httpx_scan` for tech detection, `wafw00f_detect` for WAF
 3. **Deep-dive on findings** — if nuclei finds GraphQL, run `graphql_scan`
 4. **Web discovery** — `katana_crawl` + `feroxbuster_scan` for hidden endpoints
-5. **TLS analysis** — `testssl_scan` for protocol/cipher vulnerabilities
-6. **Page content** — `extract_webpage_content` for interesting pages
-7. **Subdomain scans** — run `nuclei_scan` per subdomain
-8. **Structured summary** — emit findings with evidence
+5. **XSS testing** — `dalfox_scan` on URLs with query parameters from crawling/discovery
+6. **TLS analysis** — `testssl_scan` for protocol/cipher vulnerabilities
+7. **Cloud storage** — `s3scanner_scan` if bucket names found in code, JS, or findings
+8. **Page content** — `extract_webpage_content` for interesting pages
+9. **Subdomain scans** — run `nuclei_scan` per subdomain
+10. **Structured summary** — emit findings with evidence
 
 ### Adaptive strategy
 
