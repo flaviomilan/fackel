@@ -21,9 +21,25 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 180
 
 
-def run_command(cmd: list[str], timeout: int = DEFAULT_TIMEOUT) -> tuple[int, str, str]:
-    """Execute a subprocess command and return (returncode, stdout, stderr)."""
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # noqa: S603
+def run_command(
+    cmd: list[str],
+    timeout: int = DEFAULT_TIMEOUT,
+    env: dict[str, str] | None = None,
+) -> tuple[int, str, str]:
+    """Execute a subprocess command and return (returncode, stdout, stderr).
+
+    Parameters
+    ----------
+    env:
+        Extra environment variables merged into the current ``os.environ``.
+        Avoids exposing secrets as CLI arguments visible via ``/proc``.
+    """
+    merged_env: dict[str, str] | None = None
+    if env:
+        merged_env = {**os.environ, **env}
+    proc = subprocess.run(  # noqa: S603
+        cmd, capture_output=True, text=True, timeout=timeout, env=merged_env
+    )
     return proc.returncode, proc.stdout, proc.stderr
 
 

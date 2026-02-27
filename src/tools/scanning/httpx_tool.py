@@ -15,6 +15,7 @@ from fackel.tooling import (
     parse_jsonl,
     require_binary,
     run_command,
+    sanitize_ports,
 )
 
 
@@ -72,7 +73,11 @@ def httpx_scan(
     cmd = ["httpx", "-u", target, "-json", "-silent"]
 
     if ports.strip():
-        cmd.extend(["-p", ports.strip()])
+        clean_ports, port_err = sanitize_ports(ports)
+        if port_err:
+            raise ToolException(f"httpx_scan: {port_err}")
+        if clean_ports:
+            cmd.extend(["-p", clean_ports])
     if tech_detect:
         cmd.append("-td")
     if follow_redirects:

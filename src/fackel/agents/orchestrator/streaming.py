@@ -64,6 +64,7 @@ ToolApprovalCallback = Callable[[dict[str, Any]], str] | None
 _event_callback: EventCallback = None
 _tool_approval_callback: ToolApprovalCallback = None
 _tool_approval_enabled: bool = False
+_guidance_enabled: bool = False
 
 MAX_AGENT_ITERATIONS = 50
 
@@ -100,6 +101,22 @@ def set_tool_approval(
 def is_tool_approval_enabled() -> bool:
     """Whether tool-level approval is active for scanning agents."""
     return _tool_approval_enabled
+
+
+def set_guidance_enabled(enabled: bool) -> None:
+    """Enable or disable per-phase operator guidance gates.
+
+    When enabled, the graph pauses before each major agent phase
+    (osint, port_scan, vuln_scan) to collect optional operator
+    instructions that steer the agent's strategy.
+    """
+    global _guidance_enabled
+    _guidance_enabled = enabled
+
+
+def is_guidance_enabled() -> bool:
+    """Whether per-phase guidance gates are active."""
+    return _guidance_enabled
 
 
 def emit(phase: str, event_type: str, data: dict[str, Any]) -> None:

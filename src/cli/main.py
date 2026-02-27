@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +15,11 @@ from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
-from fackel.agents.orchestrator.streaming import set_event_callback, set_tool_approval
+from fackel.agents.orchestrator.streaming import (
+    set_event_callback,
+    set_guidance_enabled,
+    set_tool_approval,
+)
 
 from .renderer import EventRenderer
 
@@ -65,6 +71,45 @@ def _print_provider_status(
         table.add_row(spec.provider, vars_str, status)
     console.print(table)
     console.print()
+
+
+def _make_guidance_prompt(renderer: EventRenderer) -> Callable[[dict[str, Any]], str]:
+    """Create a guidance prompt closure that pauses the Live area.
+
+    Returns a callable ``(interrupt_data: dict) -> str`` that shows
+    a Rich Panel with the phase description and collects free-text input
+    from the operator.  Returns an empty string when the operator skips.
+    """
+
+    def guidance_prompt(interrupt_data: dict[str, Any]) -> str:
+        renderer._persist_content()
+        renderer._stop_live()
+        phase = interrupt_data.get("phase", "?")
+        description = interrupt_data.get("description", "")
+
+        body = f"[bold]Phase:[/bold]  [cyan]{phase}[/cyan]\n\n{description}"
+        console.print()
+        console.print(
+            Panel(
+                body,
+                title="[bold blue]📝 Operator Guidance[/bold blue]",
+                border_style="blue",
+                padding=(1, 2),
+                expand=True,
+            )
+        )
+        text = console.input("  [bold blue]Guidance[/bold blue] [dim](Enter to skip):[/dim] ")
+        text = text.strip()
+        if text:
+            console.print(
+                f"  [bold green]✓ Guidance recorded[/bold green]  [dim]{text[:60]}{'…' if len(text) > 60 else ''}[/dim]"
+            )
+        else:
+            console.print("  [dim]— skipped[/dim]")
+        console.print()
+        return text
+
+    return guidance_prompt
 
 
 def _make_approval_prompt(
@@ -141,7 +186,9 @@ def _make_approval_prompt(
 
 @app.command()
 def scan(
-    target: str = typer.Argument(..., help="Target domain or IP"),
+    target: str | None = typer.Argument(
+        None, help="Target domain or IP (omit for interactive mode)"
+    ),
     active_scan: bool = typer.Option(
         True,
         "--active-scan/--no-active-scan",
@@ -164,6 +211,11 @@ def scan(
         "--approve-tools",
         help="Require per-tool-call approval for active scanning tools",
     ),
+    guided: bool = typer.Option(
+        False,
+        "--guided",
+        help="Enable per-phase operator guidance (provide instructions before each agent phase)",
+    ),
 ) -> None:
     """Run a full scan workflow and emit the final report."""
     from dotenv import load_dotenv
@@ -180,6 +232,18 @@ def scan(
 
     if check_providers:
         _print_provider_status(get_provider_key_status())
+
+    # --- Interactive intake when no target provided ---
+    initial_guidance = ""
+    if target is None:
+        from .intake import interactive_intake
+
+        intent = interactive_intake(console)
+        target = intent.target
+        active_scan = intent.active_scan
+        initial_guidance = intent.guidance
+        if initial_guidance:
+            guided = True
 
     _print_scan_header(target, active_scan=active_scan, approve_tools=approve_tools)
 
@@ -202,6 +266,13 @@ def scan(
         console.print("[yellow]⚠ Tool-level approval enabled for active scanning tools[/yellow]")
         console.print()
 
+    guidance_prompt: Callable[[dict[str, Any]], str] | None = None
+    if guided:
+        set_guidance_enabled(True)
+        guidance_prompt = _make_guidance_prompt(renderer)
+        console.print("[blue]📝 Per-phase operator guidance enabled[/blue]")
+        console.print()
+
     started_at = time.perf_counter()
 
     result = _execute_scan(
@@ -210,6 +281,8 @@ def scan(
         target,
         active_scan,
         approval_prompt,
+        guidance_prompt,
+        initial_guidance,
         started_at,
     )
     _render_report(result, output, target, started_at)
@@ -221,6 +294,8 @@ def _execute_scan(
     target: str,
     active_scan: bool,
     approval_prompt: Any,
+    guidance_prompt: Callable[[dict[str, Any]], str] | None,
+    initial_guidance: str,
     started_at: float,
 ) -> dict[str, Any]:
     """Run the orchestrator and handle interrupts / errors."""
@@ -229,6 +304,8 @@ def _execute_scan(
             target,
             active_scan=active_scan,
             approval_callback=approval_prompt,
+            guidance_callback=guidance_prompt,
+            initial_guidance=initial_guidance,
         )
         return result
     except KeyboardInterrupt:
@@ -264,6 +341,7 @@ def _execute_scan(
         renderer.shutdown()
         set_event_callback(None)
         set_tool_approval(enabled=False)
+        set_guidance_enabled(False)
 
 
 def _render_report(
@@ -299,7 +377,7 @@ def _render_report(
     if output is None:
         reports_dir = Path("reports")
         reports_dir.mkdir(exist_ok=True)
-        safe_target = target.replace("/", "_").replace(":", "_")
+        safe_target = re.sub(r"[^\w.\-]", "_", target)
         ts = time.strftime("%Y%m%d_%H%M%S")
         output = reports_dir / f"{safe_target}_{ts}.md"
 

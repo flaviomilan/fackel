@@ -7,16 +7,17 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
+from fackel.agents.prompts import load_template
 from fackel.formatting import format_tech_fingerprint
 
 from .. import evaluator, streaming
 from ..state import ScanState
 from ..streaming import agent_summary, is_tool_approval_enabled, run_and_stream_agent
 from ._helpers import (
-    DEFAULT_VULN_SCAN_STRATEGY,
     SUBDOMAIN_CAP,
     emit_evaluation,
     get_phase_evaluation,
+    get_phase_guidance,
     make_finding,
     prepare_scan_targets,
 )
@@ -33,6 +34,9 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
     capped_subs = subdomains[:SUBDOMAIN_CAP]
 
     prompt = _build_vuln_scan_prompt(target, ips, capped_subs, state)
+    guidance = get_phase_guidance(state, "vuln_scan")
+    if guidance:
+        prompt += "\n\n" + load_template("guidance_suffix").format(guidance=guidance)
     agent = build(approve_tools=is_tool_approval_enabled())
     messages = run_and_stream_agent(agent, "vuln_scan", prompt, config=config)
 
@@ -60,7 +64,7 @@ def _build_vuln_scan_prompt(
     all_subs = state.get("discovered_subdomains", [])
     skipped = len(all_subs) - len(subdomains)
 
-    parts = ["Run vulnerability scans on the target."]
+    parts = [load_template("vuln_scan_task")]
     parts.append(f"\nOriginal target domain: {target}")
     if subdomains:
         parts.append(f"Discovered subdomains ({len(subdomains)}): {', '.join(subdomains)}")
@@ -89,9 +93,7 @@ def _append_tech_fingerprint_context(parts: list[str], state: ScanState) -> None
     all_techs = sorted({t for fp in tech_fps for t in fp.get("technologies", [])})
     if all_techs:
         parts.append(
-            f"\nDetected technologies: {', '.join(all_techs)}. "
-            "Prioritise nuclei templates targeting these specific "
-            "technologies for higher-value findings."
+            "\n" + load_template("vuln_scan_tech_hint").format(technologies=", ".join(all_techs))
         )
 
 
@@ -99,25 +101,16 @@ def _append_port_scan_strategy(parts: list[str], state: ScanState) -> None:
     """Append vulnerability scan strategy based on port-scan evaluation."""
     port_eval = get_phase_evaluation(state, "port_scan")
     if not port_eval:
-        parts.append(DEFAULT_VULN_SCAN_STRATEGY)
+        parts.append("\n" + load_template("vuln_scan_strategy"))
         return
 
     completeness = port_eval.get("completeness", "partial")
     if completeness == "empty":
-        parts.append(
-            "\n⚠ PORT SCAN FOUND NO OPEN PORTS. Focus entirely on "
-            "domain-level checks: nuclei templates (DNS, SSL, HTTP), "
-            "wafw00f, httpx, and katana on the domain and subdomains. "
-            "Do NOT waste iterations on IP-specific scans."
-        )
+        parts.append("\n" + load_template("vuln_scan_empty_ports"))
     elif completeness == "partial":
         eval_gaps = port_eval.get("gaps", [])
         if eval_gaps:
             parts.append(f"\n⚠ Port scan gaps: {'; '.join(eval_gaps)}")
-        parts.append(
-            "\nPort scan was partial. Prioritise domain-level nuclei "
-            "and httpx. Run IP-specific checks only if ports were found "
-            "on that IP."
-        )
+        parts.append("\n" + load_template("vuln_scan_partial_ports"))
     else:
-        parts.append(DEFAULT_VULN_SCAN_STRATEGY)
+        parts.append("\n" + load_template("vuln_scan_strategy"))

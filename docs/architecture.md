@@ -18,6 +18,7 @@ phases, and streams events to the CLI.
 - [Prompt system](#prompt-system)
   - [Soul prompt](#soul-prompt)
   - [Skill prompts](#skill-prompts)
+  - [Templates](#templates)
 - [Event streaming](#event-streaming)
 - [Report generation](#report-generation)
 - [Safety guards](#safety-guards)
@@ -43,20 +44,27 @@ phases, and streams events to the CLI.
 ┌──────────────────────────────────────────────────────────────────┐
 │                LangGraph StateGraph(ScanState)                   │
 │                                                                  │
-│  ┌──────────┐     ┌──────────────┐     ┌────────────┐            │
-│  │  osint   │────▶│approval_gate │────▶│ port_scan  │            │
-│  │(27 tools)│     │  (HitL)      │     │ (2 tools)  │            │
-│  └──────────┘     └──────────────┘     └─────┬──────┘            │
-│       │                                      │                   │
-│       │ (no active scan)         ┌───────────▼────────────┐      │
+│  ┌────────────┐  ┌──────────┐  ┌──────────────┐  ┌────────────┐  │
+│  │osint_guide │─▶│  osint   │─▶│approval_gate │─▶│ ps_guide   │  │
+│  │ (optional) │  │(27 tools)│  │  (HitL)      │  │ (optional) │  │
+│  └────────────┘  └──────────┘  └──────────────┘  └─────┬──────┘  │
+│       │                                                │         │
+│       │ (no active scan)                 ┌─────────────▼──────┐  │
+│       │                                  │    port_scan       │  │
+│       │                                  │    (2 tools)       │  │
+│       │                                  └──┬─────────────────┘  │
+│       │                          ┌──────────▼────────────┐       │
 │       │                          │ evaluate_phase (judge) │      │
 │       │                          └──┬──────────────────┬──┘      │
 │       │                             │                  │         │
 │       │                    ┌────────▼───┐    ┌────────▼────┐     │
-│       │                    │ vuln_scan  │    │   triage    │     │
-│       │                    │ (12 tools) │    │ (structured)│     │
+│       │                    │ vs_guide   │    │   triage    │     │
+│       │                    │ (optional) │    │ (structured)│     │
 │       │                    └────────┬───┘    └──────┬──────┘     │
-│       │                             │               │            │
+│       │                    ┌────────▼───┐           │            │
+│       │                    │ vuln_scan  │           │            │
+│       │                    │ (12 tools) │           │            │
+│       │                    └────────┬───┘           │            │
 │       │                    ┌────────▼───┐           │            │
 │       │                    │   triage   │           │            │
 │       └────────────┐       └────────┬───┘           │            │
@@ -69,6 +77,8 @@ phases, and streams events to the CLI.
 │                                 │                                │
 │                                END                               │
 └──────────────────────────────────────────────────────────────────┘
+
+*Guide nodes (osint_guide, ps_guide, vs_guide) are active only with `--guided`.*
 ```
 
 ---
@@ -208,23 +218,26 @@ rather than overwriting. This ensures no phase can destroy another phase's data.
 
 Defined in `src/fackel/agents/prompts/__init__.py`.
 
+Three-tier architecture — a shared **soul** (identity/rules), per-agent
+**skill** prompts (playbooks), and **16 runtime templates** that inject
+dynamic context into task messages.
+
 ### Architecture
 
-Two-tier composition — a shared **soul** prompt (agent identity and rules)
-combined with a task-specific **skill** prompt.
-
 ```python
-load_prompt("osint")     # → soul.md + "\n\n---\n\n" + skills/osint.md
-load_prompt("port_scan") # → soul.md + "\n\n---\n\n" + skills/port_scan.md
+# Tier 1+2: system prompt (soul + skill)
+load_prompt("osint")            # → soul.md + skills/osint.md
+
+# Tier 3: dynamic task context
+load_template("osint_task")     # → templates/osint_task.md (with {placeholders})
+load_section_map("ip_class_hints")  # → {"cdn": "...", "cloud": "...", ...}
 ```
 
-Prompts are loaded from disk and cached via `@lru_cache(maxsize=16)`.
+All files are Markdown, loaded from disk and cached via `@lru_cache`.
 
 ### Soul prompt
 
 `src/fackel/agents/prompts/soul.md` — shared by all agents.
-
-Defines:
 
 | Section | Content |
 |---------|---------|
@@ -235,16 +248,43 @@ Defines:
 
 ### Skill prompts
 
-Located in `src/fackel/agents/prompts/skills/`.
+Located in `src/fackel/agents/prompts/skills/`. One per agent role.
 
 | File | Agent | Content |
 |------|-------|---------|
-| `osint.md` | OSINT | 8-step playbook (DNS → WHOIS → subdomain enum → reverse DNS → Shodan/Censys → job search → email analysis). Tool table. Structured output format. |
+| `osint.md` | OSINT | 22-step playbook (DNS → WHOIS → subdomain enum → reverse DNS → Shodan/Censys → job search → email analysis). Tool table. Structured output format. |
 | `port_scan.md` | Port Scan | Strategy: naabu (top 1000) per IP first, then nmap for service fingerprinting. Skip duplicate subdomain IPs. Per-IP table output. |
 | `vuln_scan.md` | Vuln Scan | 8-section playbook: domain nuclei first → HTTP surface + WAF → deep-dive on findings → web discovery (katana + feroxbuster) → TLS analysis → page content → subdomain scans. |
 | `triage.md` | Triage | Technology identification, coverage gap analysis. Technology coverage table. Infrastructure risk signals. Gap severity classification. |
 | `report.md` | Report | 8-section report structure. Phase quality assessment integration. Writing rules (factual, tables over prose, quantify). |
 | `judge.md` | Judge | Scoring guide (0.0–1.0), recommendation guide (proceed/adapt/skip_downstream). Phase-specific expectations. |
+
+### Templates
+
+Located in `src/fackel/agents/prompts/templates/`. 16 files injected into
+`HumanMessage` at runtime by graph nodes.
+
+| Template | Placeholders | Purpose |
+|----------|-------------|---------|
+| `osint_task` | `{target}` | Primary OSINT task instruction |
+| `osint_retry` | `{target}`, `{completeness}`, `{score}`, `{gaps_text}`, `{reasoning}` | Retry with quality feedback |
+| `port_scan_task` | — | Port scan task header |
+| `port_scan_strategy` | — | Naabu→nmap strategy |
+| `cdn_warning` | — | CDN IP warning (conditional) |
+| `ip_class_hints` | *(section map)* | Per-IP-class hints: `cdn` / `cloud` / `direct_host` |
+| `vuln_scan_task` | — | Vuln scan task header |
+| `vuln_scan_strategy` | — | Domain-first strategy |
+| `vuln_scan_empty_ports` | — | Fallback for empty port scan |
+| `vuln_scan_partial_ports` | — | Fallback for partial port scan |
+| `vuln_scan_tech_hint` | `{technologies}` | Technology-specific nuclei hints |
+| `triage_task` | `{context}` | Triage task with serialised findings |
+| `intake_system` | — | Interactive intake system prompt |
+| `report_fallback` | `{target}` | Report error fallback |
+| `guidance_suffix` | `{guidance}` | Operator guidance wrapper (`--guided`) |
+| `phase_descriptions` | *(section map)* | Phase descriptions: `osint` / `port_scan` / `vuln_scan` |
+
+See [docs/prompts.md](prompts.md) for the complete prompt reference — loader API,
+pipeline flow diagram, per-template usage map, and instructions for adding new prompts.
 
 ---
 

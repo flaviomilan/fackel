@@ -20,6 +20,7 @@ from fackel.tooling import (
     guard_target,
     require_binary,
     run_command,
+    sanitize_exclude_extensions,
 )
 
 _TIMEOUT = 180
@@ -60,12 +61,16 @@ def paramspider_crawl(
 
     target = guard_target(target, "paramspider_crawl", TargetType.DOMAIN)
 
+    clean_exclude, exclude_err = sanitize_exclude_extensions(exclude)
+    if exclude_err:
+        raise ToolException(f"paramspider_crawl: {exclude_err}")
+
     cmd = [
         "paramspider",
         "-d",
         target,
         "--exclude",
-        exclude,
+        clean_exclude or exclude,
         "--level",
         "high",
         "--quiet",

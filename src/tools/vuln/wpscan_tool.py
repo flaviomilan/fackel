@@ -20,6 +20,7 @@ from fackel.tooling import (
     require_binary,
     require_env,
     run_command,
+    sanitize_enumerate,
 )
 
 _TIMEOUT = 300
@@ -70,15 +71,22 @@ def wpscan_scan(target: str, enumerate: str = "vp,vt,u") -> dict[str, Any]:
         "json",
         "--no-banner",
         "--random-user-agent",
-        "--api-token",
-        api_token,
     ]
 
     if enumerate:
-        cmd.extend(["--enumerate", enumerate])
+        clean_enum, enum_err = sanitize_enumerate(enumerate)
+        if enum_err:
+            raise ToolException(f"wpscan_scan: {enum_err}")
+        if clean_enum:
+            cmd.extend(["--enumerate", clean_enum])
+
+    # Pass API token via environment to avoid exposure in process list.
+    env = {"WPSCAN_API_TOKEN": api_token}
 
     try:
-        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("wpscan_scan", _TIMEOUT))
+        code, out, stderr = run_command(
+            cmd, timeout=get_tool_timeout("wpscan_scan", _TIMEOUT), env=env
+        )
     except Exception as exc:
         raise ToolException(f"wpscan_scan: {exc}") from exc
 

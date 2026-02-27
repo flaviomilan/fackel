@@ -12,8 +12,10 @@ from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
+    TargetType,
     format_tool_output,
     get_tool_timeout,
+    guard_target,
     parse_jsonl,
     require_binary,
     run_command,
@@ -52,9 +54,7 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
     """
     require_binary("trufflehog", "trufflehog_scan")
 
-    target = target.strip()
-    if not target:
-        raise ToolException("trufflehog_scan: target must not be empty")
+    target = guard_target(target, "trufflehog_scan", TargetType.HOST_OR_URL)
 
     # Determine scan mode from target format.
     if "github.com/" in target:

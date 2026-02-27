@@ -63,6 +63,32 @@ def is_reverse_ptr_subdomain(label: str) -> bool:
 
 _SHELL_META_RE = re.compile(r"[;&|`$(){}!\[\]<>'\"\\\n\r]")
 
+# Networks that must never be used as scan targets (SSRF prevention).
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+
+def _is_blocked_ip(host: str) -> bool:
+    """Return ``True`` if *host* is an IP in a blocked (internal/reserved) range.
+
+    Blocks RFC 1918 private ranges, loopback, link-local (including the
+    cloud metadata endpoint 169.254.169.254), and IPv6 equivalents.
+    """
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return any(addr in net for net in _BLOCKED_NETWORKS)
+
 
 class TargetType(Enum):
     """Declares what kind of target a tool accepts."""
@@ -116,6 +142,8 @@ def guard_target(
         host = parsed.hostname
         if _SHELL_META_RE.search(host):
             raise _err(f"target contains forbidden characters: {host!r}")
+        if _is_blocked_ip(host):
+            raise _err(f"target resolves to a private/reserved IP: {host!r}")
         return raw
 
     if accept is TargetType.HOST_OR_URL:
@@ -124,6 +152,8 @@ def guard_target(
             host = parsed.hostname
             if _SHELL_META_RE.search(host):
                 raise _err(f"target contains forbidden characters: {host!r}")
+            if _is_blocked_ip(host):
+                raise _err(f"target resolves to a private/reserved IP: {host!r}")
             return raw
         return guard_target(raw, tool_name, TargetType.HOST)
 

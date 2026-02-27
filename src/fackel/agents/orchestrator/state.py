@@ -69,5 +69,8 @@ class ScanState(TypedDict):
     risk_score: dict[str, Any]
     """Exposure risk score: {score, exposure_type, factors}."""
 
+    phase_guidance: dict[str, str]
+    """Operator guidance per phase (e.g. {"osint": "focus on subdomains"})."""
+
     report: str
     """Final rendered Markdown report."""

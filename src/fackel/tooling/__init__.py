@@ -24,6 +24,8 @@ from fackel.tooling.execution import (
 )
 from fackel.tooling.ip_classifier import IpClass, classify_ip
 from fackel.tooling.sanitizers import (
+    sanitize_enumerate,
+    sanitize_exclude_extensions,
     sanitize_ports,
     sanitize_severity,
     sanitize_tags,
@@ -53,6 +55,8 @@ __all__ = [
     "require_binary",
     "require_env",
     "run_command",
+    "sanitize_enumerate",
+    "sanitize_exclude_extensions",
     "sanitize_ports",
     "sanitize_severity",
     "sanitize_tags",

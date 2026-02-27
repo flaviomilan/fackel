@@ -63,6 +63,7 @@ def approval_gate(state: ScanState) -> Command:  # type: ignore[type-arg]
 
     approved = interrupt(
         {
+            "type": "approval",
             "question": "\n".join(summary_lines),
             "targets": ips,
             "subdomains": subdomains,
@@ -72,7 +73,7 @@ def approval_gate(state: ScanState) -> Command:  # type: ignore[type-arg]
     streaming.emit("approval", "done", {"approved": approved})
 
     if approved:
-        return Command(goto="port_scan")
+        return Command(goto="port_scan_guidance")
     return Command(goto="report")
 
 

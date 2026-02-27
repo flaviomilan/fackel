@@ -7,6 +7,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
+from fackel.agents.prompts import load_template
 from fackel.tooling import is_valid_domain, is_valid_ip, sanitize_target
 
 from .. import evaluator, streaming
@@ -20,7 +21,7 @@ from ..extractors import (
 )
 from ..state import ScanState
 from ..streaming import agent_summary, run_and_stream_agent
-from ._helpers import emit_evaluation, make_finding
+from ._helpers import emit_evaluation, get_phase_guidance, make_finding
 
 logger = logging.getLogger(__name__)
 
@@ -35,21 +36,26 @@ def osint_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
     from fackel.agents.osint.agent import build
 
     target = sanitize_target(state["target"])
+    guidance = get_phase_guidance(state, "osint")
     agent = build()
-    messages, evaluation = _run_osint_with_retry(agent, target, config)
+    messages, evaluation = _run_osint_with_retry(agent, target, guidance, config)
     return _build_osint_result(messages, target, evaluation)
 
 
 def _run_osint_with_retry(
     agent: Any,
     target: str,
+    guidance: str,
     config: RunnableConfig,
 ) -> tuple[list[Any], Any]:
     """Run OSINT agent with quality evaluation and retry on poor output."""
+    prompt = load_template("osint_task").format(target=target)
+    if guidance:
+        prompt += "\n\n" + load_template("guidance_suffix").format(guidance=guidance)
     messages = run_and_stream_agent(
         agent,
         "osint",
-        f"Perform passive OSINT reconnaissance on: {target}",
+        prompt,
         config=config,
     )
     summary = agent_summary(messages)
@@ -71,15 +77,12 @@ def _retry_osint(agent: Any, target: str, evaluation: Any, config: RunnableConfi
         evaluation.score,
     )
     gaps_text = "; ".join(evaluation.gaps) if evaluation.gaps else "thin output"
-    retry_prompt = (
-        f"Your first OSINT pass on {target} was insufficient.\n"
-        f"Quality assessment: {evaluation.completeness} (score: {evaluation.score:.1f})\n"
-        f"Gaps identified: {gaps_text}\n"
-        f"Reasoning: {evaluation.reasoning}\n\n"
-        f"Please perform a MORE THOROUGH reconnaissance on: {target}\n"
-        "Use ALL available tools from your playbook — DNS, WHOIS, subdomain "
-        "enumeration, reverse DNS, IP classification, Shodan/Censys, httpx, "
-        "TLS certs. Do not stop after one or two tools."
+    retry_prompt = load_template("osint_retry").format(
+        target=target,
+        completeness=evaluation.completeness,
+        score=f"{evaluation.score:.1f}",
+        gaps_text=gaps_text,
+        reasoning=evaluation.reasoning,
     )
     streaming.emit("osint", "retry", {"reason": gaps_text})
     return run_and_stream_agent(agent, "osint", retry_prompt, config=config)

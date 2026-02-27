@@ -33,9 +33,6 @@ dependencies = [
 fackel = "cli.main:app"
 
 [project.optional-dependencies]
-ollama = [
-  "langchain-ollama>=0.3",
-]
 dev = [
   "ruff>=0.4",
   "mypy>=1.9",
@@ -48,6 +45,9 @@ dev = [
   "types-requests>=2.31",
   "types-python-nmap>=0.7",
   "types-beautifulsoup4>=4.12",
+]
+ollama = [
+  "langchain-ollama>=0.3",
 ]
 api = [
   "fastapi>=0.110",

@@ -18,7 +18,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
 from fackel.agents.config import build_llm
-from fackel.agents.prompts import load_prompt
+from fackel.agents.prompts import load_prompt, load_template
 from fackel.formatting import format_tech_fingerprint, serialize_findings
 
 logger = logging.getLogger(__name__)
@@ -117,7 +117,11 @@ def run_triage(
 
     try:
         result = agent.invoke(
-            {"messages": [HumanMessage(content=f"Analyse these scan findings:\n\n{context}")]},
+            {
+                "messages": [
+                    HumanMessage(content=load_template("triage_task").format(context=context))
+                ]
+            },
             config=config,
         )
         structured: TriageResult | None = result.get("structured_response")

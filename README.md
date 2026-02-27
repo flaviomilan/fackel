@@ -420,66 +420,12 @@ See [docs/development.md](docs/development.md) for the full development guide.
 
 ---
 
-## Project structure
-
-```
-src/
-├── cli/
-│   └── main.py                      # Typer CLI with real-time Rich rendering
-├── fackel/
-│   ├── agents/
-│   │   ├── config.py                # build_llm(), get_model(), default_middleware()
-│   │   ├── prompts/
-│   │   │   ├── __init__.py          # Prompt loader with caching
-│   │   │   ├── soul.md              # Shared agent identity + rules
-│   │   │   └── skills/
-│   │   │       ├── osint.md         # OSINT playbook
-│   │   │       ├── port_scan.md     # Port scan strategy
-│   │   │       ├── vuln_scan.md     # Vuln scan playbook
-│   │   │       ├── triage.md        # Coverage gap analysis
-│   │   │       ├── report.md        # Report writing rules
-│   │   │       └── judge.md         # Quality scoring guide
-│   │   ├── orchestrator/
-│   │   │   ├── state.py             # ScanState (TypedDict + reducers)
-│   │   │   ├── graph.py             # StateGraph + SqliteSaver checkpointer
-│   │   │   ├── streaming.py         # Dual-mode agent streaming + HITL
-│   │   │   ├── evaluator.py         # LLM-as-a-judge quality scoring
-│   │   │   ├── extractors.py        # IP/subdomain/fingerprint extraction
-│   │   │   ├── main.py              # Public API: run()
-│   │   │   └── nodes/               # Graph node functions
-│   │   │       ├── osint.py         # OSINT node + quality-gated retry
-│   │   │       ├── port_scan.py     # Port scan node + evaluator
-│   │   │       ├── vuln_scan.py     # Vuln scan node + evaluator
-│   │   │       ├── triage.py        # Triage node
-│   │   │       └── report_and_gates.py  # Report node + approval gate
-│   │   ├── osint/agent.py           # OSINT ReAct agent (27 tools)
-│   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
-│   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (12 tools)
-│   │   ├── triage/agent.py          # Triage structured output
-│   │   └── report/agent.py          # Report synthesis
-│   ├── tooling/
-│   │   ├── validators.py            # guard_target() (raises ToolException)
-│   │   ├── execution.py             # run_command, require_binary, get_tool_timeout
-│   │   ├── sanitizers.py            # Input sanitisation helpers
-│   │   ├── ip_classifier.py         # IP classification (CDN, cloud, hosting)
-│   │   └── ddgs.py                  # DuckDuckGo search wrapper
-│   ├── provider_keys.py             # API key gating + tool filtering
-│   └── report_writer.py             # Full archival report builder
-└── tools/
-    ├── circuit_breaker.py           # Per-service circuit breaker
-    ├── recon/                       # 22 passive reconnaissance tools
-    ├── osint/                       # 3 open-source intelligence tools
-    ├── scanning/                    # 7 active scanning tools
-    └── vuln/                        # 5 vulnerability assessment tools
-```
-
----
-
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
 | [docs/architecture.md](docs/architecture.md) | System architecture, graph flow, state management, prompt system |
+| [docs/prompts.md](docs/prompts.md) | Prompt system — soul, skills, templates, loader API, pipeline flow |
 | [docs/agents.md](docs/agents.md) | Agent specifications, prompts, LLM-as-a-judge evaluator |
 | [docs/tools.md](docs/tools.md) | Complete tool reference — schemas, validation, binaries |
 | [docs/input-validation.md](docs/input-validation.md) | Input validation system — TargetType, guard_target, security |

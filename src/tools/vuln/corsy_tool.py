@@ -62,22 +62,20 @@ def corsy_scan(target: str) -> dict[str, Any]:
         "-q",
     ]
 
-    json_dir = tempfile.mkdtemp()
-    json_file = Path(json_dir) / "corsy_output.json"
-    cmd.extend(["-o", str(json_file)])
+    with tempfile.TemporaryDirectory() as json_dir:
+        json_file = Path(json_dir) / "corsy_output.json"
+        cmd.extend(["-o", str(json_file)])
 
-    try:
-        code, _out, stderr = run_command(cmd, timeout=get_tool_timeout("corsy_scan", _TIMEOUT))
-    except Exception as exc:
-        raise ToolException(f"corsy_scan: {exc}") from exc
+        try:
+            code, _out, stderr = run_command(cmd, timeout=get_tool_timeout("corsy_scan", _TIMEOUT))
+        except Exception as exc:
+            raise ToolException(f"corsy_scan: {exc}") from exc
+
+        raw = ""
+        if json_file.exists():
+            raw = json_file.read_text().strip()
 
     findings: list[dict[str, Any]] = []
-
-    raw = ""
-    if json_file.exists():
-        raw = json_file.read_text().strip()
-        json_file.unlink(missing_ok=True)
-    Path(json_dir).rmdir()
 
     if raw:
         try:

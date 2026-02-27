@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from fackel.agents.config import build_llm
-from fackel.agents.prompts import load_prompt
+from fackel.agents.prompts import load_prompt, load_template
 from fackel.formatting import serialize_findings
 
 logger = logging.getLogger(__name__)
@@ -110,8 +110,5 @@ def generate_report(
         return cast(str, response.content)
     except Exception:
         logger.exception("Report LLM call failed — returning raw findings as fallback")
-        return (
-            f"# Penetration Test Report — {target}\n\n"
-            "**Note:** The LLM report generation failed. "
-            "Raw findings are included below for manual review.\n\n" + "\n\n---\n\n".join(parts)
-        )
+        fallback_header = load_template("report_fallback").format(target=target)
+        return fallback_header + "\n\n" + "\n\n---\n\n".join(parts)

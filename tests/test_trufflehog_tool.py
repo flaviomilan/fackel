@@ -97,4 +97,4 @@ class TestTrufflehogScan:
     @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_empty_target_returns_error(self, _bin, mock_run):
         result = trufflehog_scan.invoke({"target": ""})
-        assert "must not be empty" in result
+        assert "empty" in result

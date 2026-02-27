@@ -224,6 +224,7 @@ fackel <target> [OPTIONS]
 | `--verbose / -v` | `bool` | `False` | Show LLM reasoning and detailed tool results |
 | `--check-providers` | `bool` | `False` | Print provider API key status table before starting the scan |
 | `--approve-tools` | `bool` | `False` | Require per-tool-call approval for active scanning tools (nmap, nuclei, etc.) |
+| `--guided` | `bool` | `False` | Enable per-phase operator guidance — provide instructions before each agent phase |
 
 ### Active scan vs passive
 
@@ -259,6 +260,39 @@ SecurityTrails     ✗         securitytrails_history
 AlienVault OTX     ✗         otx_passive_dns
 HaveIBeenPwned     ✗         analyze_email (graceful)
 EmailRep           ✗         analyze_email (graceful)
+```
+
+### Guided mode
+
+```bash
+fackel example.com --guided
+```
+
+When `--guided` is enabled, the pipeline pauses before each major agent phase
+(OSINT, port scan, vulnerability scan) and prompts the operator for free-text
+instructions. These instructions are injected into the agent's prompt as
+priority directives.
+
+**Flow with `--guided`:**
+
+```
+📝 Operator Guidance (OSINT) ──→ OSINT ──→ Approval Gate
+  ──→ 📝 Operator Guidance (Port Scan) ──→ Port Scan
+  ──→ 📝 Operator Guidance (Vuln Scan) ──→ Vuln Scan
+  ──→ Triage ──→ Report
+```
+
+At each guidance prompt, press **Enter** to skip (no guidance), or type
+instructions to steer the agent. Examples:
+
+- *"Focus on subdomain enumeration and DNS records, skip email harvesting"*
+- *"Prioritise web ports 80, 443, 8080 and 8443"*
+- *"Look for SQL injection on the login forms, skip WordPress scanning"*
+
+Can be combined with `--approve-tools` for maximum control:
+
+```bash
+fackel example.com --guided --approve-tools
 ```
 
 ---

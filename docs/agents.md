@@ -424,6 +424,43 @@ Prompts are loaded from disk and cached via `@lru_cache(maxsize=16)`.
 
 ---
 
+## Operator guidance (`--guided`)
+
+When running with `--guided`, the pipeline pauses before each major agent
+phase and offers the operator a free-text prompt. The guidance is injected
+into the agent's prompt as a priority directive under the heading
+`--- Operator Guidance ---`.
+
+### Guidance gates
+
+| Gate | Fires before | Description shown to operator |
+|------|-------------|-------------------------------|
+| `osint_guidance` | OSINT | Passive recon scope — what to focus on, tools to skip |
+| `port_scan_guidance` | Port Scan | Host priority, scan depth, ports of interest |
+| `vuln_scan_guidance` | Vuln Scan | Vulnerability types, technologies, tools to prefer/skip |
+
+### Implementation
+
+Guidance gates are lightweight graph nodes in
+`src/fackel/agents/orchestrator/nodes/_guidance.py`. Each gate:
+
+1. Checks `is_guidance_enabled()` — if disabled, returns `{}` immediately
+   (no interrupt, no UX disruption).
+2. If enabled, calls `interrupt()` with phase context.
+3. The CLI shows a Rich Panel and collects free-text input.
+4. The text is stored in `phase_guidance[phase]` in the graph state.
+5. The downstream node reads it via `get_phase_guidance(state, phase)` and
+   appends it to the agent prompt.
+
+### State field
+
+```python
+phase_guidance: dict[str, str]
+# e.g. {"osint": "focus on subdomains", "vuln_scan": "skip wpscan"}
+```
+
+---
+
 ## Provider key gating
 
 Defined in `src/fackel/provider_keys.py`.
