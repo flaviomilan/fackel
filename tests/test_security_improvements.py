@@ -172,13 +172,13 @@ class TestRunCommandLimits:
     """Verify that ``run_command`` respects output size limits."""
 
     def test_small_output_unchanged(self) -> None:
-        rc, stdout, stderr = run_command(["echo", "hello"])
+        rc, stdout, _stderr = run_command(["echo", "hello"])
         assert rc == 0
         assert stdout.strip() == "hello"
 
     def test_large_output_truncated(self) -> None:
         # Generate 1 MB of output, limit to 1 KB
-        rc, stdout, stderr = run_command(
+        rc, stdout, _stderr = run_command(
             ["python3", "-c", "print('A' * 1_000_000)"],
             max_output=1024,
         )
@@ -186,7 +186,7 @@ class TestRunCommandLimits:
         assert "[OUTPUT TRUNCATED]" in stdout
 
     def test_zero_disables_truncation(self) -> None:
-        rc, stdout, stderr = run_command(
+        rc, stdout, _stderr = run_command(
             ["python3", "-c", "print('B' * 10_000)"],
             max_output=0,
         )

@@ -1,0 +1,48 @@
+# Build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# CI / config
+.github/
+.pre-commit-config.yaml
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Reports (user-generated — not needed in image)
+reports/
+
+# Tests (not needed in production image)
+tests/
+
+# Documentation (not needed in production image)
+docs/
+*.md
+!README.md
+!LICENSE
+
+# OS files
+.DS_Store
+Thumbs.db

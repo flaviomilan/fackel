@@ -12,6 +12,7 @@ model selection, API keys, CLI options, and infrastructure setup.
   - [Model selection](#model-selection)
   - [Provider API keys](#provider-api-keys)
   - [Tool timeouts](#tool-timeouts)
+  - [Operational settings](#operational-settings)
   - [Checkpointer](#checkpointer)
   - [Infrastructure (MongoDB)](#infrastructure-mongodb)
   - [Observability — LangSmith tracing](#observability--langsmith-tracing)
@@ -20,6 +21,7 @@ model selection, API keys, CLI options, and infrastructure setup.
 - [Infrastructure — Docker Compose (optional)](#infrastructure--docker-compose-optional)
 - [.env file](#env-file)
 - [Python API configuration](#python-api-configuration)
+- [Docker](#docker)
 
 ---
 
@@ -119,6 +121,75 @@ is set, the default from `get_tool_timeout()` (typically 180 s) is used.
 | `FACKEL_TIMEOUT_HTTPX_PROBE` | httpx | 180 s |
 | `FACKEL_TIMEOUT_NAABU_SCAN` | naabu | 180 s |
 | `FACKEL_TIMEOUT_WAFW00F` | wafw00f | 180 s |
+
+### Operational settings
+
+All settings below are managed by the centralized `Settings` dataclass in
+`src/fackel/settings.py`.  Every field has a sensible default and can be
+overridden via a `FACKEL_*` environment variable.
+
+#### Scan orchestration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_SCAN_TIMEOUT` | `3600` | Global scan timeout in seconds. Uses SIGALRM. |
+| `FACKEL_MAX_AGENT_ITERATIONS` | `50` | Maximum tool calls per agent phase. |
+| `FACKEL_BUDGET_WARNING_RATIO` | `0.8` | Fraction of budget at which agents receive a warning prompt. |
+
+#### Default LLM model
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_DEFAULT_MODEL` | `gpt-5-mini` | Fallback model when no per-agent `FACKEL_MODEL_{AGENT}` is set. |
+
+#### LLM provider tuning
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_LLM_REQUEST_TIMEOUT` | `120` | Per-request timeout for LLM calls (seconds). |
+| `FACKEL_LLM_MAX_RETRIES` | `1` | Number of retries on transient LLM errors. |
+| `FACKEL_LLM_RETRY_DELAY` | `5.0` | Initial delay between LLM retries (seconds). |
+
+#### Tool retry middleware
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_TOOL_RETRY_MAX_RETRIES` | `2` | Maximum retries in `ToolRetryMiddleware`. |
+| `FACKEL_TOOL_RETRY_BACKOFF_FACTOR` | `2.0` | Exponential backoff multiplier. |
+| `FACKEL_TOOL_RETRY_INITIAL_DELAY` | `1.0` | Initial delay before first retry (seconds). |
+
+#### Subprocess execution
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_SUBPROCESS_TIMEOUT` | `180` | Default subprocess timeout in seconds (overridden by per-tool `FACKEL_TIMEOUT_*`). |
+| `FACKEL_SUBPROCESS_MAX_OUTPUT` | `2097152` | Maximum bytes per stdout/stderr stream (~2 MiB). |
+
+#### Output sanitizer
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_SANITIZER_MAX_BYTES` | `50000` | Maximum bytes of tool output before truncation. |
+
+#### HTTP client
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_HTTP_RETRY_TOTAL` | `2` | Total retries for the shared HTTP session. |
+| `FACKEL_HTTP_BACKOFF_FACTOR` | `1.0` | Backoff factor between HTTP retries. |
+
+#### Circuit breaker
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_CIRCUIT_BREAKER_THRESHOLD` | `3` | Consecutive failures before the circuit opens. |
+| `FACKEL_CIRCUIT_BREAKER_RESET_TIMEOUT` | `60` | Seconds before a half-open probe is attempted. |
+
+#### Logging
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_LOG_FORMAT` | `text` | Log format: `"text"` for human-readable, `"json"` for structured. |
 
 ### Checkpointer
 
@@ -342,3 +413,49 @@ os.environ["OPENAI_API_KEY"] = "sk-..."
 from fackel.agents.orchestrator import run
 result = run("example.com")
 ```
+
+---
+
+## Docker
+
+A multi-stage `Dockerfile` is provided for containerised deployment. It
+pre-installs all external tool dependencies (Go, Rust, Python, Ruby binaries).
+
+### Building
+
+```bash
+# Full image (all tools)
+docker build -t fackel .
+
+# Minimal image (core tools: nmap, subfinder, naabu, nuclei, httpx, katana)
+docker build --build-arg INSTALL_MODE=minimal -t fackel:minimal .
+```
+
+### Running
+
+```bash
+# Run a scan (pass API keys via --env-file or -e)
+docker run --rm --env-file .env fackel example.com
+
+# With custom report output
+docker run --rm --env-file .env -v ./reports:/app/reports fackel example.com -o /app/reports/scan.md
+
+# Persist checkpoint database across runs
+docker run --rm --env-file .env -v fackel-data:/data fackel example.com
+```
+
+### Volumes
+
+| Mount point | Purpose |
+|-------------|---------|
+| `/data` | SQLite checkpoint database (interrupt/resume) |
+| `/app/reports` | Generated scan reports |
+
+### Build args
+
+| Arg | Default | Description |
+|-----|---------|-------------|
+| `PYTHON_VERSION` | `3.12` | Python base image version |
+| `GO_VERSION` | `1.23` | Go compiler version for tool build |
+| `RUST_VERSION` | `1.82` | Rust compiler version for feroxbuster |
+| `INSTALL_MODE` | `full` | `full` or `minimal` |
