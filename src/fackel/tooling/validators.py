@@ -25,11 +25,15 @@ Available target types:
 from __future__ import annotations
 
 import ipaddress
+import logging
 import re
+import socket
 from enum import Enum
 from urllib.parse import urlparse
 
 from langchain_core.tools import ToolException
+
+logger = logging.getLogger(__name__)
 
 _DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$")
 
@@ -260,3 +264,52 @@ def sanitize_target(raw: str) -> str:
         return host
 
     raise ValueError(f"Target is not a valid IP or domain: {host!r}")
+
+
+def resolve_host(hostname: str) -> list[str]:
+    """Resolve *hostname* to a list of IP address strings.
+
+    Returns an empty list if DNS resolution fails.  Never raises.
+    """
+    try:
+        infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        return list({info[4][0] for info in infos})
+    except (socket.gaierror, OSError):
+        return []
+
+
+def guard_dns_rebinding(hostname: str, tool_name: str) -> None:
+    """Resolve *hostname* and reject it if any address is private/reserved.
+
+    DNS rebinding attacks work by making a domain resolve to a private IP
+    **after** the domain-level validation has passed.  This function
+    performs an actual DNS lookup and checks every resolved address against
+    :data:`_PRIVATE_NETWORKS`.
+
+    Should be called **immediately before** the tool makes its outbound
+    network request, to minimise the window between resolution and use.
+
+    Raises
+    ------
+    ToolException
+        When the hostname resolves to one or more private/reserved IPs.
+    """
+    if is_valid_ip(hostname):
+        # Already checked by guard_target — skip resolution.
+        return
+
+    resolved = resolve_host(hostname)
+    if not resolved:
+        logger.debug(
+            "guard_dns_rebinding(%s): DNS resolution returned no results",
+            hostname,
+        )
+        return  # Tool will fail on its own when it can't connect.
+
+    private_addrs = [ip for ip in resolved if is_private_ip(ip)]
+    if private_addrs:
+        raise ToolException(
+            f"{tool_name}: hostname {hostname!r} resolves to private/reserved "
+            f"address(es) {private_addrs}. This may be a DNS rebinding attack. "
+            "Scanning internal networks is not permitted."
+        )

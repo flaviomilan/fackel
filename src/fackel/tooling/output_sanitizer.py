@@ -26,10 +26,12 @@ from __future__ import annotations
 import logging
 import re
 
+from fackel.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 # Maximum raw output size in bytes before truncation.
-DEFAULT_MAX_OUTPUT_BYTES: int = 50_000
+# Runtime default comes from ``FACKEL_SANITIZER_MAX_BYTES`` via settings.
 
 # Patterns that indicate prompt injection attempts in tool output.
 # Each tuple: (compiled_regex, human-readable label for logging).
@@ -88,7 +90,7 @@ _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 def sanitize_tool_output(
     raw: str,
     *,
-    max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+    max_bytes: int | None = None,
     tool_name: str = "",
 ) -> str:
     """Sanitise a raw tool output string.
@@ -102,11 +104,15 @@ def sanitize_tool_output(
         The raw string output from a tool (stdout, HTTP response, etc.).
     max_bytes:
         Maximum output size in bytes.  Content beyond this is truncated.
+        Defaults to ``FACKEL_SANITIZER_MAX_BYTES``.
     tool_name:
         Optional tool name for log messages.
     """
     if not raw:
         return raw
+
+    if max_bytes is None:
+        max_bytes = get_settings().sanitizer_max_bytes
 
     # 1. Strip null bytes and control characters.
     cleaned = _CONTROL_CHAR_RE.sub("", raw)

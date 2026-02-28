@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import functools
 import logging
-import os
 import signal
 import uuid
 from collections.abc import Callable
@@ -21,14 +20,13 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
+from fackel.settings import get_settings
 from fackel.tooling import sanitize_target
 
 from .graph import build_graph
 from .state import ScanState
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_SCAN_TIMEOUT = 3600  # 1 hour
 
 
 @functools.lru_cache(maxsize=1)
@@ -69,23 +67,22 @@ class ScanTimeoutError(Exception):
     """Raised when the global scan timeout is exceeded."""
 
 
+class ScanInterruptedError(Exception):
+    """Raised when the scan receives SIGINT or SIGTERM."""
+
+
 def _scan_timeout() -> int:
-    """Return the global scan timeout in seconds from env or default."""
-    raw = os.getenv("FACKEL_SCAN_TIMEOUT", "").strip()
-    if raw:
-        try:
-            return int(raw)
-        except ValueError:
-            logger.warning(
-                "FACKEL_SCAN_TIMEOUT=%r is not a valid integer — using default %d",
-                raw,
-                DEFAULT_SCAN_TIMEOUT,
-            )
-    return DEFAULT_SCAN_TIMEOUT
+    """Return the global scan timeout in seconds from settings."""
+    return get_settings().scan_timeout
 
 
 def _timeout_handler(signum: int, frame: Any) -> None:
     raise ScanTimeoutError("Global scan timeout exceeded")
+
+
+def _interrupt_handler(signum: int, frame: Any) -> None:
+    sig_name = signal.Signals(signum).name
+    raise ScanInterruptedError(f"Scan interrupted by {sig_name}")
 
 
 def run(
@@ -111,6 +108,8 @@ def run(
     ------
     ScanTimeoutError
         When the scan exceeds ``FACKEL_SCAN_TIMEOUT`` seconds (default 3600).
+    ScanInterruptedError
+        When the process receives SIGINT or SIGTERM during scanning.
     """
     scan_id = uuid.uuid4().hex[:12]
     logger.info("orchestrator: run %s (active_scan=%s, scan_id=%s)", target, active_scan, scan_id)
@@ -119,7 +118,9 @@ def run(
     config = _config(scan_id)
 
     timeout = _scan_timeout()
-    prev_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    prev_alarm = signal.signal(signal.SIGALRM, _timeout_handler)
+    prev_int = signal.signal(signal.SIGINT, _interrupt_handler)
+    prev_term = signal.signal(signal.SIGTERM, _interrupt_handler)
     signal.alarm(timeout)
     logger.info("orchestrator: global timeout set to %d s", timeout)
 
@@ -139,8 +140,13 @@ def run(
 
             result = graph.invoke(Command(resume=approved), config=config)
             snapshot = graph.get_state(config)
+    except ScanInterruptedError:
+        logger.warning("orchestrator: scan %s interrupted — cleaning up", scan_id)
+        raise
     finally:
         signal.alarm(0)  # cancel the alarm
-        signal.signal(signal.SIGALRM, prev_handler)
+        signal.signal(signal.SIGALRM, prev_alarm)
+        signal.signal(signal.SIGINT, prev_int)
+        signal.signal(signal.SIGTERM, prev_term)
 
     return cast(ScanState, result)

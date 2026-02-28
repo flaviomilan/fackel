@@ -6,6 +6,7 @@ import json
 import logging
 
 from fackel.logging_config import _JSONFormatter, configure_logging
+from fackel.settings import _reset_settings
 
 
 class TestJSONFormatter:
@@ -58,6 +59,7 @@ class TestConfigureLogging:
 
     def test_default_text_format(self, monkeypatch):
         monkeypatch.delenv("FACKEL_LOG_FORMAT", raising=False)
+        _reset_settings()
         configure_logging(verbose=False)
         root = logging.getLogger()
         assert len(root.handlers) == 1
@@ -65,18 +67,21 @@ class TestConfigureLogging:
 
     def test_verbose_enables_debug(self, monkeypatch):
         monkeypatch.delenv("FACKEL_LOG_FORMAT", raising=False)
+        _reset_settings()
         configure_logging(verbose=True)
         fackel_logger = logging.getLogger("fackel")
         assert fackel_logger.level == logging.DEBUG
 
     def test_json_format(self, monkeypatch):
         monkeypatch.setenv("FACKEL_LOG_FORMAT", "json")
+        _reset_settings()
         configure_logging(verbose=False)
         root = logging.getLogger()
         assert isinstance(root.handlers[0].formatter, _JSONFormatter)
 
     def test_clears_existing_handlers(self, monkeypatch):
         monkeypatch.delenv("FACKEL_LOG_FORMAT", raising=False)
+        _reset_settings()
         root = logging.getLogger()
         root.addHandler(logging.StreamHandler())
         root.addHandler(logging.StreamHandler())

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from langchain_core.messages import ToolMessage
+from langchain_core.tools import ToolException
 
 from fackel.tooling import is_private_ip
-from fackel.tooling.execution import _truncate, run_command
+from fackel.tooling.execution import _truncate, redact_secrets, run_command
 from fackel.tooling.output_sanitizer import sanitize_tool_output
+from fackel.tooling.validators import guard_dns_rebinding, resolve_host
 
 # ---------------------------------------------------------------------------
 # is_private_ip
@@ -234,3 +238,146 @@ class TestValidateToolOutputSanitization:
         )
         result = validate_tool_output(msg)
         assert result.content == msg.content
+
+
+# ---------------------------------------------------------------------------
+# DNS rebinding protection
+# ---------------------------------------------------------------------------
+
+
+class TestDnsRebinding:
+    """Tests for guard_dns_rebinding."""
+
+    def test_skips_ip_addresses(self) -> None:
+        # Should not raise — IPs are already checked by guard_target.
+        guard_dns_rebinding("8.8.8.8", "test_tool")
+
+    def test_allows_public_resolution(self) -> None:
+        with patch(
+            "fackel.tooling.validators.resolve_host",
+            return_value=["93.184.216.34"],
+        ):
+            guard_dns_rebinding("example.com", "test_tool")
+
+    def test_rejects_private_resolution(self) -> None:
+        with (
+            patch(
+                "fackel.tooling.validators.resolve_host",
+                return_value=["192.168.1.1"],
+            ),
+            pytest.raises(ToolException, match="private/reserved"),
+        ):
+            guard_dns_rebinding("evil.example.com", "test_tool")
+
+    def test_rejects_mixed_public_private(self) -> None:
+        with (
+            patch(
+                "fackel.tooling.validators.resolve_host",
+                return_value=["8.8.8.8", "127.0.0.1"],
+            ),
+            pytest.raises(ToolException, match="private/reserved"),
+        ):
+            guard_dns_rebinding("mixed.example.com", "test_tool")
+
+    def test_allows_unresolvable_host(self) -> None:
+        with patch(
+            "fackel.tooling.validators.resolve_host",
+            return_value=[],
+        ):
+            # Should not raise — tool will fail on its own.
+            guard_dns_rebinding("nonexistent.invalid", "test_tool")
+
+    def test_rejects_localhost_resolution(self) -> None:
+        with (
+            patch(
+                "fackel.tooling.validators.resolve_host",
+                return_value=["127.0.0.1"],
+            ),
+            pytest.raises(ToolException, match="DNS rebinding"),
+        ):
+            guard_dns_rebinding("rebind.attacker.com", "test_tool")
+
+
+class TestResolveHost:
+    """Tests for resolve_host helper."""
+
+    def test_returns_empty_on_failure(self) -> None:
+        result = resolve_host("this-domain-does-not-exist.invalid")
+        assert result == []
+
+    def test_returns_list_of_strings(self) -> None:
+        with patch(
+            "fackel.tooling.validators.socket.getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+            ],
+        ):
+            result = resolve_host("example.com")
+            assert result == ["93.184.216.34"]
+
+
+# ---------------------------------------------------------------------------
+# Secret redaction in subprocess output
+# ---------------------------------------------------------------------------
+
+
+class TestRedactSecrets:
+    """Tests for redact_secrets."""
+
+    def test_redacts_known_api_key(self, monkeypatch) -> None:
+        from fackel.tooling import execution
+
+        execution._secret_values = None  # force re-scan
+        monkeypatch.setenv("SHODAN_API_KEY", "sk-super-secret-12345678")
+        execution._secret_values = None  # force re-scan
+        result = redact_secrets("Error: invalid key sk-super-secret-12345678 for host")
+        assert "sk-super-secret-12345678" not in result
+        assert "[REDACTED]" in result
+        execution._secret_values = None  # cleanup
+
+    def test_no_redaction_when_no_secrets(self, monkeypatch) -> None:
+        from fackel.tooling import execution
+
+        execution._secret_values = None
+        monkeypatch.delenv("SHODAN_API_KEY", raising=False)
+        monkeypatch.delenv("VIRUSTOTAL_API_KEY", raising=False)
+        execution._secret_values = None
+        text = "normal output with no secrets"
+        assert redact_secrets(text) == text
+        execution._secret_values = None
+
+    def test_short_values_ignored(self, monkeypatch) -> None:
+        from fackel.tooling import execution
+
+        execution._secret_values = None
+        monkeypatch.setenv("SHODAN_API_KEY", "short")  # < 8 chars
+        execution._secret_values = None
+        text = "Error: short"
+        result = redact_secrets(text)
+        # "short" should NOT be redacted since it's < 8 chars
+        assert "short" in result
+        execution._secret_values = None
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown
+# ---------------------------------------------------------------------------
+
+
+class TestGracefulShutdown:
+    """Tests for ScanInterruptedError."""
+
+    def test_interrupt_error_is_defined(self) -> None:
+        from fackel.agents.orchestrator.main import ScanInterruptedError
+
+        err = ScanInterruptedError("test")
+        assert str(err) == "test"
+        assert isinstance(err, Exception)
+
+    def test_timeout_error_is_defined(self) -> None:
+        from fackel.agents.orchestrator.main import ScanTimeoutError
+
+        err = ScanTimeoutError("timeout")
+        assert str(err) == "timeout"
+        assert isinstance(err, Exception)

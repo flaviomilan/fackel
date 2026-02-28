@@ -20,9 +20,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from datetime import UTC, datetime
+
+from fackel.settings import get_settings
 
 
 class _JSONFormatter(logging.Formatter):
@@ -66,7 +67,7 @@ def configure_logging(*, verbose: bool = False) -> None:
         ``"json"`` for structured JSON output; anything else (or unset)
         defaults to human-readable text.
     """
-    log_format = os.getenv("FACKEL_LOG_FORMAT", "text").lower()
+    log_format = get_settings().log_format
 
     root = logging.getLogger()
     root.setLevel(logging.WARNING)

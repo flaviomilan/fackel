@@ -18,13 +18,14 @@ Flow::
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+
+from fackel.settings import get_settings
 
 from .nodes import (
     approval_gate,
@@ -38,11 +39,7 @@ from .nodes import (
 )
 from .state import ScanState
 
-_DEFAULT_CHECKPOINT_DIR = Path.home() / ".fackel"
-_CHECKPOINT_DB = os.getenv(
-    "FACKEL_CHECKPOINT_DB",
-    str(_DEFAULT_CHECKPOINT_DIR / "checkpoints.db"),
-)
+_CHECKPOINT_DB = get_settings().checkpoint_db
 
 Path(_CHECKPOINT_DB).parent.mkdir(parents=True, exist_ok=True)
 

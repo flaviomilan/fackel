@@ -22,17 +22,23 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from fackel.settings import get_settings
+
 _USER_AGENT = "fackel-scanner/0.1"
 
-_RETRY_STRATEGY = Retry(
-    total=2,
-    backoff_factor=1.0,
-    status_forcelist=[502, 503, 504],
-    allowed_methods=["GET", "POST", "HEAD"],
-    raise_on_status=False,
-)
-
 _session: Session | None = None
+
+
+def _build_retry_strategy() -> Retry:
+    """Build a retry strategy from centralized settings."""
+    s = get_settings()
+    return Retry(
+        total=s.http_retry_total,
+        backoff_factor=s.http_backoff_factor,
+        status_forcelist=[502, 503, 504],
+        allowed_methods=["GET", "POST", "HEAD"],
+        raise_on_status=False,
+    )
 
 
 def get_session() -> Session:
@@ -45,7 +51,7 @@ def get_session() -> Session:
     if _session is None:
         _session = Session()
         _session.headers["User-Agent"] = _USER_AGENT
-        adapter = HTTPAdapter(max_retries=_RETRY_STRATEGY)
+        adapter = HTTPAdapter(max_retries=_build_retry_strategy())
         _session.mount("https://", adapter)
         _session.mount("http://", adapter)
     return _session

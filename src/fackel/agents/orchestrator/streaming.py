@@ -26,6 +26,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Too
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
+from fackel.settings import get_settings
 from fackel.tooling.output_sanitizer import sanitize_tool_output as _sanitize_output
 
 logger = logging.getLogger(__name__)
@@ -48,8 +49,6 @@ ToolApprovalCallback = Callable[[dict[str, Any]], str] | None
 _event_callback: EventCallback = None
 _tool_approval_callback: ToolApprovalCallback = None
 _tool_approval_enabled: bool = False
-
-MAX_AGENT_ITERATIONS = 50
 
 
 def set_event_callback(cb: EventCallback) -> None:
@@ -190,7 +189,7 @@ class _AgentStreamer:
     * **messages** — token-level ``AIMessageChunk`` objects for real-time
       streaming display.
 
-    Also enforces ``MAX_AGENT_ITERATIONS`` and handles HITL
+    Also enforces ``max_agent_iterations`` and handles HITL
     interrupt/resume cycles when the inner agent has a checkpointer.
     """
 
@@ -219,9 +218,11 @@ class _AgentStreamer:
 
     def run(self, user_message: str) -> list[Any]:
         """Execute the full streaming cycle and return collected messages."""
+        s = get_settings()
+        max_iterations = s.max_agent_iterations
         emit(self._phase, "start", {})
         budget_notice = (
-            f"\n\n[BUDGET: You have a maximum of {MAX_AGENT_ITERATIONS} tool calls"
+            f"\n\n[BUDGET: You have a maximum of {max_iterations} tool calls"
             " for this phase. Use them wisely — prioritise high-value actions"
             " and batch independent calls.]"
         )
@@ -229,8 +230,8 @@ class _AgentStreamer:
         self._handle_interrupts()
         return self._messages
 
-    _MAX_LLM_RETRIES = 1
-    _LLM_RETRY_DELAY = 5.0
+    _MAX_LLM_RETRIES = property(lambda self: get_settings().llm_max_retries)
+    _LLM_RETRY_DELAY = property(lambda self: get_settings().llm_retry_delay)
 
     def _stream_once(self, input_data: Any) -> None:
         """Run one streaming pass using dual updates + messages mode.
@@ -327,7 +328,7 @@ class _AgentStreamer:
         self._messages.append(validated)
         _emit_tool_result_event(self._phase, validated)
 
-    _BUDGET_WARNING_RATIO = 0.8
+    _BUDGET_WARNING_RATIO = property(lambda self: get_settings().budget_warning_ratio)
 
     def _check_iteration_limit(self) -> None:
         """Stop streaming if max tool-call iterations exceeded.
@@ -335,28 +336,30 @@ class _AgentStreamer:
         Emits a soft warning when 80 % of the budget is consumed so the
         agent can start wrapping up.
         """
-        if self._tool_call_count >= MAX_AGENT_ITERATIONS:
+        max_iterations = get_settings().max_agent_iterations
+
+        if self._tool_call_count >= max_iterations:
             logger.warning(
                 "%s: hit max iterations (%d tool calls) — stopping agent",
                 self._phase,
-                MAX_AGENT_ITERATIONS,
+                max_iterations,
             )
             emit(
                 self._phase,
                 "reasoning",
-                {"content": f"⚠ Agent stopped: reached {MAX_AGENT_ITERATIONS} tool call limit."},
+                {"content": f"⚠ Agent stopped: reached {max_iterations} tool call limit."},
             )
             self._hit_limit = True
             return
 
-        warning_threshold = int(MAX_AGENT_ITERATIONS * self._BUDGET_WARNING_RATIO)
+        warning_threshold = int(max_iterations * self._BUDGET_WARNING_RATIO)
         if self._tool_call_count == warning_threshold:
-            remaining = MAX_AGENT_ITERATIONS - self._tool_call_count
+            remaining = max_iterations - self._tool_call_count
             logger.info(
                 "%s: %d/%d tool calls used — %d remaining",
                 self._phase,
                 self._tool_call_count,
-                MAX_AGENT_ITERATIONS,
+                max_iterations,
                 remaining,
             )
             emit(
@@ -365,7 +368,7 @@ class _AgentStreamer:
                 {
                     "content": (
                         f"⚠ Budget warning: {remaining} tool calls remaining"
-                        f" out of {MAX_AGENT_ITERATIONS}. Start wrapping up."
+                        f" out of {max_iterations}. Start wrapping up."
                     )
                 },
             )
@@ -425,7 +428,7 @@ def run_and_stream_agent(
 
     Uses dual ``stream_mode=["updates", "messages"]`` for reliable
     message collection and real-time token streaming.  Enforces
-    ``MAX_AGENT_ITERATIONS`` and handles HITL interrupt/resume cycles.
+    ``max_agent_iterations`` and handles HITL interrupt/resume cycles.
 
     Parameters
     ----------

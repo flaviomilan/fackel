@@ -7,8 +7,8 @@ import time
 import pytest
 from langchain_core.tools import ToolException
 
+from fackel.settings import get_settings
 from tools.circuit_breaker import (
-    FAILURE_THRESHOLD,
     _CircuitState,
     _get_circuit,
     circuit_breaker,
@@ -42,7 +42,8 @@ class TestCircuitBreakerClosed:
         assert cb.state is _CircuitState.CLOSED
 
     def test_opens_after_threshold(self):
-        for _ in range(FAILURE_THRESHOLD):
+        threshold = get_settings().circuit_breaker_threshold
+        for _ in range(threshold):
             with pytest.raises(RuntimeError), circuit_breaker("test_service"):
                 raise RuntimeError("fail")
         cb = _get_circuit("test_service")
@@ -53,7 +54,8 @@ class TestCircuitBreakerOpen:
     """Verify open-state behaviour."""
 
     def _open_circuit(self, service: str = "test_service"):
-        for _ in range(FAILURE_THRESHOLD):
+        threshold = get_settings().circuit_breaker_threshold
+        for _ in range(threshold):
             with pytest.raises(RuntimeError), circuit_breaker(service):
                 raise RuntimeError("fail")
 
