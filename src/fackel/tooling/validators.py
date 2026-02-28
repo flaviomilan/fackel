@@ -35,6 +35,34 @@ _DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\
 
 _OCTET_QUAD_RE = re.compile(r"^\d{1,3}(?:-\d{1,3}){3}$")
 
+# Networks considered private/reserved and rejected by SSRF protection.
+# Covers RFC 1918 private, loopback, link-local, multicast, and special-use.
+_PRIVATE_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
+    ipaddress.IPv4Network("10.0.0.0/8"),
+    ipaddress.IPv4Network("172.16.0.0/12"),
+    ipaddress.IPv4Network("192.168.0.0/16"),
+    ipaddress.IPv4Network("127.0.0.0/8"),
+    ipaddress.IPv4Network("169.254.0.0/16"),
+    ipaddress.IPv4Network("0.0.0.0/8"),
+    ipaddress.IPv6Network("::1/128"),
+    ipaddress.IPv6Network("fc00::/7"),
+    ipaddress.IPv6Network("fe80::/10"),
+    ipaddress.IPv6Network("::/128"),
+)
+
+
+def is_private_ip(value: str) -> bool:
+    """Return ``True`` if *value* is an IP in a private or reserved range.
+
+    Covers RFC 1918, loopback (127.x), link-local (169.254.x),
+    IPv6 ULA (fc00::/7), and IPv6 link-local (fe80::/10).
+    """
+    try:
+        addr = ipaddress.ip_address(value.strip())
+    except ValueError:
+        return False
+    return any(addr in net for net in _PRIVATE_NETWORKS)
+
 
 def is_valid_ip(value: str) -> bool:
     """Return ``True`` if *value* is a valid IPv4 or IPv6 address."""
@@ -76,7 +104,18 @@ class TargetType(Enum):
 
 
 def _extract_host(value: str) -> str:
-    """Return the bare hostname / IP from a value that may include a scheme."""
+    """Return the bare hostname / IP from a value that may include a scheme.
+
+    Handles bare IPv6 addresses (e.g. ``fc00::1``) which ``urlparse``
+    misinterprets as having a scheme.
+    """
+    # Detect bare IPv6 first — urlparse misparses these.
+    try:
+        ipaddress.ip_address(value)
+        return value  # Already a valid IP literal.
+    except ValueError:
+        pass
+
     parsed = urlparse(value)
     host = parsed.hostname or parsed.netloc or parsed.path.split("/")[0] or value
     return host.strip().rstrip(".")
@@ -145,11 +184,23 @@ def guard_target(
     if accept is TargetType.IP:
         if not is_valid_ip(host):
             raise _err(f"{tool_name} requires an IP address, got: {host!r}")
+        if is_private_ip(host):
+            raise _err(
+                f"target is a private/reserved IP address ({host}). "
+                "Scanning internal networks is not permitted. "
+                "Use a public IP or domain name instead."
+            )
         return host
 
     if accept is TargetType.HOST:
         if not is_valid_ip(host) and not is_valid_domain(host):
             raise _err(f"invalid host (not a valid IP or domain): {host!r}")
+        if is_valid_ip(host) and is_private_ip(host):
+            raise _err(
+                f"target is a private/reserved IP address ({host}). "
+                "Scanning internal networks is not permitted. "
+                "Use a public IP or domain name instead."
+            )
         return host
 
     if accept is TargetType.HOST_PORT:
@@ -197,7 +248,15 @@ def sanitize_target(raw: str) -> str:
     if _SHELL_META_RE.search(host):
         raise ValueError(f"Target contains forbidden characters: {host!r}")
 
-    if is_valid_ip(host) or is_valid_domain(host):
+    if is_valid_ip(host):
+        if is_private_ip(host):
+            raise ValueError(
+                f"Target is a private/reserved IP address ({host}). "
+                "Scanning internal networks is not permitted."
+            )
+        return host
+
+    if is_valid_domain(host):
         return host
 
     raise ValueError(f"Target is not a valid IP or domain: {host!r}")

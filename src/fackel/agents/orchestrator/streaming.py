@@ -26,6 +26,8 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Too
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
+from fackel.tooling.output_sanitizer import sanitize_tool_output as _sanitize_output
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -91,17 +93,33 @@ def emit(phase: str, event_type: str, data: dict[str, Any]) -> None:
 
 
 def validate_tool_output(msg: ToolMessage) -> ToolMessage:
-    """Basic structural validation of tool results.
+    """Validate and sanitize tool results before they reach the agent.
 
     Detects errors from two sources:
     - ``ToolException`` via ``handle_tool_error`` (msg.status == "error")
     - Legacy envelope with ``status: "error"`` in JSON content
+
+    Non-error outputs are run through :func:`sanitize_tool_output` to
+    enforce size limits, strip control characters, and redact prompt
+    injection patterns.
 
     Logs warnings for malformed or error outputs without blocking the agent.
     """
     if getattr(msg, "status", None) == "error":
         logger.debug("tool %s raised ToolException: %s", msg.name, msg.content)
         return msg
+
+    # --- sanitize raw content before structural checks ---
+    if isinstance(msg.content, str):
+        sanitized = _sanitize_output(msg.content, tool_name=msg.name or "")
+        if sanitized != msg.content:
+            logger.debug(
+                "tool %s output sanitized (%d → %d bytes)",
+                msg.name,
+                len(msg.content),
+                len(sanitized),
+            )
+            msg = msg.model_copy(update={"content": sanitized})
 
     try:
         payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
@@ -202,7 +220,12 @@ class _AgentStreamer:
     def run(self, user_message: str) -> list[Any]:
         """Execute the full streaming cycle and return collected messages."""
         emit(self._phase, "start", {})
-        self._stream_once({"messages": [HumanMessage(content=user_message)]})
+        budget_notice = (
+            f"\n\n[BUDGET: You have a maximum of {MAX_AGENT_ITERATIONS} tool calls"
+            " for this phase. Use them wisely — prioritise high-value actions"
+            " and batch independent calls.]"
+        )
+        self._stream_once({"messages": [HumanMessage(content=user_message + budget_notice)]})
         self._handle_interrupts()
         return self._messages
 
@@ -304,21 +327,48 @@ class _AgentStreamer:
         self._messages.append(validated)
         _emit_tool_result_event(self._phase, validated)
 
+    _BUDGET_WARNING_RATIO = 0.8
+
     def _check_iteration_limit(self) -> None:
-        """Stop streaming if max tool-call iterations exceeded."""
-        if self._tool_call_count < MAX_AGENT_ITERATIONS:
+        """Stop streaming if max tool-call iterations exceeded.
+
+        Emits a soft warning when 80 % of the budget is consumed so the
+        agent can start wrapping up.
+        """
+        if self._tool_call_count >= MAX_AGENT_ITERATIONS:
+            logger.warning(
+                "%s: hit max iterations (%d tool calls) — stopping agent",
+                self._phase,
+                MAX_AGENT_ITERATIONS,
+            )
+            emit(
+                self._phase,
+                "reasoning",
+                {"content": f"⚠ Agent stopped: reached {MAX_AGENT_ITERATIONS} tool call limit."},
+            )
+            self._hit_limit = True
             return
-        logger.warning(
-            "%s: hit max iterations (%d tool calls) — stopping agent",
-            self._phase,
-            MAX_AGENT_ITERATIONS,
-        )
-        emit(
-            self._phase,
-            "reasoning",
-            {"content": f"⚠ Agent stopped: reached {MAX_AGENT_ITERATIONS} tool call limit."},
-        )
-        self._hit_limit = True
+
+        warning_threshold = int(MAX_AGENT_ITERATIONS * self._BUDGET_WARNING_RATIO)
+        if self._tool_call_count == warning_threshold:
+            remaining = MAX_AGENT_ITERATIONS - self._tool_call_count
+            logger.info(
+                "%s: %d/%d tool calls used — %d remaining",
+                self._phase,
+                self._tool_call_count,
+                MAX_AGENT_ITERATIONS,
+                remaining,
+            )
+            emit(
+                self._phase,
+                "reasoning",
+                {
+                    "content": (
+                        f"⚠ Budget warning: {remaining} tool calls remaining"
+                        f" out of {MAX_AGENT_ITERATIONS}. Start wrapping up."
+                    )
+                },
+            )
 
     def _handle_interrupts(self) -> None:
         """Resume interrupted tool approvals (HITL middleware)."""

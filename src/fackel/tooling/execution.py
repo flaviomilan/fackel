@@ -19,12 +19,36 @@ from langchain_core.tools import ToolException
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 180
+MAX_OUTPUT_BYTES = 2 * 1024 * 1024  # 2 MiB per stream
 
 
-def run_command(cmd: list[str], timeout: int = DEFAULT_TIMEOUT) -> tuple[int, str, str]:
-    """Execute a subprocess command and return (returncode, stdout, stderr)."""
+def _truncate(text: str, max_bytes: int) -> str:
+    """Truncate *text* to at most *max_bytes* UTF-8 bytes."""
+    encoded = text.encode()
+    if len(encoded) <= max_bytes:
+        return text
+    # Decode safely to avoid splitting a multi-byte char
+    return encoded[:max_bytes].decode(errors="ignore") + "\n[OUTPUT TRUNCATED]"
+
+
+def run_command(
+    cmd: list[str],
+    timeout: int = DEFAULT_TIMEOUT,
+    max_output: int = MAX_OUTPUT_BYTES,
+) -> tuple[int, str, str]:
+    """Execute a subprocess command and return (returncode, stdout, stderr).
+
+    Parameters
+    ----------
+    max_output:
+        Maximum bytes kept per stdout/stderr stream.  Prevents a
+        single tool from consuming unbounded memory.  Set to ``0``
+        to disable truncation.
+    """
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # noqa: S603
-    return proc.returncode, proc.stdout, proc.stderr
+    stdout = _truncate(proc.stdout, max_output) if max_output else proc.stdout
+    stderr = _truncate(proc.stderr, max_output) if max_output else proc.stderr
+    return proc.returncode, stdout, stderr
 
 
 def format_tool_output(

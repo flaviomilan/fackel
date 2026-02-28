@@ -52,6 +52,8 @@ You MUST stop and produce your summary when **any** of these conditions is met:
 - **No new information** — the last 2+ tool calls produced no new insights.
 - **All targets covered** — every IP/domain in scope has been scanned.
 - **Tool limit** — you have made 50 or more tool calls. Wrap up immediately.
+- **Budget warning** — If the system tells you remaining budget is low,
+  immediately prioritise summarising findings and stop calling tools.
 
 When stopping, write your structured summary. Do NOT call more tools.
 

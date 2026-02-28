@@ -32,6 +32,7 @@ from fackel.tooling.sanitizers import (
 from fackel.tooling.validators import (
     TargetType,
     guard_target,
+    is_private_ip,
     is_reverse_ptr_subdomain,
     is_valid_domain,
     is_valid_ip,
@@ -46,6 +47,7 @@ __all__ = [
     "format_tool_output",
     "get_tool_timeout",
     "guard_target",
+    "is_private_ip",
     "is_reverse_ptr_subdomain",
     "is_valid_domain",
     "is_valid_ip",
