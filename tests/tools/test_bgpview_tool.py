@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from tools.circuit_breaker import reset_all as reset_circuits
+from fackel.tooling.circuit_breaker import reset_all as reset_circuits
 from tools.recon.bgpview_tool import _parse_holder, _parse_rir, bgp_lookup
 
 

@@ -13,7 +13,7 @@ States
 
 Usage inside a tool::
 
-    from tools.circuit_breaker import circuit_breaker
+    from fackel.tooling.circuit_breaker import circuit_breaker
 
     @tool(handle_tool_error=True)
     def my_tool(target: str) -> dict:

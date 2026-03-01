@@ -11,7 +11,7 @@ from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import format_tool_output
-from tools.http_client import get_session
+from fackel.tooling.http_client import get_session
 
 logger = logging.getLogger(__name__)
 

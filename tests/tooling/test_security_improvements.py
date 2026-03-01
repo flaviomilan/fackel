@@ -10,9 +10,8 @@ from langchain_core.tools import ToolException
 
 from fackel.agents.orchestrator.main import ScanInterruptedError, ScanTimeoutError
 from fackel.agents.orchestrator.streaming import validate_tool_output
-from fackel.tooling import execution as _execution_mod
 from fackel.tooling import is_private_ip
-from fackel.tooling.execution import _truncate, redact_secrets, run_command
+from fackel.tooling.execution import _reset_secret_cache, _truncate, redact_secrets, run_command
 from fackel.tooling.output_sanitizer import sanitize_tool_output
 from fackel.tooling.validators import guard_dns_rebinding, resolve_host
 
@@ -279,15 +278,15 @@ class TestRedactSecrets:
     """Tests for redact_secrets."""
 
     @pytest.fixture(autouse=True)
-    def _reset_secret_cache(self):
+    def _reset_secret_cache_fixture(self):
         """Force secret cache re-scan before and after each test."""
-        _execution_mod._secret_values = None
+        _reset_secret_cache()
         yield
-        _execution_mod._secret_values = None
+        _reset_secret_cache()
 
     def test_redacts_known_api_key(self, monkeypatch) -> None:
         monkeypatch.setenv("SHODAN_API_KEY", "sk-super-secret-12345678")
-        _execution_mod._secret_values = None
+        _reset_secret_cache()
         result = redact_secrets("Error: invalid key sk-super-secret-12345678 for host")
         assert "sk-super-secret-12345678" not in result
         assert "[REDACTED]" in result

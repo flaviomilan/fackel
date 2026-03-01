@@ -8,7 +8,7 @@ import pytest
 from langchain_core.tools import ToolException
 
 from fackel.settings import get_settings
-from tools.circuit_breaker import (
+from fackel.tooling.circuit_breaker import (
     _CircuitState,
     _get_circuit,
     circuit_breaker,

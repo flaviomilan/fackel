@@ -11,7 +11,7 @@ All tool modules should use :func:`get_session` instead of bare
 
 Usage::
 
-    from tools.http_client import get_session
+    from fackel.tooling.http_client import get_session
 
     resp = get_session().get(url, timeout=15)
 """
@@ -55,3 +55,12 @@ def get_session() -> Session:
         _session.mount("https://", adapter)
         _session.mount("http://", adapter)
     return _session
+
+
+def _reset_session() -> None:
+    """Discard the cached session so the next call creates a fresh one.
+
+    Intended for **tests only** — production code should never call this.
+    """
+    global _session
+    _session = None

@@ -39,11 +39,21 @@ from .nodes import (
 )
 from .state import ScanState
 
-_CHECKPOINT_DB = get_settings().checkpoint_db
+_checkpointer: SqliteSaver | None = None
 
-Path(_CHECKPOINT_DB).parent.mkdir(parents=True, exist_ok=True)
 
-_checkpointer = SqliteSaver(sqlite3.connect(_CHECKPOINT_DB, check_same_thread=False))
+def _get_checkpointer() -> SqliteSaver:
+    """Return the SQLite checkpointer, creating it lazily on first call.
+
+    Avoids side effects (directory creation, SQLite connection) at import
+    time — the connection is opened only when ``build_graph()`` is called.
+    """
+    global _checkpointer
+    if _checkpointer is None:
+        db_path = get_settings().checkpoint_db
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        _checkpointer = SqliteSaver(sqlite3.connect(db_path, check_same_thread=False))
+    return _checkpointer
 
 
 def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
@@ -74,4 +84,4 @@ def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
     graph.add_edge("triage", "report")
     graph.add_edge("report", END)
 
-    return graph.compile(checkpointer=_checkpointer)
+    return graph.compile(checkpointer=_get_checkpointer())

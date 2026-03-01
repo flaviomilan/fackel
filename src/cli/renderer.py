@@ -19,7 +19,16 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from fackel.formatting import PHASE_ICONS, PHASE_LABELS
+from fackel.formatting import PHASE_LABELS
+
+PHASE_ICONS: dict[str, str] = {
+    "osint": "🔍",
+    "approval": "⚠️",
+    "port_scan": "🔌",
+    "vuln_scan": "🛡️",
+    "triage": "📊",
+    "report": "📝",
+}
 
 _THINKING_MAX_CHARS = 500
 """Max characters of LLM reasoning to show in the thinking panel."""

@@ -59,6 +59,15 @@ def _get_secret_values() -> list[str]:
     return _secret_values
 
 
+def _reset_secret_cache() -> None:
+    """Clear the cached secret values so the next call re-scans the env.
+
+    Intended for **tests only** — production code should never call this.
+    """
+    global _secret_values
+    _secret_values = None
+
+
 def redact_secrets(text: str) -> str:
     """Replace known secret values in *text* with ``[REDACTED]``.
 
