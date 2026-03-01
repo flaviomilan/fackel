@@ -163,12 +163,12 @@ class TestBgpLookupHappyPath:
             {
                 "data": {
                     "asns": [{"asn": 999, "holder": "SIMPLENAME"}],
-                    "resource": "10.0.0.0/8",
+                    "resource": "198.51.100.0/24",
                     "block": {},
                 },
             }
         )
-        result = bgp_lookup.invoke({"ip": "10.0.0.1"})
+        result = bgp_lookup.invoke({"ip": "198.51.100.1"})
         assert result["status"] == "ok"
         assert result["data"]["asn_name"] == "SIMPLENAME"
         assert result["data"]["asn_description"] == ""

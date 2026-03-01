@@ -20,8 +20,7 @@ from fackel.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Environment variable prefixes/names that commonly hold secrets.
-# Values will be collected at first use and redacted from process output.
+
 _SECRET_ENV_PATTERNS: tuple[str, ...] = (
     "API_KEY",
     "API_SECRET",

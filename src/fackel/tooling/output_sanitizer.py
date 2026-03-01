@@ -30,11 +30,7 @@ from fackel.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Maximum raw output size in bytes before truncation.
-# Runtime default comes from ``FACKEL_SANITIZER_MAX_BYTES`` via settings.
 
-# Patterns that indicate prompt injection attempts in tool output.
-# Each tuple: (compiled_regex, human-readable label for logging).
 _INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
         re.compile(
@@ -83,7 +79,7 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
 ]
 
-# Control characters to strip (excluding common whitespace \t \n \r).
+
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 

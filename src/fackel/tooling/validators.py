@@ -39,8 +39,7 @@ _DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\
 
 _OCTET_QUAD_RE = re.compile(r"^\d{1,3}(?:-\d{1,3}){3}$")
 
-# Networks considered private/reserved and rejected by SSRF protection.
-# Covers RFC 1918 private, loopback, link-local, multicast, and special-use.
+
 _PRIVATE_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
     ipaddress.IPv4Network("10.0.0.0/8"),
     ipaddress.IPv4Network("172.16.0.0/12"),
@@ -273,7 +272,7 @@ def resolve_host(hostname: str) -> list[str]:
     """
     try:
         infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        return list({info[4][0] for info in infos})
+        return list({str(info[4][0]) for info in infos})
     except (socket.gaierror, OSError):
         return []
 

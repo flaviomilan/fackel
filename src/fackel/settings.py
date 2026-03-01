@@ -35,11 +35,6 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Helpers — safe env-var parsing with fallback
-# ---------------------------------------------------------------------------
-
-
 def _env_int(key: str, default: int) -> int:
     """Read *key* from the environment as ``int``, falling back to *default*."""
     raw = os.getenv(key, "").strip()
@@ -75,11 +70,6 @@ def _env_float(key: str, default: float) -> float:
 def _env_str(key: str, default: str) -> str:
     """Read *key* from the environment as ``str``, falling back to *default*."""
     return os.getenv(key, default).strip() or default
-
-
-# ---------------------------------------------------------------------------
-# Settings dataclass
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,11 +145,6 @@ class Settings:
     # --- Checkpoint -----------------------------------------------------------
     checkpoint_db: str
     """``FACKEL_CHECKPOINT_DB`` — SQLite path for graph state (default ``~/.fackel/checkpoints.db``)."""
-
-
-# ---------------------------------------------------------------------------
-# Factory
-# ---------------------------------------------------------------------------
 
 
 def _load_settings() -> Settings:

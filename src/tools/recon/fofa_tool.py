@@ -20,7 +20,7 @@ from fackel.tooling.http_client import get_session
 _API_BASE = "https://en.fofa.info/api/v1/search/all"
 _MAX_RESULTS = 100
 
-# Error codes that indicate account/billing issues, not transient failures.
+
 _ACCOUNT_ERROR_CODES = frozenset({820031, -700})
 
 

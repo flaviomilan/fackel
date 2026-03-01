@@ -24,7 +24,7 @@ from fackel.tooling import (
 
 _TIMEOUT = 120
 
-# Regex to extract URLs/paths from LinkFinder output.
+
 _URL_PATTERN = re.compile(r"((?:https?://|/)[^\s\"'<>]+)")
 
 
