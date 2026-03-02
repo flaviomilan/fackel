@@ -5,8 +5,6 @@ Tries ``ddgs`` first (newer package name), then ``duckduckgo_search``
 degrade gracefully.
 """
 
-from __future__ import annotations
-
 try:
     from ddgs import DDGS
 except ImportError:

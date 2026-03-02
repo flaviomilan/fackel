@@ -25,15 +25,46 @@ Available target types:
 from __future__ import annotations
 
 import ipaddress
+import logging
 import re
+import socket
 from enum import Enum
 from urllib.parse import urlparse
 
 from langchain_core.tools import ToolException
 
+logger = logging.getLogger(__name__)
+
 _DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$")
 
 _OCTET_QUAD_RE = re.compile(r"^\d{1,3}(?:-\d{1,3}){3}$")
+
+
+_PRIVATE_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
+    ipaddress.IPv4Network("10.0.0.0/8"),
+    ipaddress.IPv4Network("172.16.0.0/12"),
+    ipaddress.IPv4Network("192.168.0.0/16"),
+    ipaddress.IPv4Network("127.0.0.0/8"),
+    ipaddress.IPv4Network("169.254.0.0/16"),
+    ipaddress.IPv4Network("0.0.0.0/8"),
+    ipaddress.IPv6Network("::1/128"),
+    ipaddress.IPv6Network("fc00::/7"),
+    ipaddress.IPv6Network("fe80::/10"),
+    ipaddress.IPv6Network("::/128"),
+)
+
+
+def is_private_ip(value: str) -> bool:
+    """Return ``True`` if *value* is an IP in a private or reserved range.
+
+    Covers RFC 1918, loopback (127.x), link-local (169.254.x),
+    IPv6 ULA (fc00::/7), and IPv6 link-local (fe80::/10).
+    """
+    try:
+        addr = ipaddress.ip_address(value.strip())
+    except ValueError:
+        return False
+    return any(addr in net for net in _PRIVATE_NETWORKS)
 
 
 def is_valid_ip(value: str) -> bool:
@@ -76,7 +107,18 @@ class TargetType(Enum):
 
 
 def _extract_host(value: str) -> str:
-    """Return the bare hostname / IP from a value that may include a scheme."""
+    """Return the bare hostname / IP from a value that may include a scheme.
+
+    Handles bare IPv6 addresses (e.g. ``fc00::1``) which ``urlparse``
+    misinterprets as having a scheme.
+    """
+    # Detect bare IPv6 first — urlparse misparses these.
+    try:
+        ipaddress.ip_address(value)
+        return value  # Already a valid IP literal.
+    except ValueError:
+        pass
+
     parsed = urlparse(value)
     host = parsed.hostname or parsed.netloc or parsed.path.split("/")[0] or value
     return host.strip().rstrip(".")
@@ -145,11 +187,23 @@ def guard_target(
     if accept is TargetType.IP:
         if not is_valid_ip(host):
             raise _err(f"{tool_name} requires an IP address, got: {host!r}")
+        if is_private_ip(host):
+            raise _err(
+                f"target is a private/reserved IP address ({host}). "
+                "Scanning internal networks is not permitted. "
+                "Use a public IP or domain name instead."
+            )
         return host
 
     if accept is TargetType.HOST:
         if not is_valid_ip(host) and not is_valid_domain(host):
             raise _err(f"invalid host (not a valid IP or domain): {host!r}")
+        if is_valid_ip(host) and is_private_ip(host):
+            raise _err(
+                f"target is a private/reserved IP address ({host}). "
+                "Scanning internal networks is not permitted. "
+                "Use a public IP or domain name instead."
+            )
         return host
 
     if accept is TargetType.HOST_PORT:
@@ -197,7 +251,64 @@ def sanitize_target(raw: str) -> str:
     if _SHELL_META_RE.search(host):
         raise ValueError(f"Target contains forbidden characters: {host!r}")
 
-    if is_valid_ip(host) or is_valid_domain(host):
+    if is_valid_ip(host):
+        if is_private_ip(host):
+            raise ValueError(
+                f"Target is a private/reserved IP address ({host}). "
+                "Scanning internal networks is not permitted."
+            )
+        return host
+
+    if is_valid_domain(host):
         return host
 
     raise ValueError(f"Target is not a valid IP or domain: {host!r}")
+
+
+def resolve_host(hostname: str) -> list[str]:
+    """Resolve *hostname* to a list of IP address strings.
+
+    Returns an empty list if DNS resolution fails.  Never raises.
+    """
+    try:
+        infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        return list({str(info[4][0]) for info in infos})
+    except (socket.gaierror, OSError):
+        return []
+
+
+def guard_dns_rebinding(hostname: str, tool_name: str) -> None:
+    """Resolve *hostname* and reject it if any address is private/reserved.
+
+    DNS rebinding attacks work by making a domain resolve to a private IP
+    **after** the domain-level validation has passed.  This function
+    performs an actual DNS lookup and checks every resolved address against
+    :data:`_PRIVATE_NETWORKS`.
+
+    Should be called **immediately before** the tool makes its outbound
+    network request, to minimise the window between resolution and use.
+
+    Raises
+    ------
+    ToolException
+        When the hostname resolves to one or more private/reserved IPs.
+    """
+    if is_valid_ip(hostname):
+        # Already checked by guard_target — skip resolution.
+        return
+
+    resolved = resolve_host(hostname)
+    if not resolved:
+        logger.debug(
+            "guard_dns_rebinding(%s): DNS resolution returned no results",
+            hostname,
+        )
+        return  # Tool will fail on its own when it can't connect.
+
+    private_addrs = [ip for ip in resolved if is_private_ip(ip)]
+    if private_addrs:
+        raise ToolException(
+            f"{tool_name}: hostname {hostname!r} resolves to private/reserved "
+            f"address(es) {private_addrs}. This may be a DNS rebinding attack. "
+            "Scanning internal networks is not permitted."
+        )

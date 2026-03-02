@@ -20,16 +20,17 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from datetime import UTC, datetime
+
+from fackel.settings import get_settings
 
 
 class _JSONFormatter(logging.Formatter):
     """Emit each log record as a single JSON line.
 
-    Fields: ``ts``, ``level``, ``logger``, ``message``, plus any
-    ``exc_info`` serialised under ``exception``.
+    Fields: ``ts``, ``level``, ``logger``, ``message``, optional
+    ``scan_id``, plus any ``exc_info`` serialised under ``exception``.
     """
 
     def format(self, record: logging.LogRecord) -> str:
@@ -39,6 +40,9 @@ class _JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        scan_id = getattr(record, "scan_id", None)
+        if scan_id:
+            entry["scan_id"] = scan_id
         if record.exc_info and record.exc_info[1] is not None:
             entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(entry, default=str)
@@ -63,7 +67,7 @@ def configure_logging(*, verbose: bool = False) -> None:
         ``"json"`` for structured JSON output; anything else (or unset)
         defaults to human-readable text.
     """
-    log_format = os.getenv("FACKEL_LOG_FORMAT", "text").lower()
+    log_format = get_settings().log_format
 
     root = logging.getLogger()
     root.setLevel(logging.WARNING)

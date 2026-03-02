@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from tools.circuit_breaker import reset_all as reset_circuits
+from fackel.tooling.circuit_breaker import reset_all as reset_circuits
 from tools.recon.ipinfo_tool import ipinfo_lookup
 
 
@@ -76,11 +76,11 @@ class TestIpinfoLookupHappyPath:
     def test_minimal_response(self, mock_gs: MagicMock) -> None:
         """ipinfo returns only IP — optional fields default gracefully."""
         mock_get = mock_gs.return_value.get
-        mock_get.return_value = _ok_response({"ip": "10.0.0.1"})
-        result = ipinfo_lookup.invoke({"ip": "10.0.0.1"})
+        mock_get.return_value = _ok_response({"ip": "198.51.100.1"})
+        result = ipinfo_lookup.invoke({"ip": "198.51.100.1"})
         assert result["status"] == "ok"
         data = result["data"]
-        assert data["ip"] == "10.0.0.1"
+        assert data["ip"] == "198.51.100.1"
         assert data["org"] == ""
         assert data["asn"] == ""
         assert data["anycast"] is False

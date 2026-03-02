@@ -18,15 +18,6 @@ PHASE_LABELS: dict[str, str] = {
     "report": "Report",
 }
 
-PHASE_ICONS: dict[str, str] = {
-    "osint": "🔍",
-    "approval": "⚠️",
-    "port_scan": "🔌",
-    "vuln_scan": "🛡️",
-    "triage": "📊",
-    "report": "📝",
-}
-
 PHASE_ORDER: tuple[str, ...] = ("osint", "port_scan", "vuln_scan", "triage")
 """Canonical ordering of scan phases (excluding report)."""
 

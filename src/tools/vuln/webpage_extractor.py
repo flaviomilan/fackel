@@ -10,8 +10,8 @@ from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
-from tools.circuit_breaker import circuit_breaker
-from tools.http_client import get_session
+from fackel.tooling.circuit_breaker import circuit_breaker
+from fackel.tooling.http_client import get_session
 
 _MAX_CONTENT_LENGTH = 2000
 _TIMEOUT = 10

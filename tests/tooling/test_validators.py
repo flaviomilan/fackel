@@ -57,19 +57,34 @@ class TestGuardTargetIP:
     @pytest.mark.parametrize(
         "value",
         [
-            "192.168.1.1",
-            "10.0.0.1",
-            "127.0.0.1",
-            "::1",
+            "8.8.8.8",
+            "1.1.1.1",
+            "203.0.113.50",
             "2606:4700::6811:d209",
         ],
     )
-    def test_valid_ips(self, value: str) -> None:
+    def test_valid_public_ips(self, value: str) -> None:
         assert guard_target(value, "test_tool", TargetType.IP) == value
 
     def test_rejects_domain(self) -> None:
         with pytest.raises(ToolException):
             guard_target("example.com", "test_tool", TargetType.IP)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "192.168.1.1",
+            "10.0.0.1",
+            "127.0.0.1",
+            "172.16.0.1",
+            "::1",
+            "169.254.1.1",
+            "fc00::1",
+        ],
+    )
+    def test_rejects_private_ips(self, value: str) -> None:
+        with pytest.raises(ToolException, match="private"):
+            guard_target(value, "test_tool", TargetType.IP)
 
 
 class TestGuardTargetHost:
@@ -78,12 +93,16 @@ class TestGuardTargetHost:
     def test_accepts_domain(self) -> None:
         assert guard_target("example.com", "test_tool", TargetType.HOST) == "example.com"
 
-    def test_accepts_ip(self) -> None:
-        assert guard_target("10.0.0.1", "test_tool", TargetType.HOST) == "10.0.0.1"
+    def test_accepts_public_ip(self) -> None:
+        assert guard_target("8.8.8.8", "test_tool", TargetType.HOST) == "8.8.8.8"
 
     def test_rejects_garbage(self) -> None:
         with pytest.raises(ToolException):
             guard_target("not a valid host!!!", "test_tool", TargetType.HOST)
+
+    def test_rejects_private_ip(self) -> None:
+        with pytest.raises(ToolException, match="private"):
+            guard_target("10.0.0.1", "test_tool", TargetType.HOST)
 
 
 class TestGuardTargetURL:
@@ -118,4 +137,4 @@ class TestGuardTargetHostOrURL:
         assert guard_target("example.com", "test_tool", TargetType.HOST_OR_URL) == "example.com"
 
     def test_accepts_ip(self) -> None:
-        assert guard_target("10.0.0.1", "test_tool", TargetType.HOST_OR_URL) == "10.0.0.1"
+        assert guard_target("8.8.8.8", "test_tool", TargetType.HOST_OR_URL) == "8.8.8.8"

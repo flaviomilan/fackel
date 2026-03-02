@@ -14,8 +14,8 @@ from fackel.tooling import (
     guard_target,
     require_env,
 )
-from tools.circuit_breaker import circuit_breaker
-from tools.http_client import get_session
+from fackel.tooling.circuit_breaker import circuit_breaker
+from fackel.tooling.http_client import get_session
 
 _TIMEOUT = 20
 

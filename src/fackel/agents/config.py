@@ -29,9 +29,7 @@ from langchain.agents.middleware.types import (
 )
 from langchain_openai import ChatOpenAI
 
-_DEFAULT_MODEL = "gpt-5-mini"
-
-LLM_REQUEST_TIMEOUT: int = 120
+from fackel.settings import get_settings
 
 _RETRYABLE_ERRORS: tuple[type[Exception], ...] = (
     ConnectionError,
@@ -61,7 +59,7 @@ def get_model(agent_name: str) -> str:
     environment, falling back to :data:`_DEFAULT_MODEL`.
     """
     env_var = f"FACKEL_MODEL_{agent_name.upper()}"
-    return os.getenv(env_var, _DEFAULT_MODEL)
+    return os.getenv(env_var, get_settings().default_model)
 
 
 def build_llm(
@@ -91,7 +89,7 @@ def build_llm(
     """
     kwargs: dict[str, Any] = {
         "model": model_name or get_model(agent_name),
-        "request_timeout": request_timeout or LLM_REQUEST_TIMEOUT,
+        "request_timeout": request_timeout or get_settings().llm_request_timeout,
     }
     if temperature is not None:
         kwargs["temperature"] = temperature
@@ -119,13 +117,14 @@ def default_middleware(
         Enable per-tool-call human approval for active scanning tools.
         Requires a checkpointer on the agent graph to support interrupts.
     """
+    s = get_settings()
     mw: list[AgentMiddleware] = [
         ParallelToolCalls(),
         ToolRetryMiddleware(
-            max_retries=2,
+            max_retries=s.tool_retry_max_retries,
             retry_on=_RETRYABLE_ERRORS,
-            backoff_factor=2.0,
-            initial_delay=1.0,
+            backoff_factor=s.tool_retry_backoff_factor,
+            initial_delay=s.tool_retry_initial_delay,
             on_failure="continue",
         ),
     ]

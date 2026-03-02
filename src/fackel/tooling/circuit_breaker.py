@@ -13,7 +13,7 @@ States
 
 Usage inside a tool::
 
-    from tools.circuit_breaker import circuit_breaker
+    from fackel.tooling.circuit_breaker import circuit_breaker
 
     @tool(handle_tool_error=True)
     def my_tool(target: str) -> dict:
@@ -42,11 +42,19 @@ from enum import Enum
 
 from langchain_core.tools import ToolException
 
+from fackel.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
-FAILURE_THRESHOLD: int = 3
 
-RESET_TIMEOUT: float = 60.0
+def _failure_threshold() -> int:
+    """Return the circuit breaker failure threshold from settings."""
+    return get_settings().circuit_breaker_threshold
+
+
+def _reset_timeout() -> float:
+    """Return the circuit breaker reset timeout from settings."""
+    return get_settings().circuit_breaker_reset_timeout
 
 
 class _CircuitState(Enum):
@@ -91,7 +99,8 @@ def circuit_breaker(service: str) -> Generator[None, None, None]:
 
         if cb.state is _CircuitState.OPEN:
             elapsed = time.monotonic() - cb.last_failure_time
-            if elapsed >= RESET_TIMEOUT:
+            reset_timeout = _reset_timeout()
+            if elapsed >= reset_timeout:
                 cb.state = _CircuitState.HALF_OPEN
                 logger.info(
                     "circuit_breaker(%s): transitioning OPEN → HALF-OPEN after %.0fs",
@@ -99,7 +108,7 @@ def circuit_breaker(service: str) -> Generator[None, None, None]:
                     elapsed,
                 )
             else:
-                remaining = RESET_TIMEOUT - elapsed
+                remaining = reset_timeout - elapsed
                 raise ToolException(
                     f"{service} is temporarily unavailable (circuit breaker open, "
                     f"retry in {remaining:.0f}s after {cb.failure_count} consecutive failures)"
@@ -112,7 +121,7 @@ def circuit_breaker(service: str) -> Generator[None, None, None]:
             cb = _get_circuit(service)
             cb.failure_count += 1
             cb.last_failure_time = time.monotonic()
-            if cb.failure_count >= FAILURE_THRESHOLD:
+            if cb.failure_count >= _failure_threshold():
                 cb.state = _CircuitState.OPEN
                 logger.warning(
                     "circuit_breaker(%s): OPEN after %d consecutive failures",

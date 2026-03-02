@@ -54,8 +54,6 @@ def subzy_check(target: str) -> dict[str, Any]:
         "run",
         "--target",
         target,
-        "--output",
-        "json",
         "--hide_fails",
         "--concurrency",
         "10",

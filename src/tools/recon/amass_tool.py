@@ -62,7 +62,7 @@ def amass_enum(target: str, passive: bool = True) -> dict[str, Any]:
         "enum",
         "-d",
         target,
-        "-",
+        "-json",
         "-timeout",
         "10",
     ]

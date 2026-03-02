@@ -29,10 +29,10 @@ class TestDnsResolve:
         assert result["data"]["type"] == "domain"
 
     def test_validates_ip_address(self):
-        result = dns_resolve.invoke({"target": "192.168.1.1"})
+        result = dns_resolve.invoke({"target": "203.0.113.1"})
         assert result["status"] == "ok"
         assert result["data"]["type"] == "ip"
-        assert "192.168.1.1" in result["data"]["ips"]
+        assert "203.0.113.1" in result["data"]["ips"]
 
     @patch("tools.recon.dns_resolver.socket.getaddrinfo", side_effect=socket.gaierror("no host"))
     def test_resolution_failure_returns_error(self, _mock):

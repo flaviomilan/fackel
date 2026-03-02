@@ -52,8 +52,6 @@ def gau_urls(target: str) -> dict[str, Any]:
         "gau",
         "--threads",
         "2",
-        "--o",
-        "-",
         target,
     ]
 
