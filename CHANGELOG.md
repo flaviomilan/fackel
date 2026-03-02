@@ -2,6 +2,43 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-03-02)
+
+### Bug Fixes
+
+- **tools**: Remove CLI args that create spurious '-' and 'json' files
+  ([`3173bbb`](https://github.com/flaviomilan/fackel/commit/3173bbb75a26d34ad5d9f4c9162fbed3c9410de8))
+
+### Chores
+
+- Remove spurious files - and json from repository root
+  ([`980cab6`](https://github.com/flaviomilan/fackel/commit/980cab6607aec93a1b002c52505acd0e82635e9c))
+
+### Documentation
+
+- Dockerfile, CONTRIBUTING.md, and configuration reference updates
+  ([`a2edeae`](https://github.com/flaviomilan/fackel/commit/a2edeaea267825994bf23bb6472df8b87bd86315))
+
+### Features
+
+- Centralized settings, DNS rebinding protection, secret redaction, graceful shutdown
+  ([`c0f3eab`](https://github.com/flaviomilan/fackel/commit/c0f3eab7934601c8fdd2e13299d9e97aa06ff12e))
+
+- Remove comments
+  ([`082793d`](https://github.com/flaviomilan/fackel/commit/082793df86c3d390b17bc676eef2da855ef4abb6))
+
+- Security hardening and operational improvements
+  ([`726768f`](https://github.com/flaviomilan/fackel/commit/726768fe5fbca338cb53f9e1b18bffb96082c590))
+
+### Refactoring
+
+- Relocate infrastructure modules, reorganize tests, eliminate side effects
+  ([`f146c6f`](https://github.com/flaviomilan/fackel/commit/f146c6f4d85cc6417a62c96840ecc132ec969300))
+
+- **tests**: Clean up test_security_improvements
+  ([`6f006a0`](https://github.com/flaviomilan/fackel/commit/6f006a0a09f2a45fde50e3e0d6784094a7fbca0d))
+
+
 ## v1.3.1 (2026-02-26)
 
 ### Bug Fixes
