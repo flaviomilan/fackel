@@ -18,7 +18,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
 from fackel.agents.config import build_llm
-from fackel.agents.prompts import load_prompt
+from fackel.prompts import compose_prompt, load_section
 from fackel.formatting import format_tech_fingerprint, serialize_findings
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,13 @@ def build(model_name: str | None = None) -> CompiledStateGraph:  # type: ignore[
     return create_agent(
         llm,
         [],
-        system_prompt=load_prompt("triage"),
+        system_prompt=compose_prompt(
+            "triage",
+            "validation/false_positive_detection",
+            "validation/severity_classification",
+            "synthesis/evidence_correlation",
+            "stages/gap_identification",
+        ),
         response_format=TriageResult,
         name="triage",
     )
@@ -115,6 +121,9 @@ def run_triage(
     if structured_sections:
         context = f"{context}\n\n---\n\n{structured_sections}"
 
+    triage_guidance = _build_triage_guidance()
+    context = f"{context}\n\n---\n\n{triage_guidance}"
+
     try:
         result = agent.invoke(
             {"messages": [HumanMessage(content=f"Analyse these scan findings:\n\n{context}")]},
@@ -150,6 +159,20 @@ def _fallback_result(summary: str) -> TriageResult:
 def _serialize_findings(findings: list[dict[str, Any]]) -> str:
     """Convert a list of Finding dicts into Markdown sections for the LLM."""
     return serialize_findings(findings)
+
+
+def _build_triage_guidance() -> str:
+    """Compose supplementary triage guidance from prompt sections.
+
+    Loads strategic analysis, entity grouping, and source reliability
+    prompt sections to enrich the triage LLM's contextual understanding.
+    """
+    sections = [
+        ("Strategic Analysis", load_section("stages/strategic_analysis")),
+        ("Entity Grouping", load_section("synthesis/entity_grouping")),
+        ("Source Reliability", load_section("validation/source_reliability")),
+    ]
+    return "\n\n---\n\n".join(f"## {title}\n\n{content}" for title, content in sections)
 
 
 def _serialize_structured_context(

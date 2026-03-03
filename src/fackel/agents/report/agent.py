@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from fackel.agents.config import build_llm
-from fackel.agents.prompts import load_prompt
+from fackel.prompts import compose_prompt, load_section
 from fackel.formatting import serialize_findings
 
 logger = logging.getLogger(__name__)
@@ -99,10 +99,20 @@ def generate_report(
                 risk_lines.append(f"- {factor}")
         parts.append("\n".join(risk_lines))
 
+    report_guidance = _build_report_guidance()
+    parts.append(f"\n---\n\n{report_guidance}")
+
     try:
         response = llm.invoke(
             [
-                SystemMessage(content=load_prompt("report")),
+                SystemMessage(
+                    content=compose_prompt(
+                        "report",
+                        "reporting/technical",
+                        "reporting/executive",
+                        "stages/final_report",
+                    )
+                ),
                 HumanMessage(content="\n".join(parts)),
             ],
             config=config,
@@ -115,3 +125,17 @@ def generate_report(
             "**Note:** The LLM report generation failed. "
             "Raw findings are included below for manual review.\n\n" + "\n\n---\n\n".join(parts)
         )
+
+
+def _build_report_guidance() -> str:
+    """Compose supplementary report guidance from prompt sections.
+
+    Loads evidence consolidation, actionable summary, and risk-oriented
+    prompt sections to enrich the report LLM's contextual understanding.
+    """
+    sections = [
+        ("Evidence Consolidation", load_section("stages/evidence_consolidation")),
+        ("Actionable Summary", load_section("reporting/actionable_summary")),
+        ("Risk-Oriented Analysis", load_section("reporting/risk_oriented")),
+    ]
+    return "\n\n---\n\n".join(f"## {title}\n\n{content}" for title, content in sections)

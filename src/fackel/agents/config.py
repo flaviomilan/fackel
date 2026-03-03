@@ -48,6 +48,11 @@ ACTIVE_SCAN_TOOLS: frozenset[str] = frozenset(
         "feroxbuster_scan",
         "katana_crawl",
         "testssl_scan",
+        "sqlmap_scan",
+        "ssrf_detect",
+        "open_redirect_scan",
+        "ssti_scan",
+        "ffuf_scan",
     }
 )
 

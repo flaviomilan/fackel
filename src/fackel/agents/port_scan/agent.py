@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
 from fackel.agents.config import build_llm, default_middleware
-from fackel.agents.prompts import load_prompt
+from fackel.prompts import compose_prompt
 from tools.scanning.naabu_tool import naabu_scan
 from tools.scanning.nmap_scanner import nmap_port_scan
 
@@ -36,7 +36,11 @@ def build(
     return create_agent(
         llm,
         TOOLS,
-        system_prompt=load_prompt("port_scan"),
+        system_prompt=compose_prompt(
+            "port_scan",
+            "tools/port_scanning",
+            "contracts/nmap",
+        ),
         middleware=default_middleware(approve_tools=approve_tools),
         checkpointer=MemorySaver() if approve_tools else None,
         name="port_scan",
