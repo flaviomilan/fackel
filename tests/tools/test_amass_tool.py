@@ -20,6 +20,7 @@ class TestAmassEnum:
         assert "amass" in cmd
         assert "enum" in cmd
         assert "example.com" in cmd
+        assert "-oA" in cmd
 
     @patch("tools.recon.amass_tool.run_command")
     @patch("tools.recon.amass_tool.require_binary", return_value=None)

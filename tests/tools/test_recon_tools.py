@@ -1,5 +1,5 @@
-"""Tests for remaining recon tools — dns_resolver, crtsh, dnsdumpster,
-reverse_dns, shodan, subfinder, virustotal, censys."""
+"""Tests for remaining recon tools — dns_resolver, crtsh,
+reverse_dns, subfinder."""
 
 from __future__ import annotations
 
