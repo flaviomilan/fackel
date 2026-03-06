@@ -3,11 +3,25 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from tools.vuln.nuclei_tool import nuclei_scan
 from tools.vuln.testssl_tool import _parse_severity, testssl_scan
 from tools.vuln.webpage_extractor import _extract_text, extract_webpage_content
+
+
+def _testssl_run(json_content: str = "[]"):
+    """Return a side_effect for run_command that writes JSON to the testssl tempfile."""
+
+    def _side_effect(cmd, **_kwargs):
+        # The --jsonfile <path> arg pair tells us where to write.
+        idx = cmd.index("--jsonfile")
+        json_path = Path(cmd[idx + 1])
+        json_path.write_text(json_content)
+        return 0, "", ""
+
+    return _side_effect
 
 
 class TestNucleiScan:
@@ -118,16 +132,53 @@ class TestTestsslScan:
     @patch("tools.vuln.testssl_tool.run_command")
     @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_basic_command(self, _bin, mock_run):
-        mock_run.return_value = (0, "[]", "")
+        mock_run.side_effect = _testssl_run("[]")
         testssl_scan.invoke({"target": "example.com"})
         cmd = mock_run.call_args[0][0]
         assert "testssl.sh" in cmd
-        assert "--jsonfile=-" in cmd
+        assert "--jsonfile" in cmd
+        assert "--overwrite" in cmd
+
+    @patch("tools.vuln.testssl_tool.run_command")
+    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    def test_fast_mode_default(self, _bin, mock_run):
+        """Default fast=True adds --fast flag."""
+        mock_run.side_effect = _testssl_run("[]")
+        testssl_scan.invoke({"target": "example.com"})
+        cmd = mock_run.call_args[0][0]
+        assert "--fast" in cmd
+
+    @patch("tools.vuln.testssl_tool.run_command")
+    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    def test_fast_disabled(self, _bin, mock_run):
+        """fast=False omits --fast flag for exhaustive scan."""
+        mock_run.side_effect = _testssl_run("[]")
+        testssl_scan.invoke({"target": "example.com", "fast": False})
+        cmd = mock_run.call_args[0][0]
+        assert "--fast" not in cmd
+
+    @patch("tools.vuln.testssl_tool.run_command")
+    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    def test_openssl_timeout_in_cmd(self, _bin, mock_run):
+        """openssl_timeout is passed as --openssl-timeout=N."""
+        mock_run.side_effect = _testssl_run("[]")
+        testssl_scan.invoke({"target": "example.com", "openssl_timeout": 20})
+        cmd = mock_run.call_args[0][0]
+        assert "--openssl-timeout=20" in cmd
+
+    @patch("tools.vuln.testssl_tool.run_command")
+    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    def test_openssl_timeout_clamped(self, _bin, mock_run):
+        """openssl_timeout is clamped to 1-30."""
+        mock_run.side_effect = _testssl_run("[]")
+        testssl_scan.invoke({"target": "example.com", "openssl_timeout": 100})
+        cmd = mock_run.call_args[0][0]
+        assert "--openssl-timeout=30" in cmd
 
     @patch("tools.vuln.testssl_tool.run_command")
     @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_checks_mapped_to_flags(self, _bin, mock_run):
-        mock_run.return_value = (0, "[]", "")
+        mock_run.side_effect = _testssl_run("[]")
         testssl_scan.invoke({"target": "example.com", "checks": "protocols,ciphers"})
         cmd = mock_run.call_args[0][0]
         assert "-p" in cmd
@@ -140,7 +191,7 @@ class TestTestsslScan:
             {"id": "TLS1_3", "severity": "OK", "finding": "offered"},
             {"id": "heartbleed", "severity": "HIGH", "finding": "VULNERABLE"},
         ]
-        mock_run.return_value = (0, json.dumps(records), "")
+        mock_run.side_effect = _testssl_run(json.dumps(records))
         result = testssl_scan.invoke({"target": "example.com"})
         assert result["status"] == "ok"
         assert result["data"]["summary"]["total"] == 2
@@ -153,14 +204,14 @@ class TestTestsslScan:
             {"id": "TLS1_3", "severity": "OK", "finding": "offered"},
             {"id": "heartbleed", "severity": "HIGH", "finding": "VULNERABLE"},
         ]
-        mock_run.return_value = (0, json.dumps(records), "")
+        mock_run.side_effect = _testssl_run(json.dumps(records))
         result = testssl_scan.invoke({"target": "example.com", "severity": "high"})
         assert result["data"]["summary"]["total"] == 1
 
     @patch("tools.vuln.testssl_tool.run_command")
     @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_empty_output_returns_ok(self, _bin, mock_run):
-        mock_run.return_value = (0, "", "")
+        mock_run.side_effect = _testssl_run("")
         result = testssl_scan.invoke({"target": "example.com"})
         assert result["status"] == "ok"
         assert result["data"]["summary"]["total"] == 0

@@ -12,6 +12,8 @@ Requires ``testssl.sh`` in PATH.  Install via:
 from __future__ import annotations
 
 import json
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from langchain_core.tools import ToolException, tool
@@ -27,7 +29,7 @@ from fackel.tooling import (
     sanitize_severity,
 )
 
-_TIMEOUT = 300
+_TIMEOUT = 600
 
 
 class TestSSLInput(BaseModel):
@@ -55,6 +57,22 @@ class TestSSLInput(BaseModel):
             "'certificate' (cert chain). Comma-separated, empty = full scan."
         ),
     )
+    fast: bool = Field(
+        default=True,
+        description=(
+            "Use --fast mode for quicker results (skip some cipher checks). "
+            "Default: True. Set to False for exhaustive TLS analysis when "
+            "deep cipher enumeration is needed."
+        ),
+    )
+    openssl_timeout: int = Field(
+        default=10,
+        description=(
+            "Timeout in seconds for individual openssl connections (1-30). "
+            "Increase for targets behind CDN/WAF with high latency. "
+            "Default: 10."
+        ),
+    )
 
 
 def _parse_severity(finding: dict[str, Any]) -> str:
@@ -79,6 +97,8 @@ def testssl_scan(
     target: str,
     severity: str = "",
     checks: str = "",
+    fast: bool = True,
+    openssl_timeout: int = 10,
 ) -> dict[str, Any]:
     """Deep TLS/SSL analysis: protocols, ciphers, certificate chain, and known
     vulnerabilities (Heartbleed, POODLE, BEAST, ROBOT, DROWN, Logjam, etc.).
@@ -90,15 +110,26 @@ def testssl_scan(
 
     host = guard_target(target, "testssl_scan", TargetType.HOST_PORT)
 
+    openssl_timeout = max(1, min(openssl_timeout, 30))
+
+    # testssl.sh does not support streaming JSON to stdout via "--jsonfile=-";
+    # it treats "-" as a literal filename and creates a file called "-" in cwd.
+    # Use a temporary file and read it back after the scan completes.
+    tmpdir = tempfile.mkdtemp(prefix="testssl_")
+    json_path = Path(tmpdir) / "results.json"
+
     cmd = [
         "testssl.sh",
-        "--jsonfile=-",
-        "--warnings",
-        "off",
-        "--color",
-        "0",
+        "--jsonfile", str(json_path),
+        "--overwrite",
+        "--warnings", "off",
+        "--color", "0",
         "--sneaky",
+        f"--openssl-timeout={openssl_timeout}",
     ]
+
+    if fast:
+        cmd.append("--fast")
 
     check_flags = {
         "protocols": "-p",
@@ -116,9 +147,14 @@ def testssl_scan(
     cmd.append(host)
 
     try:
-        _code, out, _stderr = run_command(cmd, timeout=get_tool_timeout("testssl_scan", _TIMEOUT))
+        _code, _stdout, _stderr = run_command(cmd, timeout=get_tool_timeout("testssl_scan", _TIMEOUT))
+        out = json_path.read_text() if json_path.is_file() else ""
     except Exception as exc:
         raise ToolException(f"testssl_scan: {exc}") from exc
+    finally:
+        import shutil
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
     findings: list[dict[str, Any]] = []
 
