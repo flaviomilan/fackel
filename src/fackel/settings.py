@@ -146,6 +146,12 @@ class Settings:
     checkpoint_db: str
     """``FACKEL_CHECKPOINT_DB`` — SQLite path for graph state (default ``~/.fackel/checkpoints.db``)."""
 
+    # --- Agent context management ---------------------------------------------
+    agent_context_window: int
+    """``FACKEL_AGENT_CONTEXT_WINDOW`` — max tokens for trim_messages guard (default 120000)."""
+
+
+
 
 def _load_settings() -> Settings:
     """Build a ``Settings`` instance from the current environment."""
@@ -181,6 +187,9 @@ def _load_settings() -> Settings:
             "FACKEL_CHECKPOINT_DB",
             str(Path.home() / ".fackel" / "checkpoints.db"),
         ),
+        # Agent context management
+        agent_context_window=_env_int("FACKEL_AGENT_CONTEXT_WINDOW", 120_000),
+
     )
 
 

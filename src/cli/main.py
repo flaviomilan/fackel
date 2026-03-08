@@ -165,10 +165,13 @@ def scan(
         help="Require per-tool-call approval for active scanning tools",
     ),
 ) -> None:
-    """Run a full scan workflow and emit the final report."""
-    from dotenv import load_dotenv
+    """Run an autonomous scan against a target.
 
-    from fackel.agents.orchestrator import run
+    Fackel runs the full OSINT → active scan → vulnerability → triage →
+    report pipeline start-to-finish with real-time Rich output showing
+    tool execution, LLM reasoning, and phase progress.
+    """
+    from dotenv import load_dotenv
 
     load_dotenv()
     from fackel.logging_config import configure_logging
@@ -192,6 +195,8 @@ def scan(
             vars_str = ", ".join(missing_vars)
             console.print(f"  [dim]• {tool_name} — {provider} ({vars_str})[/dim]")
         console.print()
+
+    from fackel.agents.orchestrator import run
 
     renderer = EventRenderer(console, verbose=verbose)
     set_event_callback(renderer.handle)

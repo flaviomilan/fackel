@@ -12,7 +12,7 @@ from fackel.formatting import is_ipv6
 
 from .. import streaming
 from ..state import ScanState
-from ._helpers import get_phase_evaluation
+from ._helpers import get_phase_evaluation, make_finding
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,19 @@ def approval_gate(state: ScanState) -> Command:  # type: ignore[type-arg]
 
     if approved:
         return Command(goto="port_scan")
-    return Command(goto="report")
+    return Command(
+        goto="report",
+        update={
+            "findings": [
+                make_finding(
+                    "approval",
+                    "Active Scan Rejected",
+                    "Operator declined active scanning at the approval gate. "
+                    "Report generated from passive OSINT data only.",
+                )
+            ],
+        },
+    )
 
 
 def route_after_osint(state: ScanState) -> str:

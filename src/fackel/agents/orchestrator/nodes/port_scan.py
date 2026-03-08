@@ -7,6 +7,8 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
+from fackel.prompts import load_section
+
 from .. import evaluator, streaming
 from ..state import ScanState
 from ..streaming import agent_summary, is_tool_approval_enabled, run_and_stream_agent
@@ -19,6 +21,19 @@ from ._helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Loaded once and cached — supplies node-level prompt context.
+_ENUMERATION_GUIDANCE: str | None = None
+_PIVOT_PRIORITY_GUIDANCE: str | None = None
+
+
+def _load_port_scan_guidance() -> tuple[str, str]:
+    """Lazy-load stage and orchestrator prompt sections for port scanning."""
+    global _ENUMERATION_GUIDANCE, _PIVOT_PRIORITY_GUIDANCE  # noqa: PLW0603
+    if _ENUMERATION_GUIDANCE is None:
+        _ENUMERATION_GUIDANCE = load_section("stages/enumeration")
+        _PIVOT_PRIORITY_GUIDANCE = load_section("orchestrator/pivot_priority")
+    return _ENUMERATION_GUIDANCE, _PIVOT_PRIORITY_GUIDANCE  # type: ignore[return-value]
 
 
 def port_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
@@ -79,6 +94,11 @@ def _build_port_scan_prompt(
         "scanned. Skip subdomains that point to the same IP — the IP scan "
         "already covers them."
     )
+
+    enumeration_guide, pivot_guide = _load_port_scan_guidance()
+    parts.append(f"\n## Enumeration Stage Guidance\n\n{enumeration_guide}")
+    parts.append(f"\n## Target Prioritisation\n\n{pivot_guide}")
+
     return "\n".join(parts)
 
 

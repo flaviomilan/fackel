@@ -10,10 +10,9 @@ from langchain_core.tools import ToolException
 
 from fackel.agents.orchestrator.main import ScanInterruptedError, ScanTimeoutError
 from fackel.agents.orchestrator.streaming import validate_tool_output
-from fackel.tooling import is_private_ip
 from fackel.tooling.execution import _reset_secret_cache, _truncate, redact_secrets, run_command
 from fackel.tooling.output_sanitizer import sanitize_tool_output
-from fackel.tooling.validators import guard_dns_rebinding, resolve_host
+from fackel.tooling.validators import guard_dns_rebinding, is_private_ip, resolve_host
 
 
 class TestIsPrivateIP:

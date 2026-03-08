@@ -38,6 +38,36 @@ class Finding(TypedDict, total=False):
     """0.0 - 1.0.  How confident the agent is in this finding."""
 
 
+def _finding_fingerprint(f: Finding) -> str:
+    """Stable fingerprint for deduplication: phase + title + detail prefix."""
+    return f"{f.get('phase', '')}:{f.get('title', '')}:{f.get('detail', '')[:120]}"
+
+
+def merge_findings(old: list[Finding], new: list[Finding]) -> list[Finding]:
+    """Append-with-dedup reducer for findings.
+
+    Merges *new* into *old*, skipping entries whose fingerprint
+    (``phase:title:detail[:120]``) already exists.  Later duplicates with a
+    higher severity or confidence silently win via replacement.
+    """
+    seen: dict[str, int] = {}
+    merged = list(old)
+    for idx, f in enumerate(merged):
+        seen[_finding_fingerprint(f)] = idx
+
+    for f in new:
+        fp = _finding_fingerprint(f)
+        if fp in seen:
+            # Keep the version with higher severity/confidence
+            existing = merged[seen[fp]]
+            if f.get("confidence", 0.0) > existing.get("confidence", 0.0):
+                merged[seen[fp]] = f
+        else:
+            seen[fp] = len(merged)
+            merged.append(f)
+    return merged
+
+
 class ScanState(TypedDict):
     target: str
     """Original target (domain or IP) provided by the user."""
@@ -51,8 +81,8 @@ class ScanState(TypedDict):
     discovered_subdomains: list[str]
     """Subdomains discovered during OSINT (fed into port_scan and vuln_scan)."""
 
-    findings: Annotated[list[Finding], add]
-    """Structured findings accumulated across phases (append-only reducer)."""
+    findings: Annotated[list[Finding], merge_findings]
+    """Structured findings accumulated across phases (dedup-merge reducer)."""
 
     unassessed_areas: Annotated[list[dict[str, Any]], add]
     """Technologies/opportunities detected but not covered by any specialist."""
