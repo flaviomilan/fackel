@@ -10,6 +10,7 @@ from typing import Any
 
 from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
+from urllib.parse import urlparse
 
 from fackel.tooling import (
     format_tool_output,
@@ -57,14 +58,22 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
         raise ToolException("trufflehog_scan: target must not be empty")
 
     # Determine scan mode from target format.
-    if "github.com/" in target:
-        parts = target.rstrip("/").split("github.com/")[-1].split("/")
+    parsed = urlparse(target if "://" in target else f"https://{target}")
+    hostname = (parsed.hostname or "").lower()
+
+    if hostname == "github.com":
+        parts = parsed.path.lstrip("/").split("/")
         if len(parts) >= 2:
+            # GitHub repository: use git scan against the repository URL.
             scan_type = "git"
             scan_target = target if target.startswith("http") else f"https://{target}"
         else:
+            # GitHub organization scan.
             scan_type = "github"
-            scan_target = f"--org={parts[0]}"
+            org = parts[0] if parts and parts[0] else ""
+            if not org:
+                raise ToolException("trufflehog_scan: github organization name is missing in target")
+            scan_target = f"--org={org}"
     else:
         scan_type = "git"
         scan_target = target if target.startswith("http") else f"https://{target}"
