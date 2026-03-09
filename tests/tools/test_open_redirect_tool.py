@@ -90,8 +90,6 @@ class TestOpenRedirectScan:
     @patch("tools.vuln.open_redirect_tool.require_binary", return_value=None)
     def test_severity_filter(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        open_redirect_scan.invoke(
-            {"target": "https://example.com", "severity": "medium,high"}
-        )
+        open_redirect_scan.invoke({"target": "https://example.com", "severity": "medium,high"})
         cmd = mock_run.call_args[0][0]
         assert "-severity" in cmd

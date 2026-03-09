@@ -29,7 +29,7 @@ _PIVOT_PRIORITY_GUIDANCE: str | None = None
 
 def _load_port_scan_guidance() -> tuple[str, str]:
     """Lazy-load stage and orchestrator prompt sections for port scanning."""
-    global _ENUMERATION_GUIDANCE, _PIVOT_PRIORITY_GUIDANCE  # noqa: PLW0603
+    global _ENUMERATION_GUIDANCE, _PIVOT_PRIORITY_GUIDANCE
     if _ENUMERATION_GUIDANCE is None:
         _ENUMERATION_GUIDANCE = load_section("stages/enumeration")
         _PIVOT_PRIORITY_GUIDANCE = load_section("orchestrator/pivot_priority")

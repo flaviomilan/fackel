@@ -31,7 +31,7 @@ _APPROACH_CHANGE_GUIDANCE: str | None = None
 
 def _load_retry_guidance() -> tuple[str, str]:
     """Lazy-load loop detection and approach change prompt sections."""
-    global _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE  # noqa: PLW0603
+    global _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE
     if _LOOP_DETECTION_GUIDANCE is None:
         from fackel.prompts import load_section
 

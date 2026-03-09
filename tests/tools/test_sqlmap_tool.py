@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 from tools.vuln.sqlmap_tool import _parse_sqlmap_text, sqlmap_scan
@@ -60,10 +59,12 @@ class TestSqlmapScan:
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_post_data_in_command(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        sqlmap_scan.invoke({
-            "target": "https://example.com/login",
-            "data": "user=admin&pass=test",
-        })
+        sqlmap_scan.invoke(
+            {
+                "target": "https://example.com/login",
+                "data": "user=admin&pass=test",
+            }
+        )
         cmd = mock_run.call_args[0][0]
         assert "--data" in cmd
         assert "user=admin&pass=test" in cmd
@@ -72,10 +73,12 @@ class TestSqlmapScan:
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_cookie_in_command(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        sqlmap_scan.invoke({
-            "target": "https://example.com/?id=1",
-            "cookie": "PHPSESSID=abc123",
-        })
+        sqlmap_scan.invoke(
+            {
+                "target": "https://example.com/?id=1",
+                "cookie": "PHPSESSID=abc123",
+            }
+        )
         cmd = mock_run.call_args[0][0]
         assert "--cookie" in cmd
         assert "PHPSESSID=abc123" in cmd
@@ -84,10 +87,12 @@ class TestSqlmapScan:
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_technique_filter_in_command(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        sqlmap_scan.invoke({
-            "target": "https://example.com/?id=1",
-            "technique": "BEU",
-        })
+        sqlmap_scan.invoke(
+            {
+                "target": "https://example.com/?id=1",
+                "technique": "BEU",
+            }
+        )
         cmd = mock_run.call_args[0][0]
         assert "--technique" in cmd
         assert "BEU" in cmd
@@ -96,10 +101,12 @@ class TestSqlmapScan:
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_technique_sanitized(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        sqlmap_scan.invoke({
-            "target": "https://example.com/?id=1",
-            "technique": "b;rm -rf",
-        })
+        sqlmap_scan.invoke(
+            {
+                "target": "https://example.com/?id=1",
+                "technique": "b;rm -rf",
+            }
+        )
         cmd = mock_run.call_args[0][0]
         assert "--technique" in cmd
         idx = cmd.index("--technique")
@@ -117,10 +124,12 @@ class TestSqlmapScan:
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_random_agent_disabled(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        sqlmap_scan.invoke({
-            "target": "https://example.com/?id=1",
-            "random_agent": False,
-        })
+        sqlmap_scan.invoke(
+            {
+                "target": "https://example.com/?id=1",
+                "random_agent": False,
+            }
+        )
         cmd = mock_run.call_args[0][0]
         assert "--random-agent" not in cmd
 
@@ -128,10 +137,12 @@ class TestSqlmapScan:
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_threads_in_command(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        sqlmap_scan.invoke({
-            "target": "https://example.com/?id=1",
-            "threads": 3,
-        })
+        sqlmap_scan.invoke(
+            {
+                "target": "https://example.com/?id=1",
+                "threads": 3,
+            }
+        )
         cmd = mock_run.call_args[0][0]
         assert "--threads=3" in cmd
 
@@ -139,20 +150,19 @@ class TestSqlmapScan:
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_threads_clamped_to_5(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
-        sqlmap_scan.invoke({
-            "target": "https://example.com/?id=1",
-            "threads": 100,
-        })
+        sqlmap_scan.invoke(
+            {
+                "target": "https://example.com/?id=1",
+                "threads": 100,
+            }
+        )
         cmd = mock_run.call_args[0][0]
         assert "--threads=5" in cmd
 
     @patch("tools.vuln.sqlmap_tool.run_command")
     @patch("tools.vuln.sqlmap_tool.require_binary", return_value=None)
     def test_findings_parsed_from_output(self, _bin, mock_run):
-        output = (
-            "[INFO] parameter 'id' is vulnerable\n"
-            "[INFO] boolean-based blind found\n"
-        )
+        output = "[INFO] parameter 'id' is vulnerable\n[INFO] boolean-based blind found\n"
         mock_run.return_value = (0, output, "")
         result = sqlmap_scan.invoke({"target": "https://example.com/?id=1"})
         assert result["status"] == "ok"

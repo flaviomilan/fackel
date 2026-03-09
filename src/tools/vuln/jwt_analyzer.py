@@ -62,9 +62,7 @@ def _decode_jwt_part(encoded: str) -> dict[str, Any]:
         raw = _b64url_decode(encoded)
         return json.loads(raw)
     except (json.JSONDecodeError, ValueError, UnicodeDecodeError) as exc:
-        raise ToolException(
-            f"jwt_analyzer: failed to decode JWT segment: {exc}"
-        ) from exc
+        raise ToolException(f"jwt_analyzer: failed to decode JWT segment: {exc}") from exc
 
 
 def _check_weak_secret(token: str, header: dict[str, Any]) -> str | None:
@@ -89,9 +87,7 @@ def _check_weak_secret(token: str, header: dict[str, Any]) -> str | None:
         return None
 
     for secret in _WEAK_SECRETS:
-        computed = hmac.new(
-            secret.encode(), signing_input, hash_map[alg]
-        ).digest()
+        computed = hmac.new(secret.encode(), signing_input, hash_map[alg]).digest()
         if hmac.compare_digest(computed, signature):
             return secret
     return None
@@ -108,9 +104,7 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
     token = token.strip()
     parts = token.split(".")
     if len(parts) != 3:
-        raise ToolException(
-            "jwt_analyzer: invalid JWT — expected 3 dot-separated segments"
-        )
+        raise ToolException("jwt_analyzer: invalid JWT — expected 3 dot-separated segments")
 
     header = _decode_jwt_part(parts[0])
     payload = _decode_jwt_part(parts[1])
@@ -120,110 +114,131 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
 
     # -- Algorithm checks --
     if alg.lower() == "none" or not alg:
-        findings.append({
-            "type": "alg_none",
-            "severity": "critical",
-            "description": (
-                "JWT uses 'none' algorithm — the token can be forged "
-                "without any secret key."
-            ),
-            "recommendation": "Enforce a strong algorithm (RS256, ES256) server-side.",
-        })
+        findings.append(
+            {
+                "type": "alg_none",
+                "severity": "critical",
+                "description": (
+                    "JWT uses 'none' algorithm — the token can be forged without any secret key."
+                ),
+                "recommendation": "Enforce a strong algorithm (RS256, ES256) server-side.",
+            }
+        )
     elif alg.upper() in ("HS256", "HS384", "HS512"):
-        findings.append({
-            "type": "symmetric_algorithm",
-            "severity": "info",
-            "description": f"JWT uses symmetric algorithm '{alg}'.",
-            "recommendation": (
-                "Consider asymmetric algorithms (RS256, ES256) for "
-                "public-facing APIs to avoid shared-secret risks."
-            ),
-        })
+        findings.append(
+            {
+                "type": "symmetric_algorithm",
+                "severity": "info",
+                "description": f"JWT uses symmetric algorithm '{alg}'.",
+                "recommendation": (
+                    "Consider asymmetric algorithms (RS256, ES256) for "
+                    "public-facing APIs to avoid shared-secret risks."
+                ),
+            }
+        )
 
     # -- Expiration checks --
     now = int(time.time())
     exp = payload.get("exp")
     if exp is None:
-        findings.append({
-            "type": "missing_exp",
-            "severity": "high",
-            "description": "JWT has no 'exp' (expiration) claim — token never expires.",
-            "recommendation": "Always set an expiration time for JWT tokens.",
-        })
+        findings.append(
+            {
+                "type": "missing_exp",
+                "severity": "high",
+                "description": "JWT has no 'exp' (expiration) claim — token never expires.",
+                "recommendation": "Always set an expiration time for JWT tokens.",
+            }
+        )
     elif isinstance(exp, (int, float)) and exp < now:
-        findings.append({
-            "type": "expired",
-            "severity": "medium",
-            "description": (
-                f"JWT is expired. Expiration: {int(exp)}, "
-                f"current: {now}, delta: {now - int(exp)}s."
-            ),
-            "recommendation": "Token should be refreshed or revoked.",
-        })
+        findings.append(
+            {
+                "type": "expired",
+                "severity": "medium",
+                "description": (
+                    f"JWT is expired. Expiration: {int(exp)}, "
+                    f"current: {now}, delta: {now - int(exp)}s."
+                ),
+                "recommendation": "Token should be refreshed or revoked.",
+            }
+        )
 
     nbf = payload.get("nbf")
     if isinstance(nbf, (int, float)) and nbf > now:
-        findings.append({
-            "type": "not_yet_valid",
-            "severity": "low",
-            "description": f"JWT 'nbf' is in the future ({int(nbf)}).",
-            "recommendation": "Verify clock synchronisation or token issuance logic.",
-        })
+        findings.append(
+            {
+                "type": "not_yet_valid",
+                "severity": "low",
+                "description": f"JWT 'nbf' is in the future ({int(nbf)}).",
+                "recommendation": "Verify clock synchronisation or token issuance logic.",
+            }
+        )
 
     # -- Missing standard claims --
     if "iat" not in payload:
-        findings.append({
-            "type": "missing_iat",
-            "severity": "low",
-            "description": "JWT missing 'iat' (issued at) claim.",
-            "recommendation": "Include 'iat' for token age tracking.",
-        })
+        findings.append(
+            {
+                "type": "missing_iat",
+                "severity": "low",
+                "description": "JWT missing 'iat' (issued at) claim.",
+                "recommendation": "Include 'iat' for token age tracking.",
+            }
+        )
     if "iss" not in payload:
-        findings.append({
-            "type": "missing_iss",
-            "severity": "low",
-            "description": "JWT missing 'iss' (issuer) claim.",
-            "recommendation": "Include 'iss' to validate token origin.",
-        })
+        findings.append(
+            {
+                "type": "missing_iss",
+                "severity": "low",
+                "description": "JWT missing 'iss' (issuer) claim.",
+                "recommendation": "Include 'iss' to validate token origin.",
+            }
+        )
 
     # -- Weak secret check (HMAC only) --
     weak = _check_weak_secret(token, header)
     if weak:
-        findings.append({
-            "type": "weak_secret",
-            "severity": "critical",
-            "description": f"JWT signed with known weak secret: '{weak}'.",
-            "recommendation": "Use a strong, randomly generated secret (≥256 bits).",
-        })
+        findings.append(
+            {
+                "type": "weak_secret",
+                "severity": "critical",
+                "description": f"JWT signed with known weak secret: '{weak}'.",
+                "recommendation": "Use a strong, randomly generated secret (≥256 bits).",
+            }
+        )
 
     # -- Dangerous header parameters --
     if "jku" in header:
-        findings.append({
-            "type": "jku_present",
-            "severity": "high",
-            "description": (
-                "JWT header contains 'jku' (JWK Set URL). "
-                "An attacker could redirect to a controlled key set."
-            ),
-            "recommendation": "Validate 'jku' against a whitelist of trusted URLs.",
-        })
+        findings.append(
+            {
+                "type": "jku_present",
+                "severity": "high",
+                "description": (
+                    "JWT header contains 'jku' (JWK Set URL). "
+                    "An attacker could redirect to a controlled key set."
+                ),
+                "recommendation": "Validate 'jku' against a whitelist of trusted URLs.",
+            }
+        )
     if "jwk" in header:
-        findings.append({
-            "type": "jwk_embedded",
-            "severity": "high",
-            "description": (
-                "JWT header contains embedded 'jwk'. "
-                "An attacker could supply their own public key."
-            ),
-            "recommendation": "Ignore embedded JWK; use server-side key management.",
-        })
+        findings.append(
+            {
+                "type": "jwk_embedded",
+                "severity": "high",
+                "description": (
+                    "JWT header contains embedded 'jwk'. "
+                    "An attacker could supply their own public key."
+                ),
+                "recommendation": "Ignore embedded JWK; use server-side key management.",
+            }
+        )
     if "kid" in header and ("../" in str(header["kid"]) or "/" in str(header["kid"])):
-        findings.append({
-            "type": "kid_injection",
-            "severity": "high",
-            "description": f"JWT 'kid' header may contain path traversal: '{header['kid']}'.",
-            "recommendation": "Validate 'kid' against a whitelist.",
-        })
+        findings.append(
+            {
+                "type": "kid_injection",
+                "severity": "high",
+                "description": f"JWT 'kid' header may contain path traversal: '{header['kid']}'.",
+                "recommendation": "Validate 'kid' against a whitelist.",
+            }
+        )
 
     data: dict[str, Any] = {
         "header": header,

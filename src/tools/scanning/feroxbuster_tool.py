@@ -141,14 +141,19 @@ def feroxbuster_scan(
 
     cmd = [
         "feroxbuster",
-        "-u", target,
-        "-w", wl,
+        "-u",
+        target,
+        "-w",
+        wl,
         "--json",
         "--silent",
         "--no-state",
-        "--depth", str(depth),
-        "--threads", str(threads),
-        "--time-limit", f"{ferox_limit}s",
+        "--depth",
+        str(depth),
+        "--threads",
+        str(threads),
+        "--time-limit",
+        f"{ferox_limit}s",
     ]
 
     if extensions:

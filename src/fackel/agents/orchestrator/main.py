@@ -122,7 +122,7 @@ class _TimeoutGuard:
 
     # -- context manager interface -----------------------------------------
 
-    def __enter__(self) -> "_TimeoutGuard":
+    def __enter__(self) -> _TimeoutGuard:
         if _HAS_SIGALRM:
             self._prev_alarm = signal.signal(signal.SIGALRM, _timeout_handler)
             signal.alarm(self._timeout)
@@ -199,9 +199,7 @@ def run(
                 if interrupt_values:
                     interrupt_data = interrupt_values[0].value
                     approved = (
-                        approval_callback(interrupt_data)
-                        if approval_callback is not None
-                        else True
+                        approval_callback(interrupt_data) if approval_callback is not None else True
                     )
                 else:
                     approved = True

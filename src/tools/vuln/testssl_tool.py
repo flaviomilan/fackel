@@ -120,10 +120,13 @@ def testssl_scan(
 
     cmd = [
         "testssl.sh",
-        "--jsonfile", str(json_path),
+        "--jsonfile",
+        str(json_path),
         "--overwrite",
-        "--warnings", "off",
-        "--color", "0",
+        "--warnings",
+        "off",
+        "--color",
+        "0",
         "--sneaky",
         f"--openssl-timeout={openssl_timeout}",
     ]
@@ -147,7 +150,9 @@ def testssl_scan(
     cmd.append(host)
 
     try:
-        _code, _stdout, _stderr = run_command(cmd, timeout=get_tool_timeout("testssl_scan", _TIMEOUT))
+        _code, _stdout, _stderr = run_command(
+            cmd, timeout=get_tool_timeout("testssl_scan", _TIMEOUT)
+        )
         out = json_path.read_text() if json_path.is_file() else ""
     except Exception as exc:
         raise ToolException(f"testssl_scan: {exc}") from exc

@@ -143,12 +143,14 @@ def sqlmap_scan(
 
     cmd = [
         "sqlmap",
-        "-u", target,
+        "-u",
+        target,
         "--batch",
         f"--level={level}",
         f"--risk={risk}",
         f"--threads={threads}",
-        "--output-dir", output_dir,
+        "--output-dir",
+        output_dir,
         "--flush-session",
         "--disable-coloring",
     ]
@@ -173,9 +175,7 @@ def sqlmap_scan(
         cmd.append("--random-agent")
 
     try:
-        code, out, stderr = run_command(
-            cmd, timeout=get_tool_timeout("sqlmap_scan", _TIMEOUT)
-        )
+        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("sqlmap_scan", _TIMEOUT))
     except Exception as exc:
         raise ToolException(f"sqlmap_scan: {exc}") from exc
 
@@ -207,12 +207,16 @@ def sqlmap_scan(
             else (stderr.strip()[:500] or "scan produced no output")
         )
         return format_tool_output(
-            "sqlmap_scan", target, "ok",
+            "sqlmap_scan",
+            target,
+            "ok",
             data={"findings": [], "message": msg},
         )
 
     return format_tool_output(
-        "sqlmap_scan", target, "ok",
+        "sqlmap_scan",
+        target,
+        "ok",
         data={"total": len(findings), "findings": findings},
     )
 
@@ -239,12 +243,14 @@ def _parse_sqlmap_text(output: str, findings: list[dict[str, Any]]) -> None:
 
         # Detect confirmed injection.
         if "is vulnerable" in stripped.lower() or "injectable" in stripped.lower():
-            findings.append({
-                "parameter": current_param,
-                "technique": "confirmed",
-                "severity": "high",
-                "detail": stripped,
-            })
+            findings.append(
+                {
+                    "parameter": current_param,
+                    "technique": "confirmed",
+                    "severity": "high",
+                    "detail": stripped,
+                }
+            )
 
         # Detect specific techniques.
         for technique in (
@@ -255,12 +261,14 @@ def _parse_sqlmap_text(output: str, findings: list[dict[str, Any]]) -> None:
             "stacked queries",
         ):
             if technique.lower() in stripped.lower():
-                findings.append({
-                    "parameter": current_param,
-                    "technique": technique,
-                    "severity": "high",
-                    "detail": stripped,
-                })
+                findings.append(
+                    {
+                        "parameter": current_param,
+                        "technique": technique,
+                        "severity": "high",
+                        "detail": stripped,
+                    }
+                )
 
 
 def _parse_sqlmap_output_dir(
@@ -276,12 +284,14 @@ def _parse_sqlmap_output_dir(
             for line in content.splitlines():
                 stripped = line.strip()
                 if "is vulnerable" in stripped.lower():
-                    findings.append({
-                        "parameter": "",
-                        "technique": "log",
-                        "severity": "high",
-                        "detail": stripped,
-                    })
+                    findings.append(
+                        {
+                            "parameter": "",
+                            "technique": "log",
+                            "severity": "high",
+                            "detail": stripped,
+                        }
+                    )
         except OSError:
             pass
 

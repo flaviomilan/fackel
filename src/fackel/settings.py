@@ -151,8 +151,6 @@ class Settings:
     """``FACKEL_AGENT_CONTEXT_WINDOW`` — max tokens for trim_messages guard (default 120000)."""
 
 
-
-
 def _load_settings() -> Settings:
     """Build a ``Settings`` instance from the current environment."""
     return Settings(
@@ -189,7 +187,6 @@ def _load_settings() -> Settings:
         ),
         # Agent context management
         agent_context_window=_env_int("FACKEL_AGENT_CONTEXT_WINDOW", 120_000),
-
     )
 
 

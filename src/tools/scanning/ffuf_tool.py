@@ -47,10 +47,7 @@ class FfufInput(BaseModel):
     )
     method: str = Field(
         default="GET",
-        description=(
-            "HTTP method to use: GET, POST, PUT, DELETE, PATCH, HEAD. "
-            "Default is GET."
-        ),
+        description=("HTTP method to use: GET, POST, PUT, DELETE, PATCH, HEAD. Default is GET."),
     )
     match_codes: str = Field(
         default="200,204,301,302,307,401,403,405",
@@ -181,13 +178,20 @@ def ffuf_scan(
 
     cmd = [
         "ffuf",
-        "-u", target,
-        "-w", wl,
-        "-X", method,
-        "-mc", match_codes,
-        "-t", str(threads),
-        "-of", "json",
-        "-o", "/dev/stdout",
+        "-u",
+        target,
+        "-w",
+        wl,
+        "-X",
+        method,
+        "-mc",
+        match_codes,
+        "-t",
+        str(threads),
+        "-of",
+        "json",
+        "-o",
+        "/dev/stdout",
         "-s",  # silent mode
     ]
 
@@ -217,9 +221,7 @@ def ffuf_scan(
         cmd.extend(["-rate", str(rate)])
 
     try:
-        code, out, stderr = run_command(
-            cmd, timeout=get_tool_timeout("ffuf_scan", _TIMEOUT)
-        )
+        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("ffuf_scan", _TIMEOUT))
     except Exception as exc:
         raise ToolException(f"ffuf_scan: {exc}") from exc
 
@@ -235,12 +237,16 @@ def ffuf_scan(
             else (stderr.strip()[:500] or "fuzzing produced no output")
         )
         return format_tool_output(
-            "ffuf_scan", target, "ok",
+            "ffuf_scan",
+            target,
+            "ok",
             data={"findings": [], "message": msg},
         )
 
     return format_tool_output(
-        "ffuf_scan", target, "ok",
+        "ffuf_scan",
+        target,
+        "ok",
         data={"total": len(findings), "findings": findings},
     )
 
@@ -271,16 +277,18 @@ def _add_ffuf_result(result: dict[str, Any], findings: list[dict[str, Any]]) -> 
     """Normalise a single ffuf result dict into a finding."""
     if not isinstance(result, dict):
         return
-    findings.append({
-        "url": result.get("url", ""),
-        "input": result.get("input", {}).get("FUZZ", ""),
-        "status": result.get("status", 0),
-        "length": result.get("length", 0),
-        "words": result.get("words", 0),
-        "lines": result.get("lines", 0),
-        "content_type": result.get("content-type", ""),
-        "redirect_location": result.get("redirectlocation", ""),
-    })
+    findings.append(
+        {
+            "url": result.get("url", ""),
+            "input": result.get("input", {}).get("FUZZ", ""),
+            "status": result.get("status", 0),
+            "length": result.get("length", 0),
+            "words": result.get("words", 0),
+            "lines": result.get("lines", 0),
+            "content_type": result.get("content-type", ""),
+            "redirect_location": result.get("redirectlocation", ""),
+        }
+    )
 
 
 ffuf_scan.handle_tool_error = True  # type: ignore[attr-defined]

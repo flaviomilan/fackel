@@ -90,17 +90,21 @@ def _analyse_csp(value: str) -> list[dict[str, str]]:
     lower = value.lower()
     for weak in _WEAK_CSP_DIRECTIVES:
         if weak in lower:
-            warnings.append({
-                "directive": weak,
-                "severity": "high" if weak in ("unsafe-inline", "unsafe-eval") else "medium",
-                "message": f"CSP contains '{weak}' which weakens the policy.",
-            })
+            warnings.append(
+                {
+                    "directive": weak,
+                    "severity": "high" if weak in ("unsafe-inline", "unsafe-eval") else "medium",
+                    "message": f"CSP contains '{weak}' which weakens the policy.",
+                }
+            )
     if "default-src" not in lower and "script-src" not in lower:
-        warnings.append({
-            "directive": "default-src/script-src",
-            "severity": "medium",
-            "message": "CSP missing 'default-src' or 'script-src' directive.",
-        })
+        warnings.append(
+            {
+                "directive": "default-src/script-src",
+                "severity": "medium",
+                "message": "CSP missing 'default-src' or 'script-src' directive.",
+            }
+        )
     return warnings
 
 
@@ -113,19 +117,23 @@ def _analyse_hsts(value: str) -> list[dict[str, str]]:
             max_age_str = lower.split("max-age=")[1].split(";")[0].strip()
             max_age = int(max_age_str)
             if max_age < 31536000:
-                warnings.append({
-                    "directive": "max-age",
-                    "severity": "medium",
-                    "message": f"HSTS max-age is {max_age}s (< 1 year). Recommended: 31536000.",
-                })
+                warnings.append(
+                    {
+                        "directive": "max-age",
+                        "severity": "medium",
+                        "message": f"HSTS max-age is {max_age}s (< 1 year). Recommended: 31536000.",
+                    }
+                )
         except (IndexError, ValueError):
             pass
     if "includesubdomains" not in lower:
-        warnings.append({
-            "directive": "includeSubDomains",
-            "severity": "low",
-            "message": "HSTS missing 'includeSubDomains' directive.",
-        })
+        warnings.append(
+            {
+                "directive": "includeSubDomains",
+                "severity": "low",
+                "message": "HSTS missing 'includeSubDomains' directive.",
+            }
+        )
     return warnings
 
 
@@ -141,11 +149,13 @@ def _check_cors_headers(headers: dict[str, str]) -> list[dict[str, str]]:
             msg += " WITH credentials — critical data theft risk"
         warnings.append({"directive": "CORS", "severity": sev, "message": msg})
     elif acao and acac == "true":
-        warnings.append({
-            "directive": "CORS",
-            "severity": "low",
-            "message": f"CORS allows credentials for origin '{acao}'. Verify trust.",
-        })
+        warnings.append(
+            {
+                "directive": "CORS",
+                "severity": "low",
+                "message": f"CORS allows credentials for origin '{acao}'. Verify trust.",
+            }
+        )
     return warnings
 
 
@@ -203,13 +213,15 @@ def security_headers_audit(target: str) -> dict[str, Any]:
     for header, meta in _SECURITY_HEADERS.items():
         value = resp_headers_lower.get(header.lower(), "")
         if not value:
-            findings.append({
-                "header": header,
-                "status": "missing",
-                "severity": meta["severity"],
-                "description": meta["description"],
-                "recommendation": meta["recommendation"],
-            })
+            findings.append(
+                {
+                    "header": header,
+                    "status": "missing",
+                    "severity": meta["severity"],
+                    "description": meta["description"],
+                    "recommendation": meta["recommendation"],
+                }
+            )
         else:
             present_headers[header] = value
 
@@ -217,57 +229,66 @@ def security_headers_audit(target: str) -> dict[str, Any]:
     csp_value = present_headers.get("Content-Security-Policy", "")
     if csp_value:
         for warn in _analyse_csp(csp_value):
-            findings.append({
-                "header": "Content-Security-Policy",
-                "status": "weak",
-                "severity": warn["severity"],
-                "description": warn["message"],
-                "directive": warn["directive"],
-            })
+            findings.append(
+                {
+                    "header": "Content-Security-Policy",
+                    "status": "weak",
+                    "severity": warn["severity"],
+                    "description": warn["message"],
+                    "directive": warn["directive"],
+                }
+            )
 
     hsts_value = present_headers.get("Strict-Transport-Security", "")
     if hsts_value:
         for warn in _analyse_hsts(hsts_value):
-            findings.append({
-                "header": "Strict-Transport-Security",
-                "status": "weak",
-                "severity": warn["severity"],
-                "description": warn["message"],
-                "directive": warn["directive"],
-            })
+            findings.append(
+                {
+                    "header": "Strict-Transport-Security",
+                    "status": "weak",
+                    "severity": warn["severity"],
+                    "description": warn["message"],
+                    "directive": warn["directive"],
+                }
+            )
 
     # CORS analysis.
     cors_warnings = _check_cors_headers(resp_headers_lower)
     for warn in cors_warnings:
-        findings.append({
-            "header": "Access-Control-Allow-Origin",
-            "status": "misconfigured",
-            "severity": warn["severity"],
-            "description": warn["message"],
-        })
+        findings.append(
+            {
+                "header": "Access-Control-Allow-Origin",
+                "status": "misconfigured",
+                "severity": warn["severity"],
+                "description": warn["message"],
+            }
+        )
 
     # Check for information disclosure headers.
     server_header = resp_headers_lower.get("server", "")
-    if server_header:
-        # Detailed version info is a disclosure risk.
-        if any(ch.isdigit() for ch in server_header):
-            findings.append({
+    # Detailed version info is a disclosure risk.
+    if server_header and any(ch.isdigit() for ch in server_header):
+        findings.append(
+            {
                 "header": "Server",
                 "status": "disclosure",
                 "severity": "info",
                 "description": f"Server header discloses version: '{server_header}'.",
                 "recommendation": "Remove or genericise the Server header.",
-            })
+            }
+        )
 
     x_powered = resp_headers_lower.get("x-powered-by", "")
     if x_powered:
-        findings.append({
-            "header": "X-Powered-By",
-            "status": "disclosure",
-            "severity": "info",
-            "description": f"X-Powered-By header discloses technology: '{x_powered}'.",
-            "recommendation": "Remove the X-Powered-By header.",
-        })
+        findings.append(
+            {
+                "header": "X-Powered-By",
+                "status": "disclosure",
+                "severity": "info",
+                "description": f"X-Powered-By header discloses technology: '{x_powered}'.",
+                "recommendation": "Remove the X-Powered-By header.",
+            }
+        )
 
     # Parse domain for reporting.
     parsed = urlparse(target)

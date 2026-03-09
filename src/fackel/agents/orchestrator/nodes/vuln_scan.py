@@ -33,7 +33,7 @@ _APPROACH_CHANGE_GUIDANCE: str | None = None
 
 def _load_vuln_scan_guidance() -> tuple[str, str]:
     """Lazy-load correlation and depth adjustment prompt sections."""
-    global _CORRELATION_GUIDANCE, _DEPTH_ADJUSTMENT_GUIDANCE  # noqa: PLW0603
+    global _CORRELATION_GUIDANCE, _DEPTH_ADJUSTMENT_GUIDANCE
     if _CORRELATION_GUIDANCE is None:
         _CORRELATION_GUIDANCE = load_section("stages/correlation")
         _DEPTH_ADJUSTMENT_GUIDANCE = load_section("strategy/depth_adjustment")
@@ -42,7 +42,7 @@ def _load_vuln_scan_guidance() -> tuple[str, str]:
 
 def _load_retry_guidance() -> tuple[str, str]:
     """Lazy-load loop detection and approach change prompt sections."""
-    global _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE  # noqa: PLW0603
+    global _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE
     if _LOOP_DETECTION_GUIDANCE is None:
         _LOOP_DETECTION_GUIDANCE = load_section("orchestrator/loop_detection")
         _APPROACH_CHANGE_GUIDANCE = load_section("strategy/approach_change")
@@ -67,7 +67,13 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
     agent = build(approve_tools=is_tool_approval_enabled())
 
     messages, evaluation = _run_vuln_scan_with_retry(
-        agent, target, ips, capped_subs, state, prompt, config,
+        agent,
+        target,
+        ips,
+        capped_subs,
+        state,
+        prompt,
+        config,
     )
 
     summary = agent_summary(messages)
@@ -102,7 +108,10 @@ def _run_vuln_scan_with_retry(
         messages = messages + retry_msgs
         retry_summary = agent_summary(messages)
         evaluation = evaluator.evaluate_phase(
-            "vuln_scan", retry_summary, scan_targets, config=config,
+            "vuln_scan",
+            retry_summary,
+            scan_targets,
+            config=config,
         )
         emit_evaluation("vuln_scan", evaluation)
 

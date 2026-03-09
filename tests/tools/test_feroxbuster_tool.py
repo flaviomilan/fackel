@@ -148,10 +148,24 @@ class TestFeroxbusterOutputParsing:
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_response_entries_parsed(self, _bin, mock_run):
         entries = [
-            {"type": "response", "url": "https://example.com/admin", "status": 200,
-             "content_length": 1234, "content_type": "text/html", "words": 50, "lines": 10},
-            {"type": "response", "url": "https://example.com/backup", "status": 403,
-             "content_length": 500, "content_type": "text/html", "words": 20, "lines": 5},
+            {
+                "type": "response",
+                "url": "https://example.com/admin",
+                "status": 200,
+                "content_length": 1234,
+                "content_type": "text/html",
+                "words": 50,
+                "lines": 10,
+            },
+            {
+                "type": "response",
+                "url": "https://example.com/backup",
+                "status": 403,
+                "content_length": 500,
+                "content_type": "text/html",
+                "words": 20,
+                "lines": 5,
+            },
         ]
         mock_run.return_value = (0, "\n".join(json.dumps(e) for e in entries) + "\n", "")
 

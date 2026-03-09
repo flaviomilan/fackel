@@ -22,7 +22,13 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage, trim_messages
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    HumanMessage,
+    ToolMessage,
+    trim_messages,
+)
 from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
 from langgraph.types import Command
@@ -62,6 +68,7 @@ def _estimate_tokens(messages: list[Any]) -> int:
                 elif isinstance(block, dict):
                     total += len(str(block.get("text", ""))) // 4
     return total
+
 
 EventCallback = Callable[[str, str, dict[str, Any]], None] | None
 
@@ -222,15 +229,15 @@ class _AgentStreamer:
         self._hit_limit = False
         self._has_checkpointer = getattr(agent, "checkpointer", None) is not None
 
-        inner: dict[str, Any] = {}
+        inner: RunnableConfig = {}
         if self._has_checkpointer:
             inner.setdefault("configurable", {})["thread_id"] = str(uuid.uuid4())
 
         # merge_configs preserves callbacks, metadata, tags, run_name,
         # and run_id from the outer orchestrator config so that
         # LangSmith traces nest correctly under the parent run.
-        self._config: dict[str, Any] | None = (
-            merge_configs(config, inner) if config else inner  # type: ignore[assignment]
+        self._config: RunnableConfig | None = (
+            merge_configs(config, inner) if config else inner
         ) or None
 
     def run(self, user_message: str) -> list[Any]:

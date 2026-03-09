@@ -108,12 +108,16 @@ def open_redirect_scan(target: str, severity: str = "") -> dict[str, Any]:
             else (stderr.strip()[:500] or "scan produced no output")
         )
         return format_tool_output(
-            "open_redirect_scan", target, "ok",
+            "open_redirect_scan",
+            target,
+            "ok",
             data={"findings": [], "message": msg},
         )
 
     return format_tool_output(
-        "open_redirect_scan", target, "ok",
+        "open_redirect_scan",
+        target,
+        "ok",
         data={"total": len(findings), "findings": findings},
     )
 

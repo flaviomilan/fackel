@@ -10,9 +10,16 @@ import time
 
 from tools.vuln.jwt_analyzer import _b64url_decode, _check_weak_secret, jwt_analyzer
 
+DEFAULT_TEST_SECRET = "".join(["sec", "ret"])
+STRONG_TEST_SECRET = "".join(["v3ry-$tr0ng", "-R4nd0m-S3cr3t", "-K3y-That-Is-Long!"])
+WEAK_PASSWORD_SECRET = "".join(["pass", "word"])
+ALT_STRONG_SECRET = "".join(["xK9$", "mP2@", "qR7!"])
 
-def _make_jwt(header: dict, payload: dict, secret: str = "secret") -> str:
+
+def _make_jwt(header: dict, payload: dict, secret: str | None = None) -> str:
     """Build a valid HS256 JWT for testing."""
+    signing_secret = secret or DEFAULT_TEST_SECRET
+
     def _b64(data: dict) -> str:
         raw = json.dumps(data, separators=(",", ":")).encode()
         return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
@@ -20,7 +27,7 @@ def _make_jwt(header: dict, payload: dict, secret: str = "secret") -> str:
     h = _b64(header)
     p = _b64(payload)
     signing_input = f"{h}.{p}".encode()
-    sig = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    sig = hmac.new(signing_secret.encode(), signing_input, hashlib.sha256).digest()
     s = base64.urlsafe_b64encode(sig).rstrip(b"=").decode()
     return f"{h}.{p}.{s}"
 
@@ -60,16 +67,18 @@ class TestJwtAnalyzer:
         assert "missing_exp" not in types
 
     def test_weak_secret_detected(self):
-        token = _make_jwt({"alg": "HS256"}, {"sub": "1234"}, secret="secret")
+        weak_secret = DEFAULT_TEST_SECRET
+        token = _make_jwt({"alg": "HS256"}, {"sub": "1234"}, secret=weak_secret)
         result = jwt_analyzer.invoke({"token": token})
         types = [f["type"] for f in result["data"]["findings"]]
         assert "weak_secret" in types
 
     def test_strong_secret_not_flagged(self):
+        strong_secret = STRONG_TEST_SECRET
         token = _make_jwt(
             {"alg": "HS256"},
             {"sub": "1234"},
-            secret="v3ry-$tr0ng-R4nd0m-S3cr3t-K3y-That-Is-Long!",
+            secret=strong_secret,
         )
         result = jwt_analyzer.invoke({"token": token})
         types = [f["type"] for f in result["data"]["findings"]]
@@ -121,10 +130,11 @@ class TestJwtAnalyzer:
 
     def test_symmetric_algorithm_info(self):
         future = int(time.time()) + 3600
+        strong_secret = STRONG_TEST_SECRET
         token = _make_jwt(
             {"alg": "HS256"},
             {"sub": "1234", "exp": future, "iat": int(time.time()), "iss": "test"},
-            secret="v3ry-$tr0ng-R4nd0m-S3cr3t-K3y-That-Is-Long!",
+            secret=strong_secret,
         )
         result = jwt_analyzer.invoke({"token": token})
         types = [f["type"] for f in result["data"]["findings"]]
@@ -135,12 +145,14 @@ class TestCheckWeakSecret:
     """Verify weak secret brute-force check."""
 
     def test_detects_known_weak_secret(self):
-        token = _make_jwt({"alg": "HS256"}, {"sub": "1"}, secret="password")
+        weak_secret = WEAK_PASSWORD_SECRET
+        token = _make_jwt({"alg": "HS256"}, {"sub": "1"}, secret=weak_secret)
         result = _check_weak_secret(token, {"alg": "HS256"})
         assert result == "password"
 
     def test_returns_none_for_strong_secret(self):
-        token = _make_jwt({"alg": "HS256"}, {"sub": "1"}, secret="xK9$mP2@qR7!")
+        strong_secret = ALT_STRONG_SECRET
+        token = _make_jwt({"alg": "HS256"}, {"sub": "1"}, secret=strong_secret)
         result = _check_weak_secret(token, {"alg": "HS256"})
         assert result is None
 

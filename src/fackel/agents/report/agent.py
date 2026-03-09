@@ -13,8 +13,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from fackel.agents.config import build_llm
-from fackel.prompts import compose_prompt, load_section
 from fackel.formatting import serialize_findings
+from fackel.prompts import compose_prompt, load_section
 
 logger = logging.getLogger(__name__)
 

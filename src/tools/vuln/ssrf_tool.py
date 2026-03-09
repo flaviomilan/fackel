@@ -74,9 +74,7 @@ def ssrf_detect(target: str, severity: str = "") -> dict[str, Any]:
         cmd.extend(["-severity", severity])
 
     try:
-        code, out, stderr = run_command(
-            cmd, timeout=get_tool_timeout("ssrf_detect", _TIMEOUT)
-        )
+        code, out, stderr = run_command(cmd, timeout=get_tool_timeout("ssrf_detect", _TIMEOUT))
     except Exception as exc:
         raise ToolException(f"ssrf_detect: {exc}") from exc
 
@@ -110,12 +108,16 @@ def ssrf_detect(target: str, severity: str = "") -> dict[str, Any]:
             else (stderr.strip()[:500] or "scan produced no output")
         )
         return format_tool_output(
-            "ssrf_detect", target, "ok",
+            "ssrf_detect",
+            target,
+            "ok",
             data={"findings": [], "message": msg},
         )
 
     return format_tool_output(
-        "ssrf_detect", target, "ok",
+        "ssrf_detect",
+        target,
+        "ok",
         data={"total": len(findings), "findings": findings},
     )
 

@@ -12,9 +12,6 @@ Covers:
 
 from __future__ import annotations
 
-import threading
-import time
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -122,12 +119,11 @@ class TestTimeoutGuard:
 
         guard = _TimeoutGuard(1)
         # Force threading path
-        with patch("fackel.agents.orchestrator.main._HAS_SIGALRM", False):
-            with guard:
-                # Manually trigger expiry
-                guard._expired.set()
-                with pytest.raises(ScanTimeoutError):
-                    guard.check()
+        with patch("fackel.agents.orchestrator.main._HAS_SIGALRM", False), guard:
+            # Manually trigger expiry
+            guard._expired.set()
+            with pytest.raises(ScanTimeoutError):
+                guard.check()
 
 
 # ---------------------------------------------------------------------------
@@ -254,11 +250,14 @@ class TestApprovalGateRejectionFinding:
             "ip_classifications": [],
         }
 
-        with mock_patch(
-            "fackel.agents.orchestrator.nodes.report_and_gates.interrupt",
-            return_value=False,
-        ), mock_patch(
-            "fackel.agents.orchestrator.nodes.report_and_gates.streaming",
+        with (
+            mock_patch(
+                "fackel.agents.orchestrator.nodes.report_and_gates.interrupt",
+                return_value=False,
+            ),
+            mock_patch(
+                "fackel.agents.orchestrator.nodes.report_and_gates.streaming",
+            ),
         ):
             cmd = approval_gate(state)
 
@@ -282,11 +281,14 @@ class TestApprovalGateRejectionFinding:
             "ip_classifications": [],
         }
 
-        with mock_patch(
-            "fackel.agents.orchestrator.nodes.report_and_gates.interrupt",
-            return_value=True,
-        ), mock_patch(
-            "fackel.agents.orchestrator.nodes.report_and_gates.streaming",
+        with (
+            mock_patch(
+                "fackel.agents.orchestrator.nodes.report_and_gates.interrupt",
+                return_value=True,
+            ),
+            mock_patch(
+                "fackel.agents.orchestrator.nodes.report_and_gates.streaming",
+            ),
         ):
             cmd = approval_gate(state)
 

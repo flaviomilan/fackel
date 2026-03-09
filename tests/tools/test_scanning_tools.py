@@ -13,7 +13,7 @@ from tools.scanning.wafw00f_tool import wafw00f_detect
 class TestFeroxbusterScan:
     """Verify feroxbuster CLI construction and result parsing."""
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_adds_scheme_when_missing(self, _bin, mock_run, _wl):
@@ -22,7 +22,7 @@ class TestFeroxbusterScan:
         cmd = mock_run.call_args[0][0]
         assert "https://example.com" in cmd
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_preserves_existing_scheme(self, _bin, mock_run, _wl):
@@ -32,7 +32,7 @@ class TestFeroxbusterScan:
         assert "http://example.com" in cmd
         assert "https://http://example.com" not in cmd
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_no_results_returns_ok(self, _bin, mock_run, _wl):
@@ -41,7 +41,7 @@ class TestFeroxbusterScan:
         assert result["status"] == "ok"
         assert result["data"]["results"] == []
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_jsonl_results_parsed(self, _bin, mock_run, _wl):
@@ -55,7 +55,7 @@ class TestFeroxbusterScan:
         assert len(result["data"]["results"]) == 1
         assert result["data"]["results"][0]["url"] == "https://example.com/admin"
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_nonzero_code_no_results_returns_error(self, _bin, mock_run, _wl):
@@ -63,7 +63,7 @@ class TestFeroxbusterScan:
         result = feroxbuster_scan.invoke({"target": "example.com"})
         assert "scan failed" in result
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_wordlist_passed_to_cmd(self, _bin, mock_run, _wl):
@@ -72,9 +72,9 @@ class TestFeroxbusterScan:
         cmd = mock_run.call_args[0][0]
         assert "-w" in cmd
         idx = cmd.index("-w")
-        assert cmd[idx + 1] == "/tmp/wordlist.txt"
+        assert cmd[idx + 1] == "/mock/wordlist.txt"
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_extensions_passed(self, _bin, mock_run, _wl):
@@ -85,7 +85,7 @@ class TestFeroxbusterScan:
         idx = cmd.index("--extensions")
         assert cmd[idx + 1] == "php,html"
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_filter_status_passed(self, _bin, mock_run, _wl):
@@ -94,21 +94,19 @@ class TestFeroxbusterScan:
         cmd = mock_run.call_args[0][0]
         assert cmd.count("--filter-status") == 2
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_depth_and_threads_clamped(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
-        feroxbuster_scan.invoke(
-            {"target": "example.com", "depth": 10, "threads": 100}
-        )
+        feroxbuster_scan.invoke({"target": "example.com", "depth": 10, "threads": 100})
         cmd = mock_run.call_args[0][0]
         idx_d = cmd.index("--depth")
         assert cmd[idx_d + 1] == "4"  # clamped to max 4
         idx_t = cmd.index("--threads")
         assert cmd[idx_t + 1] == "50"  # clamped to max 50
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_rate_limit_passed(self, _bin, mock_run, _wl):
@@ -125,7 +123,7 @@ class TestFeroxbusterScan:
         result = feroxbuster_scan.invoke({"target": "example.com"})
         assert "no wordlist found" in result
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_filter_size_passed(self, _bin, mock_run, _wl):
@@ -134,7 +132,7 @@ class TestFeroxbusterScan:
         cmd = mock_run.call_args[0][0]
         assert cmd.count("--filter-size") == 2
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_filter_words_passed(self, _bin, mock_run, _wl):
@@ -147,13 +145,13 @@ class TestFeroxbusterScan:
         "tools.scanning.feroxbuster_tool.run_command",
         side_effect=Exception("connection timeout"),
     )
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _wl, _run):
         result = feroxbuster_scan.invoke({"target": "example.com"})
         assert "connection timeout" in result
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_non_response_entries_filtered(self, _bin, mock_run, _wl):
@@ -166,7 +164,7 @@ class TestFeroxbusterScan:
         result = feroxbuster_scan.invoke({"target": "example.com"})
         assert len(result["data"]["results"]) == 1
 
-    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/tmp/wordlist.txt")
+    @patch("tools.scanning.feroxbuster_tool._find_wordlist", return_value="/mock/wordlist.txt")
     @patch("tools.scanning.feroxbuster_tool.run_command")
     @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_multiple_results_parsed(self, _bin, mock_run, _wl):

@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
-from langchain_core.tools import ToolException
 
 from tools.vuln.security_headers import (
     _analyse_csp,
@@ -193,18 +191,22 @@ class TestCheckCorsHeaders:
         assert warnings[0]["severity"] == "medium"
 
     def test_wildcard_with_credentials(self):
-        warnings = _check_cors_headers({
-            "access-control-allow-origin": "*",
-            "access-control-allow-credentials": "true",
-        })
+        warnings = _check_cors_headers(
+            {
+                "access-control-allow-origin": "*",
+                "access-control-allow-credentials": "true",
+            }
+        )
         assert len(warnings) == 1
         assert warnings[0]["severity"] == "high"
 
     def test_specific_origin_with_credentials(self):
-        warnings = _check_cors_headers({
-            "access-control-allow-origin": "https://trusted.com",
-            "access-control-allow-credentials": "true",
-        })
+        warnings = _check_cors_headers(
+            {
+                "access-control-allow-origin": "https://trusted.com",
+                "access-control-allow-credentials": "true",
+            }
+        )
         assert len(warnings) == 1
         assert warnings[0]["severity"] == "low"
 

@@ -18,8 +18,8 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
 from fackel.agents.config import build_llm
-from fackel.prompts import compose_prompt, load_section
 from fackel.formatting import format_tech_fingerprint, serialize_findings
+from fackel.prompts import compose_prompt, load_section
 
 logger = logging.getLogger(__name__)
 

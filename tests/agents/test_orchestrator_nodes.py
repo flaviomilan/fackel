@@ -192,8 +192,14 @@ class TestRunVulnScanWithRetry:
         mock_eval_mod.evaluate_phase.return_value = good_eval
 
         agent = MagicMock()
-        msgs, evaluation = _run_vuln_scan_with_retry(
-            agent, "example.com", ["1.2.3.4"], [], {}, "scan prompt", {},
+        _msgs, evaluation = _run_vuln_scan_with_retry(
+            agent,
+            "example.com",
+            ["1.2.3.4"],
+            [],
+            {},
+            "scan prompt",
+            {},
         )
 
         assert mock_run.call_count == 1
@@ -204,9 +210,18 @@ class TestRunVulnScanWithRetry:
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.agent_summary", return_value="retry summary")
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.run_and_stream_agent", return_value=[])
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan._load_retry_guidance", return_value=("loop", "approach"))
+    @patch(
+        "fackel.agents.orchestrator.nodes.vuln_scan._load_retry_guidance",
+        return_value=("loop", "approach"),
+    )
     def test_retry_when_empty_and_low_score(
-        self, mock_guidance, mock_run, mock_summary, mock_eval_mod, mock_streaming, mock_emit,
+        self,
+        mock_guidance,
+        mock_run,
+        mock_summary,
+        mock_eval_mod,
+        mock_streaming,
+        mock_emit,
     ):
         """When first pass is empty with score < 0.3, retry is triggered."""
         empty_eval = self._make_evaluation("empty", 0.1, ["no vuln data"])
@@ -214,8 +229,14 @@ class TestRunVulnScanWithRetry:
         mock_eval_mod.evaluate_phase.side_effect = [empty_eval, retry_eval]
 
         agent = MagicMock()
-        msgs, evaluation = _run_vuln_scan_with_retry(
-            agent, "example.com", [], [], {}, "scan prompt", {},
+        _msgs, evaluation = _run_vuln_scan_with_retry(
+            agent,
+            "example.com",
+            [],
+            [],
+            {},
+            "scan prompt",
+            {},
         )
 
         assert mock_run.call_count == 2  # initial + retry
@@ -226,7 +247,9 @@ class TestRunVulnScanWithRetry:
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.agent_summary", return_value="summary")
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.run_and_stream_agent", return_value=[])
-    def test_no_retry_when_empty_but_high_score(self, mock_run, mock_summary, mock_eval_mod, mock_emit):
+    def test_no_retry_when_empty_but_high_score(
+        self, mock_run, mock_summary, mock_eval_mod, mock_emit
+    ):
         """Empty completeness but score >= 0.3 does NOT trigger retry."""
         eval_obj = self._make_evaluation("empty", 0.4)
         mock_eval_mod.evaluate_phase.return_value = eval_obj

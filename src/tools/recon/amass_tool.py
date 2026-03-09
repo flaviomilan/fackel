@@ -81,9 +81,7 @@ def _parse_jsonl(content: str) -> list[dict[str, Any]]:
         addresses = entry.get("addresses")
         if addresses and isinstance(addresses, list):
             record["ips"] = [
-                a.get("ip", "")
-                for a in addresses
-                if isinstance(a, dict) and a.get("ip")
+                a.get("ip", "") for a in addresses if isinstance(a, dict) and a.get("ip")
             ]
         subdomains.append(record)
 
@@ -118,7 +116,7 @@ def amass_enum(target: str, passive: bool = True) -> dict[str, Any]:
     target = guard_target(target, "amass_enum", TargetType.DOMAIN)
 
     with tempfile.TemporaryDirectory(prefix="amass_") as tmpdir:
-        oA_prefix = os.path.join(tmpdir, "out")
+        oa_prefix = os.path.join(tmpdir, "out")
 
         cmd = [
             "amass",
@@ -126,7 +124,7 @@ def amass_enum(target: str, passive: bool = True) -> dict[str, Any]:
             "-d",
             target,
             "-oA",
-            oA_prefix,
+            oa_prefix,
             "-timeout",
             "10",
         ]
@@ -136,13 +134,14 @@ def amass_enum(target: str, passive: bool = True) -> dict[str, Any]:
 
         try:
             code, out, stderr = run_command(
-                cmd, timeout=get_tool_timeout("amass_enum", _TIMEOUT),
+                cmd,
+                timeout=get_tool_timeout("amass_enum", _TIMEOUT),
             )
         except Exception as exc:
             raise ToolException(f"amass_enum: {exc}") from exc
 
         # Prefer the structured JSON file written by ``-oA``.
-        json_file = oA_prefix + ".json"
+        json_file = oa_prefix + ".json"
         json_content = ""
         if os.path.isfile(json_file):
             with open(json_file) as fh:

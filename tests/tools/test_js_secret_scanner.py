@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
-from langchain_core.tools import ToolException
 
 from tools.osint.js_secret_scanner import (
     _extract_script_urls,
@@ -35,12 +33,16 @@ class TestJsSecretScan:
 
     @patch("tools.osint.js_secret_scanner.requests.get")
     def test_scan_html_page_with_scripts(self, mock_get):
-        html = """
+        html = (
+            """
         <html>
         <script src="/static/app.js"></script>
-        <script>var secret = '""" + ("ghp_" + "abc123def456ghi789jkl012mno345pq6789") + """';</script>
+        <script>var secret = '"""
+            + ("ghp_" + "abc123def456ghi789jkl012mno345pq6789")
+            + """';</script>
         </html>
         """
+        )
         js_content = "var key = 'nothing-secret-here';"
 
         def get_side_effect(url, **kwargs):

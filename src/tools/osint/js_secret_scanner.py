@@ -230,16 +230,18 @@ def _scan_content(
             seen.add(dedup_key)
 
             # Approximate line number.
-            line_num = content[:match.start()].count("\n") + 1
+            line_num = content[: match.start()].count("\n") + 1
 
-            results.append({
-                "type": name,
-                "severity": severity,
-                "description": description,
-                "match": display,
-                "source": source_url,
-                "line": line_num,
-            })
+            results.append(
+                {
+                    "type": name,
+                    "severity": severity,
+                    "description": description,
+                    "match": display,
+                    "source": source_url,
+                    "line": line_num,
+                }
+            )
     return results
 
 
@@ -282,7 +284,7 @@ def js_secret_scan(target: str) -> dict[str, Any]:
 
         # Scan inline scripts on the page.
         for inline_match in re.finditer(
-            r"<script[^>]*>(.*?)</script>", page_content, re.DOTALL | re.IGNORECASE
+            r"<script[^>]*>(.*?)</script[^>]*>", page_content, re.DOTALL | re.IGNORECASE
         ):
             inline = inline_match.group(1).strip()
             if inline:

@@ -18,6 +18,7 @@ Flow::
 
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -101,9 +102,7 @@ def _reset_graph() -> None:
     """
     global _checkpointer, _checkpointer_cm
     if _checkpointer_cm is not None:
-        try:
+        with suppress(Exception):
             _checkpointer_cm.__exit__(None, None, None)
-        except Exception:  # noqa: BLE001
-            pass
         _checkpointer_cm = None
     _checkpointer = None

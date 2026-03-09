@@ -7,10 +7,10 @@ committed API keys, passwords, tokens, and other secrets.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
-from urllib.parse import urlparse
 
 from fackel.tooling import (
     format_tool_output,
@@ -61,7 +61,7 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
 
-    _GIT_HOSTS = ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org")
+    git_hosts = ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org")
 
     # Determine scan mode from target format.
     parsed = urlparse(target if "://" in target else f"https://{target}")
@@ -78,9 +78,11 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
             scan_type = "github"
             org = parts[0] if parts and parts[0] else ""
             if not org:
-                raise ToolException("trufflehog_scan: github organization name is missing in target")
+                raise ToolException(
+                    "trufflehog_scan: github organization name is missing in target"
+                )
             scan_target = f"--org={org}"
-    elif hostname in _GIT_HOSTS or parsed.path.rstrip("/").endswith(".git"):
+    elif hostname in git_hosts or parsed.path.rstrip("/").endswith(".git"):
         scan_type = "git"
         scan_target = target
     else:

@@ -71,9 +71,7 @@ class TestCensysLookup:
     def test_host_without_services_key(self, _env, mock_hosts_cls):
         mock_client = MagicMock()
         mock_hosts_cls.return_value = mock_client
-        mock_client.search.return_value = iter(
-            [{"ip": "10.0.0.1"}]
-        )
+        mock_client.search.return_value = iter([{"ip": "10.0.0.1"}])
 
         result = censys_lookup.invoke({"domain": "nosvcs.example.com"})
 
