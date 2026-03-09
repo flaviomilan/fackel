@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-03-09)
+
+### Chores
+
+- **lint**: Resolve ruff violations across src and tests
+  ([`e3e91e7`](https://github.com/flaviomilan/fackel/commit/e3e91e7d739b4f98ffa82ec77add6845dd4953f1))
+
+### Features
+
+- **orchestrator**: Wire new tools into audit pipeline
+  ([`3b32d8c`](https://github.com/flaviomilan/fackel/commit/3b32d8c0bc99b417add9c7c5d5d9c6f30542a8b5))
+
+- **recon**: Expand osint collectors and secret scanning
+  ([`22f5686`](https://github.com/flaviomilan/fackel/commit/22f56865b3c75ec14276059904e802e9a3dd3ae9))
+
+- **scanning**: Add ffuf support and improve web scanners
+  ([`9b50d7a`](https://github.com/flaviomilan/fackel/commit/9b50d7a4f394034da4a66c22dfe42c2d3daf1267))
+
+- **vuln**: Introduce jwt and web vuln analyzers
+  ([`2ecddf0`](https://github.com/flaviomilan/fackel/commit/2ecddf0f74d4fb3abf4ad96ef8e0d926561a58f0))
+
+### Refactoring
+
+- **prompts**: Migrate prompt packs and update agent bindings
+  ([`f87ead9`](https://github.com/flaviomilan/fackel/commit/f87ead9de04a5978465192fe622065cf5f90c95d))
+
+
 ## v1.4.0 (2026-03-02)
 
 ### Bug Fixes
