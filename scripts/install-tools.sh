@@ -323,9 +323,15 @@ install_python_clone_tool() {
     fi
 
     # Create wrapper script.
+    # The wrapper escapes any active virtualenv so the system Python
+    # (which has the tool's pip-installed dependencies) is used.
     mkdir -p "$symlink_dir"
     cat > "$symlink_dir/$binary" << WRAPPER
 #!/usr/bin/env bash
+if [[ -n "\$VIRTUAL_ENV" ]]; then
+    PATH="\${PATH//"\$VIRTUAL_ENV/bin:"/}"
+    unset VIRTUAL_ENV
+fi
 exec python3 "$install_dir/$main_script" "\$@"
 WRAPPER
     chmod +x "$symlink_dir/$binary"
