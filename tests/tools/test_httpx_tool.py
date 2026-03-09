@@ -11,9 +11,9 @@ class TestHttpxCommandConstruction:
     """Verify the subprocess command is built correctly."""
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
-    def test_target_passed_via_u_flag(self, _bin, mock_run):
-        """httpx requires `-u <target>` — not a positional argument."""
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
+    def test_target_passed_via_flag(self, _bin, mock_run):
+        """httpx requires `-u <domain>` flag for target."""
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com"})
 
@@ -23,7 +23,7 @@ class TestHttpxCommandConstruction:
         assert cmd[idx + 1] == "example.com"
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_json_and_silent_flags(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com"})
@@ -33,7 +33,7 @@ class TestHttpxCommandConstruction:
         assert "-silent" in cmd
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_tech_detect_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com", "tech_detect": True})
@@ -42,7 +42,7 @@ class TestHttpxCommandConstruction:
         assert "-td" in cmd
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_tech_detect_disabled(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com", "tech_detect": False})
@@ -51,7 +51,7 @@ class TestHttpxCommandConstruction:
         assert "-td" not in cmd
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_follow_redirects_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com", "follow_redirects": True})
@@ -60,7 +60,7 @@ class TestHttpxCommandConstruction:
         assert "-follow-redirects" in cmd
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_status_code_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com", "status_code": True})
@@ -69,7 +69,7 @@ class TestHttpxCommandConstruction:
         assert "-sc" in cmd
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_title_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com", "title": True})
@@ -78,7 +78,7 @@ class TestHttpxCommandConstruction:
         assert "-title" in cmd
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_custom_ports(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com", "ports": "80,443,8080"})
@@ -89,7 +89,7 @@ class TestHttpxCommandConstruction:
         assert cmd[idx + 1] == "80,443,8080"
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_empty_ports_omitted(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         httpx_scan.invoke({"domain": "example.com", "ports": ""})
@@ -102,7 +102,7 @@ class TestHttpxOutputParsing:
     """Verify JSON output is parsed correctly."""
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_valid_jsonl_parsed(self, _bin, mock_run):
         jsonl = (
             '{"url":"https://example.com","status_code":200,"title":"Example"}\n'
@@ -117,7 +117,7 @@ class TestHttpxOutputParsing:
         assert result["data"]["results"][0]["url"] == "https://example.com"
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_no_output_reports_stderr(self, _bin, mock_run):
         """When httpx produces no JSON but exits 0, stderr is forwarded as data message."""
         mock_run.return_value = (0, "", "banner text only")
@@ -128,7 +128,7 @@ class TestHttpxOutputParsing:
         assert result["data"]["message"] == "banner text only"
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_no_output_no_stderr_uses_default_message(self, _bin, mock_run):
         """When httpx produces no JSON and no stderr, a default message is used."""
         mock_run.return_value = (0, "", "")
@@ -139,7 +139,7 @@ class TestHttpxOutputParsing:
         assert "no HTTP services" in result["data"]["message"]
 
     @patch("tools.scanning.httpx_tool.run_command")
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_nonzero_exit_with_no_output_is_error(self, _bin, mock_run):
         mock_run.return_value = (1, "", "some error")
 
@@ -147,7 +147,7 @@ class TestHttpxOutputParsing:
 
         assert isinstance(result, str)
 
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_subprocess_exception(self, _bin):
         with patch(
             "tools.scanning.httpx_tool.run_command",
@@ -158,10 +158,10 @@ class TestHttpxOutputParsing:
 
     def test_binary_missing(self):
         with patch(
-            "tools.scanning.httpx_tool.require_binary",
+            "tools.scanning.httpx_tool._find_pd_httpx",
             side_effect=__import__(
                 "langchain_core.tools", fromlist=["ToolException"]
-            ).ToolException("httpx not found in PATH"),
+            ).ToolException("ProjectDiscovery httpx not found in PATH"),
         ):
             result = httpx_scan.invoke({"domain": "example.com"})
             assert isinstance(result, str)
@@ -171,12 +171,12 @@ class TestHttpxOutputParsing:
 class TestHttpxInputValidation:
     """Guard target rejects invalid inputs."""
 
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_empty_domain_rejected(self, _bin):
         result = httpx_scan.invoke({"domain": ""})
         assert isinstance(result, str)
 
-    @patch("tools.scanning.httpx_tool.require_binary", return_value=None)
+    @patch("tools.scanning.httpx_tool._find_pd_httpx", return_value="/usr/bin/httpx")
     def test_valid_ip_accepted(self, _bin):
         with patch("tools.scanning.httpx_tool.run_command") as mock_run:
             mock_run.return_value = (0, '{"url":"http://1.2.3.4"}\n', "")

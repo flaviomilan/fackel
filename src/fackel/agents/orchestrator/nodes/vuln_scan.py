@@ -1,4 +1,4 @@
-"""Vuln-scan graph node — vulnerability scanning with tech-aware prompting."""
+"""Vuln-scan graph node — vulnerability scanning with quality-gated retry."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 
 from fackel.formatting import format_tech_fingerprint
+from fackel.prompts import load_section
 
 from .. import evaluator, streaming
 from ..state import ScanState
@@ -23,9 +24,39 @@ from ._helpers import (
 
 logger = logging.getLogger(__name__)
 
+# Loaded once and cached — supplies node-level prompt context.
+_CORRELATION_GUIDANCE: str | None = None
+_DEPTH_ADJUSTMENT_GUIDANCE: str | None = None
+_LOOP_DETECTION_GUIDANCE: str | None = None
+_APPROACH_CHANGE_GUIDANCE: str | None = None
+
+
+def _load_vuln_scan_guidance() -> tuple[str, str]:
+    """Lazy-load correlation and depth adjustment prompt sections."""
+    global _CORRELATION_GUIDANCE, _DEPTH_ADJUSTMENT_GUIDANCE
+    if _CORRELATION_GUIDANCE is None:
+        _CORRELATION_GUIDANCE = load_section("stages/correlation")
+        _DEPTH_ADJUSTMENT_GUIDANCE = load_section("strategy/depth_adjustment")
+    return _CORRELATION_GUIDANCE, _DEPTH_ADJUSTMENT_GUIDANCE  # type: ignore[return-value]
+
+
+def _load_retry_guidance() -> tuple[str, str]:
+    """Lazy-load loop detection and approach change prompt sections."""
+    global _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE
+    if _LOOP_DETECTION_GUIDANCE is None:
+        _LOOP_DETECTION_GUIDANCE = load_section("orchestrator/loop_detection")
+        _APPROACH_CHANGE_GUIDANCE = load_section("strategy/approach_change")
+    return _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE  # type: ignore[return-value]
+
 
 def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
-    """Run the vuln-scan ReAct agent on the target domain, subdomains, and IPs."""
+    """Run the vuln-scan ReAct agent with quality evaluation and retry.
+
+    Includes LLM-as-a-judge quality evaluation and self-reflection retry:
+    if the first pass produces thin output (judge says "empty"), the agent
+    is re-invoked with enriched instructions based on the judge's gaps,
+    focusing on tools that failed or areas left unscanned.
+    """
     from fackel.agents.vuln_scan.agent import build
 
     target = state["target"]
@@ -34,20 +65,90 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
 
     prompt = _build_vuln_scan_prompt(target, ips, capped_subs, state)
     agent = build(approve_tools=is_tool_approval_enabled())
-    messages = run_and_stream_agent(agent, "vuln_scan", prompt, config=config)
+
+    messages, evaluation = _run_vuln_scan_with_retry(
+        agent,
+        target,
+        ips,
+        capped_subs,
+        state,
+        prompt,
+        config,
+    )
 
     summary = agent_summary(messages)
     streaming.emit("vuln_scan", "summary", {"content": summary})
-
-    scan_targets = [target, *capped_subs, *ips]
-    evaluation = evaluator.evaluate_phase("vuln_scan", summary, scan_targets, config=config)
-    emit_evaluation("vuln_scan", evaluation)
     streaming.emit("vuln_scan", "done", {})
 
     return {
         "findings": [make_finding("vuln_scan", "Vulnerability Scan Findings", summary)],
         "phase_evaluations": [evaluation.model_dump()],
     }
+
+
+def _run_vuln_scan_with_retry(
+    agent: Any,
+    target: str,
+    ips: list[str],
+    subdomains: list[str],
+    state: ScanState,
+    prompt: str,
+    config: RunnableConfig,
+) -> tuple[list[Any], Any]:
+    """Run vuln-scan agent with quality evaluation and retry on poor output."""
+    messages = run_and_stream_agent(agent, "vuln_scan", prompt, config=config)
+    summary = agent_summary(messages)
+
+    scan_targets = [target, *subdomains, *ips]
+    evaluation = evaluator.evaluate_phase("vuln_scan", summary, scan_targets, config=config)
+    emit_evaluation("vuln_scan", evaluation)
+
+    if evaluation.completeness == "empty" and evaluation.score < 0.3:
+        retry_msgs = _retry_vuln_scan(agent, target, evaluation, config)
+        messages = messages + retry_msgs
+        retry_summary = agent_summary(messages)
+        evaluation = evaluator.evaluate_phase(
+            "vuln_scan",
+            retry_summary,
+            scan_targets,
+            config=config,
+        )
+        emit_evaluation("vuln_scan", evaluation)
+
+    return messages, evaluation
+
+
+def _retry_vuln_scan(
+    agent: Any,
+    target: str,
+    evaluation: Any,
+    config: RunnableConfig,
+) -> list[Any]:
+    """Re-invoke vuln-scan agent with enriched prompt on poor quality."""
+    logger.info(
+        "vuln_scan: judge rated output as empty (score=%.1f) — retrying with enriched prompt",
+        evaluation.score,
+    )
+    gaps_text = "; ".join(evaluation.gaps) if evaluation.gaps else "thin output"
+    loop_guidance, approach_guidance = _load_retry_guidance()
+    retry_prompt = (
+        f"Your first vulnerability scan pass on {target} was insufficient.\n"
+        f"Quality assessment: {evaluation.completeness} (score: {evaluation.score:.1f})\n"
+        f"Gaps identified: {gaps_text}\n"
+        f"Reasoning: {evaluation.reasoning}\n\n"
+        f"## Loop Detection\n\n{loop_guidance}\n\n"
+        f"## Strategy Adjustment\n\n{approach_guidance}\n\n"
+        f"IMPORTANT: If a tool failed in the first pass (error, missing "
+        f"dependency, timeout), try an ALTERNATIVE tool or different "
+        f"parameters. For example:\n"
+        f"- feroxbuster failed → use ffuf_scan instead (or vice-versa)\n"
+        f"- testssl timed out → retry with checks='protocols,vulnerabilities'\n"
+        f"- nuclei returned nothing → try with specific tags for detected tech\n\n"
+        f"Please re-scan {target} focusing on the identified gaps. "
+        f"Use ALL available tools from your playbook."
+    )
+    streaming.emit("vuln_scan", "retry", {"reason": gaps_text})
+    return run_and_stream_agent(agent, "vuln_scan", retry_prompt, config=config)
 
 
 def _build_vuln_scan_prompt(
@@ -73,6 +174,11 @@ def _build_vuln_scan_prompt(
 
     _append_tech_fingerprint_context(parts, state)
     _append_port_scan_strategy(parts, state)
+
+    correlation_guide, depth_guide = _load_vuln_scan_guidance()
+    parts.append(f"\n## Cross-Phase Correlation\n\n{correlation_guide}")
+    parts.append(f"\n## Depth Adjustment\n\n{depth_guide}")
+
     return "\n".join(parts)
 
 

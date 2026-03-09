@@ -5,9 +5,9 @@
 #
 # Installs the CLI binaries that Fackel agents shell out to:
 #   Go tools     : subfinder, naabu, nuclei, httpx, katana, gau, dalfox,
-#                  cloudbrute, s3scanner, amass, subzy
+#                  cloudbrute, s3scanner, amass, subzy, ffuf
 #   Rust tools   : feroxbuster
-#   Python tools : wafw00f, paramspider (pip from git)
+#   Python tools : wafw00f, paramspider, sqlmap (pip from git/pypi)
 #   Python clone : corsy, linkfinder (git clone + wrapper)
 #   Ruby tools   : wpscan
 #   System pkgs  : nmap, whois
@@ -648,6 +648,9 @@ if ! $MINIMAL; then
     # S3Scanner installs as "S3Scanner" — create lowercase symlink.
     install_go_tool "S3Scanner" "github.com/sa7mon/S3Scanner@latest" "s3scanner"
 
+    # ffuf — fast web fuzzer for directory/file discovery.
+    install_go_tool "ffuf" "github.com/ffuf/ffuf/v2@latest"
+
     # ---- Rust tools ----
     header "Rust Tools"
     install_feroxbuster
@@ -655,8 +658,13 @@ if ! $MINIMAL; then
     # ---- Python tools ----
     header "Python Tools"
     install_python_tool "wafw00f" "wafw00f"
+    install_python_tool "sqlmap" "sqlmap"
     install_python_git_tool "paramspider" "https://github.com/devanshbatham/ParamSpider.git"
     install_python_clone_tool "linkfinder" "https://github.com/GerbenJavado/LinkFinder.git" "linkfinder.py"
+    # linkfinder requires jsbeautifier at runtime — install it alongside.
+    if has_binary "linkfinder"; then
+        pip install --user jsbeautifier &>/dev/null || true
+    fi
     install_python_clone_tool "corsy" "https://github.com/s0md3v/Corsy.git" "corsy.py"
 
     # ---- Ruby tools ----

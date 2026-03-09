@@ -18,7 +18,7 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
 from fackel.agents.config import build_llm
-from fackel.agents.prompts import load_prompt
+from fackel.prompts import compose_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +101,18 @@ def evaluate_phase(
             f"Agent output:\n{agent_summary}"
         )
 
+        judge_prompt = compose_prompt(
+            "judge",
+            "orchestrator/phase_transition",
+            "orchestrator/continue_or_stop",
+            "orchestrator/surface_exhaustion",
+        )
+
         result = cast(
             PhaseEvaluation,
             structured_llm.invoke(
                 [
-                    SystemMessage(content=load_prompt("judge")),
+                    SystemMessage(content=judge_prompt),
                     HumanMessage(content=context),
                 ],
                 config=config,

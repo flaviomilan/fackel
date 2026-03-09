@@ -7,10 +7,10 @@ committed API keys, passwords, tokens, and other secrets.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
-from urllib.parse import urlparse
 
 from fackel.tooling import (
     format_tool_output,
@@ -57,6 +57,12 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
     if not target:
         raise ToolException("trufflehog_scan: target must not be empty")
 
+    # Normalise to full URL when a bare host path is given.
+    if not target.startswith(("http://", "https://")):
+        target = f"https://{target}"
+
+    git_hosts = ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org")
+
     # Determine scan mode from target format.
     parsed = urlparse(target if "://" in target else f"https://{target}")
     hostname = (parsed.hostname or "").lower()
@@ -66,24 +72,27 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
         if len(parts) >= 2:
             # GitHub repository: use git scan against the repository URL.
             scan_type = "git"
-            scan_target = target if target.startswith("http") else f"https://{target}"
+            scan_target = target
         else:
             # GitHub organization scan.
             scan_type = "github"
             org = parts[0] if parts and parts[0] else ""
             if not org:
-                raise ToolException("trufflehog_scan: github organization name is missing in target")
+                raise ToolException(
+                    "trufflehog_scan: github organization name is missing in target"
+                )
             scan_target = f"--org={org}"
-    else:
+    elif hostname in git_hosts or parsed.path.rstrip("/").endswith(".git"):
         scan_type = "git"
-        scan_target = target if target.startswith("http") else f"https://{target}"
-
-    cmd = ["trufflehog", scan_type]
-
-    if scan_type == "github":
-        cmd.append(scan_target)
+        scan_target = target
     else:
-        cmd.append(scan_target)
+        raise ToolException(
+            "trufflehog_scan: target must be a Git repository URL "
+            "(e.g. 'https://github.com/org/repo') or a GitHub org "
+            "(e.g. 'github.com/org'). Plain domains are not supported."
+        )
+
+    cmd = ["trufflehog", scan_type, scan_target]
 
     cmd.extend(["--json", "--no-update"])
 

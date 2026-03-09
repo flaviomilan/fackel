@@ -24,6 +24,21 @@ from ._helpers import emit_evaluation, make_finding
 
 logger = logging.getLogger(__name__)
 
+# Loaded once and cached — supplies retry enrichment context.
+_LOOP_DETECTION_GUIDANCE: str | None = None
+_APPROACH_CHANGE_GUIDANCE: str | None = None
+
+
+def _load_retry_guidance() -> tuple[str, str]:
+    """Lazy-load loop detection and approach change prompt sections."""
+    global _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE
+    if _LOOP_DETECTION_GUIDANCE is None:
+        from fackel.prompts import load_section
+
+        _LOOP_DETECTION_GUIDANCE = load_section("orchestrator/loop_detection")
+        _APPROACH_CHANGE_GUIDANCE = load_section("strategy/approach_change")
+    return _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE  # type: ignore[return-value]
+
 
 def osint_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
     """Run the OSINT ReAct agent for passive reconnaissance.
@@ -71,11 +86,14 @@ def _retry_osint(agent: Any, target: str, evaluation: Any, config: RunnableConfi
         evaluation.score,
     )
     gaps_text = "; ".join(evaluation.gaps) if evaluation.gaps else "thin output"
+    loop_guidance, approach_guidance = _load_retry_guidance()
     retry_prompt = (
         f"Your first OSINT pass on {target} was insufficient.\n"
         f"Quality assessment: {evaluation.completeness} (score: {evaluation.score:.1f})\n"
         f"Gaps identified: {gaps_text}\n"
         f"Reasoning: {evaluation.reasoning}\n\n"
+        f"## Loop Detection Guidance\n\n{loop_guidance}\n\n"
+        f"## Strategy Adjustment\n\n{approach_guidance}\n\n"
         f"Please perform a MORE THOROUGH reconnaissance on: {target}\n"
         "Use ALL available tools from your playbook — DNS, WHOIS, subdomain "
         "enumeration, reverse DNS, IP classification, Shodan/Censys, httpx, "

@@ -22,8 +22,15 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    HumanMessage,
+    ToolMessage,
+    trim_messages,
+)
 from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables.config import merge_configs
 from langgraph.types import Command
 
 from fackel.settings import get_settings
@@ -41,6 +48,27 @@ try:
     )
 except ImportError:  # pragma: no cover - openai always installed via langchain-openai
     _LLM_TRANSIENT_ERRORS = ()
+
+
+def _estimate_tokens(messages: list[Any]) -> int:
+    """Rough token estimate: 1 token ≈ 4 characters.
+
+    Good enough for trim_messages guard-rails — the model's own tokenizer
+    handles exact counting at inference time.
+    """
+    total = 0
+    for msg in messages:
+        content = getattr(msg, "content", "")
+        if isinstance(content, str):
+            total += len(content) // 4
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, str):
+                    total += len(block) // 4
+                elif isinstance(block, dict):
+                    total += len(str(block.get("text", ""))) // 4
+    return total
+
 
 EventCallback = Callable[[str, str, dict[str, Any]], None] | None
 
@@ -201,20 +229,16 @@ class _AgentStreamer:
         self._hit_limit = False
         self._has_checkpointer = getattr(agent, "checkpointer", None) is not None
 
-        inner: dict[str, Any] = {}
+        inner: RunnableConfig = {}
         if self._has_checkpointer:
             inner.setdefault("configurable", {})["thread_id"] = str(uuid.uuid4())
 
-        if config:
-            outer_callbacks = config.get("callbacks")
-            if outer_callbacks:
-                inner["callbacks"] = outer_callbacks
-            if config.get("metadata"):
-                inner["metadata"] = config["metadata"]
-            if config.get("tags"):
-                inner["tags"] = config["tags"]
-
-        self._config: dict[str, Any] | None = inner or None
+        # merge_configs preserves callbacks, metadata, tags, run_name,
+        # and run_id from the outer orchestrator config so that
+        # LangSmith traces nest correctly under the parent run.
+        self._config: RunnableConfig | None = (
+            merge_configs(config, inner) if config else inner
+        ) or None
 
     def run(self, user_message: str) -> list[Any]:
         """Execute the full streaming cycle and return collected messages."""
@@ -240,7 +264,21 @@ class _AgentStreamer:
         connection) and retries once with back-off.  If the retry also
         fails, the error is logged and an event emitted so the scan can
         continue with whatever messages were already collected.
+
+        When input contains messages, applies ``trim_messages`` to keep
+        the conversation within the model's context window and avoid
+        runaway token usage on long-running agents.
         """
+        if isinstance(input_data, dict) and "messages" in input_data:
+            input_data = dict(input_data)
+            input_data["messages"] = trim_messages(
+                input_data["messages"],
+                max_tokens=get_settings().agent_context_window,
+                token_counter=_estimate_tokens,
+                strategy="last",
+                allow_partial=False,
+                start_on="human",
+            )
         retries = 0
         while True:
             try:
@@ -395,26 +433,57 @@ class _AgentStreamer:
 
 
 def _emit_tool_result_event(phase: str, msg: ToolMessage) -> None:
-    """Emit a ``tool_result`` or ``tool_error`` event for a validated message."""
+    """Emit a ``tool_result`` or ``tool_error`` event for a validated message.
+
+    Error events include a structured payload with ``tool``, ``error``,
+    ``error_class`` (timeout | auth | connection | unknown), and ISO
+    ``timestamp`` so consumers can persist or aggregate failure data.
+    """
     is_error = False
     error_hint = ""
+    error_class = "unknown"
 
     if getattr(msg, "status", None) == "error":
         is_error = True
         error_hint = str(msg.content)[:200] if msg.content else "unknown"
+        error_class = _classify_error(error_hint)
     else:
         try:
             payload = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
             if isinstance(payload, dict) and payload.get("status") == "error":
                 is_error = True
                 error_hint = str(payload.get("error", "unknown"))
+                error_class = _classify_error(error_hint)
         except (json.JSONDecodeError, TypeError, AttributeError):
             pass
 
     if is_error:
-        emit(phase, "tool_error", {"tool": msg.name, "error": error_hint})
+        emit(
+            phase,
+            "tool_error",
+            {
+                "tool": msg.name,
+                "error": error_hint,
+                "error_class": error_class,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            },
+        )
     else:
-        emit(phase, "tool_result", {"tool": msg.name, "content": str(msg.content)[:500]})
+        emit(phase, "tool_result", {"tool": msg.name, "content": str(msg.content)})
+
+
+def _classify_error(error_text: str) -> str:
+    """Map an error message to a coarse category for aggregation."""
+    lower = error_text.lower()
+    if "timeout" in lower or "timed out" in lower:
+        return "timeout"
+    if "401" in lower or "403" in lower or "auth" in lower or "api key" in lower:
+        return "auth"
+    if "connection" in lower or "refused" in lower or "unreachable" in lower:
+        return "connection"
+    if "rate" in lower and "limit" in lower:
+        return "rate_limit"
+    return "unknown"
 
 
 def run_and_stream_agent(

@@ -98,3 +98,42 @@ class TestTrufflehogScan:
     def test_empty_target_returns_error(self, _bin, mock_run):
         result = trufflehog_scan.invoke({"target": ""})
         assert "must not be empty" in result
+
+    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    def test_plain_domain_rejected(self, _bin):
+        """Plain domains (not Git hosts) must be rejected."""
+        result = trufflehog_scan.invoke({"target": "eversafe.info"})
+        assert "Plain domains are not supported" in result
+
+    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    def test_ip_address_rejected(self, _bin):
+        """IP addresses must be rejected — trufflehog needs a Git repo."""
+        result = trufflehog_scan.invoke({"target": "192.168.1.1"})
+        assert "Plain domains are not supported" in result
+
+    @patch("tools.osint.trufflehog_tool.run_command")
+    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    def test_gitlab_repo_accepted(self, _bin, mock_run):
+        mock_run.return_value = (0, "", "")
+        trufflehog_scan.invoke({"target": "https://gitlab.com/org/repo"})
+        cmd = mock_run.call_args[0][0]
+        assert "git" in cmd
+        assert "https://gitlab.com/org/repo" in cmd
+
+    @patch("tools.osint.trufflehog_tool.run_command")
+    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    def test_dotgit_url_accepted(self, _bin, mock_run):
+        """A URL ending in .git should be accepted as a git target."""
+        mock_run.return_value = (0, "", "")
+        trufflehog_scan.invoke({"target": "https://example.com/repo.git"})
+        cmd = mock_run.call_args[0][0]
+        assert "git" in cmd
+
+    @patch("tools.osint.trufflehog_tool.run_command")
+    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    def test_bare_github_path_normalised(self, _bin, mock_run):
+        """A bare 'github.com/org/repo' should get https:// prefix."""
+        mock_run.return_value = (0, "", "")
+        trufflehog_scan.invoke({"target": "github.com/org/repo"})
+        cmd = mock_run.call_args[0][0]
+        assert "https://github.com/org/repo" in cmd

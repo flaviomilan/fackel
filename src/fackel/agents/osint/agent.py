@@ -13,10 +13,11 @@ from langchain.agents import create_agent
 from langgraph.graph.state import CompiledStateGraph
 
 from fackel.agents.config import build_llm, default_middleware
-from fackel.agents.prompts import load_prompt
+from fackel.prompts import compose_prompt
 from fackel.provider_keys import filter_tools
 from tools.osint.email_analyzer import analyze_email
 from tools.osint.job_search import job_search
+from tools.osint.js_secret_scanner import js_secret_scan
 from tools.osint.trufflehog_tool import trufflehog_scan
 from tools.recon.amass_tool import amass_enum
 from tools.recon.bgpview_tool import bgp_lookup
@@ -71,6 +72,7 @@ TOOLS = [
     urlscan_search,
     otx_passive_dns,
     trufflehog_scan,
+    js_secret_scan,
     job_search,
     analyze_email,
 ]
@@ -89,7 +91,22 @@ def build(model_name: str | None = None) -> CompiledStateGraph:  # type: ignore[
     return create_agent(
         llm,
         available,
-        system_prompt=load_prompt("osint"),
+        system_prompt=compose_prompt(
+            "osint",
+            "stages/recon_initial",
+            "tools/dns_resolution",
+            "tools/subdomain_enum",
+            "tools/ct_lookup",
+            "tools/asn_whois",
+            "tools/api_querying",
+            "tools/http_probing",
+            "tools/content_fingerprint",
+            "tools/cloud_enum",
+            "tools/secret_scanning",
+            "tools/js_secrets",
+            "contracts/httpx",
+            "strategy/error_resilience",
+        ),
         middleware=default_middleware(),
         name="osint",
     )

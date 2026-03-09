@@ -50,7 +50,8 @@ RUN if [ "$INSTALL_MODE" = "full" ]; then \
    && go install github.com/owasp-amass/amass/v4/...@master \
    && go install github.com/PentestPad/subzy@latest \
    && go install github.com/0xsha/CloudBrute@latest \
-   && go install github.com/sa7mon/S3Scanner@latest; \
+   && go install github.com/sa7mon/S3Scanner@latest \
+   && go install github.com/ffuf/ffuf/v2@latest; \
     fi
 
 # Normalise case-sensitive binaries
@@ -97,6 +98,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         libpcap0.8 \
         ruby \
+        seclists \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -120,10 +122,11 @@ RUN if [ "$INSTALL_MODE" = "full" ]; then \
     fi
 
 # ---------------------------------------------------------------------------
-# Python tools (wafw00f, paramspider, corsy, linkfinder)
+# Python tools (wafw00f, paramspider, corsy, linkfinder, sqlmap)
 # ---------------------------------------------------------------------------
 RUN if [ "$INSTALL_MODE" = "full" ]; then \
       pip install --no-cache-dir wafw00f \
+   && pip install --no-cache-dir sqlmap \
    && pip install --no-cache-dir "git+https://github.com/devanshbatham/ParamSpider.git" \
    && git clone --depth 1 https://github.com/GerbenJavado/LinkFinder.git /opt/linkfinder \
    && pip install --no-cache-dir -r /opt/linkfinder/requirements.txt \

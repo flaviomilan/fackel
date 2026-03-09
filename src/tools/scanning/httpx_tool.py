@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from langchain_core.tools import ToolException, tool
@@ -13,9 +14,37 @@ from fackel.tooling import (
     get_tool_timeout,
     guard_target,
     parse_jsonl,
-    require_binary,
     run_command,
 )
+
+
+def _find_pd_httpx() -> str:
+    """Locate the ProjectDiscovery httpx binary.
+
+    The Python ``encode/httpx`` package installs a CLI script with the
+    same name.  Walk ``PATH`` and return the first ``httpx`` that is a
+    compiled (ELF) binary rather than a Python script.
+    """
+    seen: set[str] = set()
+    for directory in os.get_exec_path():
+        candidate = os.path.join(directory, "httpx")
+        real = os.path.realpath(candidate)
+        if real in seen or not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+            continue
+        seen.add(real)
+        # Python scripts start with '#!' and contain 'python'.
+        try:
+            with open(candidate, "rb") as fh:
+                head = fh.read(64)
+            if head[:2] == b"#!" and b"python" in head:
+                continue
+        except OSError:
+            continue
+        return candidate
+    raise ToolException(
+        "httpx_scan: ProjectDiscovery httpx not found in PATH "
+        "(only the Python encode/httpx was found)"
+    )
 
 
 class HttpxInput(BaseModel):
@@ -65,11 +94,11 @@ def httpx_scan(
     CDN presence, TLS version, and redirect behavior.  Use before WAF detection
     and Nuclei targeting.
     """
-    require_binary("httpx", "httpx_scan")
+    httpx_bin = _find_pd_httpx()
 
     target = guard_target(domain, "httpx_scan", TargetType.HOST_OR_URL)
 
-    cmd = ["httpx", "-u", target, "-json", "-silent"]
+    cmd = [httpx_bin, "-u", target, "-json", "-silent"]
 
     if ports.strip():
         cmd.extend(["-p", ports.strip()])
