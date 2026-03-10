@@ -64,6 +64,7 @@ where = ["src"]
 include = ["*"]
 
 [tool.setuptools.package-data]
+"fackel.prompts" = ["**/*.md"]
 "tools.scanning" = ["wordlists/*.txt"]
 
 [tool.uv]
