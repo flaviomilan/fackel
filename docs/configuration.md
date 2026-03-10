@@ -22,6 +22,7 @@ model selection, API keys, CLI options, and infrastructure setup.
 - [.env file](#env-file)
 - [Python API configuration](#python-api-configuration)
 - [Docker](#docker)
+- [LangGraph Server](#langgraph-server)
 
 ---
 
@@ -459,3 +460,72 @@ docker run --rm --env-file .env -v fackel-data:/data fackel example.com
 | `GO_VERSION` | `1.23` | Go compiler version for tool build |
 | `RUST_VERSION` | `1.82` | Rust compiler version for feroxbuster |
 | `INSTALL_MODE` | `full` | `full` or `minimal` |
+
+---
+
+## LangGraph Server
+
+Fackel exposes the orchestrator graph for the
+[LangGraph development server](https://docs.langchain.com/oss/python/langgraph/local-server)
+and [Agent Chat UI](https://docs.langchain.com/oss/python/langgraph/ui),
+enabling a web-based interface with real-time streaming, interrupt handling,
+and time-travel debugging.
+
+### Prerequisites
+
+```bash
+# Install the LangGraph CLI with in-memory support
+pip install -U "langgraph-cli[inmem]"
+
+# Or via uv
+uv add "langgraph-cli[inmem]"
+```
+
+### Running locally
+
+```bash
+# Start the dev server (reads langgraph.json)
+langgraph dev
+```
+
+The server starts at `http://localhost:2024` with:
+- **API**: `http://localhost:2024` — LangGraph REST API
+- **Studio**: opened automatically — visual graph debugger
+- **Docs**: `http://localhost:2024/docs` — OpenAPI schema
+
+### Connecting Agent Chat UI
+
+1. Visit [agentchat.vercel.app](https://agentchat.vercel.app/) or run locally:
+   ```bash
+   npx create-agent-chat-app --project-name fackel-chat
+   cd fackel-chat && pnpm install && pnpm dev
+   ```
+2. Set **Graph ID** to `fackel`
+3. Set **Deployment URL** to `http://localhost:2024`
+4. The UI will automatically detect the `approval_gate` interrupt and render an approval prompt
+
+### Configuration (`langgraph.json`)
+
+```json
+{
+  "dependencies": ["."],
+  "graphs": {
+    "fackel": "./src/fackel/agents/orchestrator/graph.py:graph"
+  },
+  "env": ".env"
+}
+```
+
+The `graph` variable is an uncompiled `StateGraph` — the LangGraph server
+compiles it with its own checkpointer for multi-thread support.
+
+### Docker (server mode)
+
+```bash
+# Build with server support
+docker build -t fackel .
+
+# Run as LangGraph server
+docker run --rm --env-file .env -p 2024:2024 fackel \
+  langgraph dev --host 0.0.0.0 --port 2024
+```

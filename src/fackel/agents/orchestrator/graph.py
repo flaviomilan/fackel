@@ -63,8 +63,13 @@ def _get_checkpointer() -> SqliteSaver:
     return _checkpointer
 
 
-def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
-    """Construct and compile the orchestrator StateGraph."""
+def _build_state_graph() -> StateGraph[ScanState]:
+    """Construct the orchestrator StateGraph (uncompiled).
+
+    Returns the raw ``StateGraph`` so callers can compile with different
+    checkpointers — the CLI uses ``SqliteSaver``, while the LangGraph
+    dev server injects its own.
+    """
     graph = StateGraph(ScanState)
 
     graph.add_node("osint", osint_node)
@@ -91,7 +96,18 @@ def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
     graph.add_edge("triage", "report")
     graph.add_edge("report", END)
 
-    return graph.compile(checkpointer=_get_checkpointer())
+    return graph
+
+
+def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
+    """Construct and compile the orchestrator StateGraph for CLI usage."""
+    return _build_state_graph().compile(checkpointer=_get_checkpointer())
+
+
+# Module-level graph for ``langgraph.json`` / ``langgraph dev``.
+# The LangGraph server compiles and injects its own checkpointer,
+# so we expose the *uncompiled* StateGraph here.
+graph = _build_state_graph()
 
 
 def _reset_graph() -> None:

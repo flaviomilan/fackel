@@ -174,7 +174,13 @@ ENV FACKEL_CHECKPOINT_DB=/data/checkpoints.db
 # Create data directory for checkpoints and reports
 RUN mkdir -p /data /app/reports
 
+# Copy langgraph.json for server mode
+COPY langgraph.json ./
+
 VOLUME ["/data", "/app/reports"]
+
+# Expose LangGraph server port (used when running in server mode)
+EXPOSE 2024
 
 ENTRYPOINT ["fackel"]
 CMD ["--help"]

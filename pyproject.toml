@@ -52,6 +52,9 @@ api = [
   "fastapi>=0.110",
   "uvicorn[standard]>=0.23",
 ]
+server = [
+  "langgraph-cli[inmem]>=0.2",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }

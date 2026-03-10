@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "fackel": "./src/fackel/agents/orchestrator/graph.py:graph"
+  },
+  "env": ".env"
+}
