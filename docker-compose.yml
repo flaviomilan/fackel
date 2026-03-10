@@ -1,0 +1,85 @@
+# =============================================================================
+# Fackel — Docker Compose (LangGraph Server + Agent Chat UI)
+# =============================================================================
+#
+# Quick start:
+#   cp .env.example .env        # add your OPENAI_API_KEY
+#   docker compose up -d        # start server + chat UI
+#
+# Services:
+#   fackel-server  — LangGraph API server (port 2024)
+#   chat-ui        — Agent Chat UI (port 3000)
+#
+# The Chat UI auto-connects to the server and renders tool calls,
+# streaming tokens, and interrupt prompts (approval gate).
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # LangGraph Server — serves the fackel orchestrator graph via REST API
+  # ---------------------------------------------------------------------------
+  fackel-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fackel:latest
+    container_name: fackel-server
+    entrypoint: []
+    command:
+      - langgraph
+      - dev
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "2024"
+      - --no-browser
+    ports:
+      - "127.0.0.1:2024:2024"
+    env_file:
+      - .env
+    environment:
+      - FACKEL_CHECKPOINT_DB=/data/checkpoints.db
+    volumes:
+      - fackel-data:/data
+      - fackel-reports:/app/reports
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:2024/ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Agent Chat UI — web interface for interacting with the graph
+  # ---------------------------------------------------------------------------
+  chat-ui:
+    image: node:22-slim
+    container_name: fackel-chat-ui
+    working_dir: /app
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ ! -f package.json ]; then
+          npx -y create-agent-chat-app@latest --project-name /app
+        fi
+        npm install --prefer-offline 2>/dev/null
+        npm run dev -- --host 0.0.0.0 --port 3000
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://fackel-server:2024
+    volumes:
+      - chat-ui-app:/app
+    depends_on:
+      fackel-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  fackel-data:
+    driver: local
+  fackel-reports:
+    driver: local
+  chat-ui-app:
+    driver: local

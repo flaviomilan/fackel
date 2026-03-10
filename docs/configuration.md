@@ -519,13 +519,48 @@ The server starts at `http://localhost:2024` with:
 The `graph` variable is an uncompiled `StateGraph` — the LangGraph server
 compiles it with its own checkpointer for multi-thread support.
 
-### Docker (server mode)
+### Docker Compose (recommended)
+
+The easiest way to run the full stack (LangGraph Server + Agent Chat UI):
+
+```bash
+# 1. Configure your API keys
+cp .env.example .env   # then edit .env
+
+# 2. Start everything
+docker compose up -d
+
+# 3. Open the Chat UI
+open http://localhost:3000
+```
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| `fackel-server` | `http://localhost:2024` | LangGraph REST API |
+| `chat-ui` | `http://localhost:3000` | Agent Chat UI |
+
+In the Chat UI, set **Graph ID** to `fackel` and **Deployment URL** to
+`http://fackel-server:2024` (already pre-configured via environment).
+
+```bash
+# View logs
+docker compose logs -f fackel-server
+
+# Stop
+docker compose down
+
+# Rebuild after code changes
+docker compose up -d --build fackel-server
+```
+
+### Docker (server mode — standalone)
 
 ```bash
 # Build with server support
 docker build -t fackel .
 
 # Run as LangGraph server
-docker run --rm --env-file .env -p 2024:2024 fackel \
-  langgraph dev --host 0.0.0.0 --port 2024
+docker run --rm --env-file .env -p 2024:2024 \
+  --entrypoint langgraph fackel \
+  dev --host 0.0.0.0 --port 2024 --no-browser
 ```
