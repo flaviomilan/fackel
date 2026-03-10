@@ -20,8 +20,8 @@
 # Args
 # ---------------------------------------------------------------------------
 ARG PYTHON_VERSION=3.12
-ARG GO_VERSION=1.23
-ARG RUST_VERSION=1.82
+ARG GO_VERSION=1.25
+ARG RUST_VERSION=1.87
 ARG INSTALL_MODE=full
 
 # ===========================================================================
@@ -31,8 +31,10 @@ FROM golang:${GO_VERSION}-bookworm AS go-builder
 
 ARG INSTALL_MODE
 
-ENV CGO_ENABLED=0
 ENV GOBIN=/go/tools
+
+RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p "$GOBIN"
 
@@ -49,12 +51,12 @@ RUN if [ "$INSTALL_MODE" = "full" ]; then \
    && go install github.com/hahwul/dalfox/v2@latest \
    && go install github.com/owasp-amass/amass/v4/...@master \
    && go install github.com/PentestPad/subzy@latest \
-   && go install github.com/0xsha/CloudBrute@latest \
-   && go install github.com/sa7mon/S3Scanner@latest \
+   && go install github.com/0xsha/cloudbrute@latest \
+   && go install github.com/sa7mon/s3scanner@latest \
    && go install github.com/ffuf/ffuf/v2@latest; \
     fi
 
-# Normalise case-sensitive binaries
+# Normalise case-sensitive binaries (if upstream still produces uppercase names)
 RUN cd "$GOBIN" \
  && [ -f CloudBrute ] && ln -sf CloudBrute cloudbrute || true \
  && [ -f S3Scanner ]  && ln -sf S3Scanner  s3scanner  || true
@@ -98,8 +100,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         libpcap0.8 \
         ruby \
-        seclists \
     && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# SecLists wordlists (not available as a Debian package)
+# ---------------------------------------------------------------------------
+RUN git clone --depth 1 https://github.com/danielmiessler/SecLists.git \
+        /usr/share/seclists \
+    && rm -rf /usr/share/seclists/.git
 
 # ---------------------------------------------------------------------------
 # Copy Go binaries from builder
@@ -142,7 +150,12 @@ RUN if [ "$INSTALL_MODE" = "full" ]; then \
 # Ruby tools (wpscan)
 # ---------------------------------------------------------------------------
 RUN if [ "$INSTALL_MODE" = "full" ]; then \
-      gem install wpscan --no-document; \
+      apt-get update && apt-get install -y --no-install-recommends \
+          ruby-dev gcc make libcurl4-openssl-dev zlib1g-dev xz-utils \
+          pkg-config libxml2-dev libxslt1-dev \
+      && gem install wpscan --no-document \
+      && apt-get purge -y --auto-remove gcc make ruby-dev \
+      && rm -rf /var/lib/apt/lists/*; \
     fi
 
 # ---------------------------------------------------------------------------
