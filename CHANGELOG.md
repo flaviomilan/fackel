@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.1 (2026-03-21)
+
+### Bug Fixes
+
+- **scripts**: Escape virtualenv in python clone tool wrappers
+  ([`d4ce3e9`](https://github.com/flaviomilan/fackel/commit/d4ce3e930adf99090236f5ca8f7ac61b75a59863))
+
+
 ## v1.5.0 (2026-03-09)
 
 ### Chores
