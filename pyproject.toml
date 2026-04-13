@@ -49,7 +49,7 @@ dev = [
   "types-beautifulsoup4>=4.12",
 ]
 api = [
-  "fastapi>=0.110",
+  "fastapi>=0.135.3",
   "uvicorn[standard]>=0.23",
 ]
 
