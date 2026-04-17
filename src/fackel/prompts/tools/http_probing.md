@@ -1,43 +1,46 @@
 # Tool — HTTP Probing
 
-## Objetivo
+## Purpose
 
-Identificar tecnologias web, headers de servidor, WAF/CDN, redirects
-e status codes para cada host na superfície de ataque.
+Identify web technologies, server headers, WAF/CDN, redirects,
+and status codes for each host on the attack surface.
 
-## Ferramentas
+## Tools
 
-| Ferramenta      | Propósito                                          |
-|-----------------|----------------------------------------------------|
-| `httpx_scan`    | Probing HTTP rápido — tech, títulos, redirects     |
-| `whatweb_scan`  | Fingerprint profundo — CMS, frameworks, libs, versões |
-| `wafw00f_detect`| Identificação de WAF/IPS                           |
+| Tool            | Purpose                                          |
+|-----------------|------------------------------------------------------|
+| `httpx_scan`    | Fast HTTP probing — tech, titles, redirects     |
+| `whatweb_scan`  | Deep fingerprint — CMS, frameworks, libs, versions |
+| `wafw00f_detect`| WAF/IPS identification                           |
 
-## Regras de Uso
+## Usage Rules
 
-1. **httpx é obrigatório** — executar em todo domínio/IP com porta web.
-2. **whatweb complementa httpx** — detecta CMS versions, jQuery, analytics
-   que httpx não captura.  Executar nos hosts principais.
-3. **wafw00f** — executar no domínio principal para identificar WAF.
-4. **Paralelismo** — httpx, whatweb e wafw00f são independentes, executar
-   em batch.
+1. **httpx is mandatory** — run on every domain/IP with web port.
+2. **whatweb complements httpx** — detects CMS versions, jQuery, analytics
+   that httpx does not capture. Run on main hosts.
+3. **wafw00f** — run on main domain to identify WAF.
+   Use `check_all: true` when you need to enumerate ALL WAFs in
+   stack (CDN + WAF + bot manager); default is stop at first
+   match for speed.
+4. **Parallelism** — httpx, whatweb, and wafw00f are independent, execute
+   in batch.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente hosts autorizados e portas conhecidas (80, 443, 8080, 8443).
-- Não seguir redirects para domínios fora do escopo.
-- Respeitar robots.txt como indicador (documentar, não bloquear).
+- Only authorized hosts and known ports (80, 443, 8080, 8443).
+- Do not follow redirects to out-of-scope domains.
+- Respect robots.txt as indicator (document, do not block).
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário              | Ação                                            |
+| Scenario             | Action                                            |
 |----------------------|-------------------------------------------------|
-| Connection refused   | Host não serve HTTP — documentar                |
-| TLS error            | Tentar HTTP-only, documentar erro TLS           |
-| WAF blocking         | Documentar WAF, notar impacto nos resultados    |
-| Timeout              | Tentar com timeout maior, documentar se persistir|
+| Connection refused   | Host does not serve HTTP — document                |
+| TLS error            | Try HTTP-only, document TLS error           |
+| WAF blocking         | Document WAF, note impact on results    |
+| Timeout              | Try with larger timeout, document if persists|
 
-## Estrutura de Output
+## Output Structure
 
 ```json
 {
@@ -56,16 +59,16 @@ e status codes para cada host na superfície de ataque.
 }
 ```
 
-## Normalização
+## Normalization
 
-- URLs normalizadas (trailing slash consistente).
-- Server headers preservados verbatim (case-sensitive).
-- Tecnologias com versão quando disponível.
+- URLs normalized (trailing slash consistent).
+- Server headers preserved verbatim (case-sensitive).
+- Technologies with version when available.
 
-## Anomalias
+## Anomalies
 
-- **Redirect para domínio externo** → possível phishing ou migração.
-- **Server header ausente** → hardening ou proxy reverso.
-- **Múltiplos WAFs** → configuração complexa, potenciais bypasses.
-- **HTTP 403 em tudo** → WAF agressivo ou IP bloqueado.
-- **Título inesperado** (ex: "Parking page") → domínio pode ter expirado.
+- **Redirect to external domain** → possible phishing or migration.
+- **Server header missing** → hardening or reverse proxy.
+- **Multiple WAFs** → complex configuration, potential bypasses.
+- **HTTP 403 on everything** → aggressive WAF or IP blocked.
+- **Unexpected title** (e.g. "Parking page") → domain may have expired.

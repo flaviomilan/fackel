@@ -28,14 +28,44 @@ Returns a JSON envelope:
 {
   "tool": "nmap_port_scan",
   "target": "<host>",
-  "status": "success|error",
+  "status": "ok|error",
   "data": {
-    "ports": [
-      {"port": 443, "protocol": "tcp", "state": "open", "service": "https", "version": "nginx 1.24"}
-    ]
+    "target": "example.com",
+    "state": "up",
+    "hostnames": [{"name": "example.com", "type": "user"}],
+    "addresses": {"ipv4": "203.0.113.10"},
+    "os_info": {
+      "os_matches": [{"name": "Linux 5.x", "accuracy": 95}],
+      "os_classes": [{"type": "general purpose", "vendor": "Linux", "osfamily": "Linux", "osgen": "5.X", "accuracy": 95}]
+    },
+    "host_scripts": {"smb-os-discovery": "..."},
+    "services": [
+      {
+        "port": 443,
+        "protocol": "tcp",
+        "state": "open",
+        "service": "https",
+        "product": "nginx",
+        "version": "1.24",
+        "extrainfo": "",
+        "cpe": "cpe:/a:nginx:nginx:1.24",
+        "vulnerabilities": [{"id": "CVE-2024-1234", "cvss": 7.5, "source": "vulners"}],
+        "scripts": {"http-title": "Example"}
+      }
+    ],
+    "summary": {
+      "total_ports_scanned": 100,
+      "open_ports": 3,
+      "filtered_ports": 0,
+      "total_vulnerabilities": 1,
+      "os_detected": true
+    }
   }
 }
 ```
+
+> `os_info` and `-O` flag are only present when the agent runs as
+> root (Nmap requires raw sockets for OS fingerprinting).
 
 ## Expected Discoveries
 

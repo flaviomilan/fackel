@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.recon.censys_tool import censys_lookup
+from fackel.tools.recon.censys_tool import censys_lookup
 
 
 class TestCensysLookup:
     """Verify Censys API integration and result parsing."""
 
-    @patch("tools.recon.censys_tool.CensysHosts")
-    @patch("tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
+    @patch("fackel.tools.recon.censys_tool.CensysHosts")
+    @patch("fackel.tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
     def test_parses_host_results(self, _env, mock_hosts_cls):
         mock_client = MagicMock()
         mock_hosts_cls.return_value = mock_client
@@ -44,8 +44,8 @@ class TestCensysLookup:
         assert len(hosts[0]["services"]) == 2
         assert hosts[0]["services"][0]["port"] == 443
 
-    @patch("tools.recon.censys_tool.CensysHosts")
-    @patch("tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
+    @patch("fackel.tools.recon.censys_tool.CensysHosts")
+    @patch("fackel.tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
     def test_empty_results(self, _env, mock_hosts_cls):
         mock_client = MagicMock()
         mock_hosts_cls.return_value = mock_client
@@ -56,8 +56,8 @@ class TestCensysLookup:
         assert result["status"] == "ok"
         assert result["data"]["hosts"] == []
 
-    @patch("tools.recon.censys_tool.CensysHosts")
-    @patch("tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
+    @patch("fackel.tools.recon.censys_tool.CensysHosts")
+    @patch("fackel.tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
     def test_api_error_raises_tool_exception(self, _env, mock_hosts_cls):
         mock_client = MagicMock()
         mock_hosts_cls.return_value = mock_client
@@ -66,8 +66,8 @@ class TestCensysLookup:
         result = censys_lookup.invoke({"domain": "example.com"})
         assert "rate limit" in result.lower()
 
-    @patch("tools.recon.censys_tool.CensysHosts")
-    @patch("tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
+    @patch("fackel.tools.recon.censys_tool.CensysHosts")
+    @patch("fackel.tools.recon.censys_tool.require_env", side_effect=["test-id", "test-secret"])
     def test_host_without_services_key(self, _env, mock_hosts_cls):
         mock_client = MagicMock()
         mock_hosts_cls.return_value = mock_client

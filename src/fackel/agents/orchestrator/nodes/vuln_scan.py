@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import Send
 
 from fackel.formatting import format_tech_fingerprint
 from fackel.prompts import load_section
@@ -16,6 +17,7 @@ from ..streaming import agent_summary, is_tool_approval_enabled, run_and_stream_
 from ._helpers import (
     DEFAULT_VULN_SCAN_STRATEGY,
     SUBDOMAIN_CAP,
+    build_retry_prompt,
     emit_evaluation,
     get_phase_evaluation,
     make_finding,
@@ -76,10 +78,121 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
         config,
     )
 
+    from ..translators import persist_phase
+
+    persist_phase(messages, phase="vuln_scan", target=target)
+
     summary = agent_summary(messages)
     streaming.emit("vuln_scan", "summary", {"content": summary})
     streaming.emit("vuln_scan", "done", {})
 
+    return {
+        "findings": [make_finding("vuln_scan", "Vulnerability Scan Findings", summary)],
+        "phase_evaluations": [evaluation.model_dump()],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Parallel specialist fan-out (idiomatic LangGraph Send map-reduce)
+#
+# Used when ``FACKEL_VULN_SPECIALISTS`` is on AND per-tool HITL approval is off
+# (parallel branches can't coherently share a single approval interrupt stream).
+# ---------------------------------------------------------------------------
+
+
+def vuln_dispatch_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
+    """Build the shared per-run vuln context once, before fanning out.
+
+    The rich prompt context (targets, tech fingerprints, port-scan strategy) is
+    derived from state here so each parallel specialist receives it without
+    rebuilding — specialist ``Send`` tasks only get their payload, not full state.
+    """
+    target = state["target"]
+    ips, subdomains = prepare_scan_targets(state)
+    capped_subs = subdomains[:SUBDOMAIN_CAP]
+    prompt = _build_vuln_scan_prompt(target, ips, capped_subs, state)
+    return {"vuln_base_prompt": prompt}
+
+
+def dispatch_vuln_specialists(state: ScanState) -> list[Send]:
+    """Fan out to one parallel ``vuln_specialist`` task per specialist.
+
+    LangGraph runs the resulting ``Send`` tasks concurrently (thread pool in sync
+    mode).  Note: vuln scanning is active, so these branches send concurrent
+    traffic to the target — by design, gated behind ``FACKEL_VULN_SPECIALISTS``.
+    """
+    from fackel.agents.vuln_scan.specialists import VULN_SPECIALISTS
+
+    target = state["target"]
+    base_prompt = state.get("vuln_base_prompt", "")
+    return [
+        Send(
+            "vuln_specialist", {"specialist": s.name, "target": target, "base_prompt": base_prompt}
+        )
+        for s in VULN_SPECIALISTS
+    ]
+
+
+def vuln_specialist_node(state: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:
+    """Run a single vuln-scan specialist (the ``Send`` payload names which one).
+
+    Persists its structured output to the scan-bound store (``current_store`` is
+    propagated into this worker thread; the store serialises writes) and returns
+    its message log on the ``vuln_messages`` fan-in channel.
+    """
+    from fackel.agents.vuln_scan.specialists import (
+        VULN_SPECIALISTS_BY_NAME,
+        _vuln_specialist_task,
+        build_vuln_specialist,
+    )
+
+    from ..translators import persist_phase
+
+    name = state["specialist"]
+    target = state["target"]
+    spec = VULN_SPECIALISTS_BY_NAME.get(name)
+    if spec is None:
+        return {}
+    agent = build_vuln_specialist(spec)
+    if agent is None:  # no usable tools (missing keys/binaries)
+        logger.info("vuln_scan: specialist %s skipped (no usable tools)", name)
+        return {}
+
+    logger.info("vuln_scan: running specialist %s", name)
+    task = _vuln_specialist_task(spec, state.get("base_prompt", ""))
+    # Bind a per-agent lane so the renderer can show this specialist in its own
+    # lane instead of interleaving with the others running in parallel.
+    with streaming.lane(name):
+        streaming.emit("vuln_scan", "lane_start", {"name": name})
+        try:
+            msgs = run_and_stream_agent(agent, "vuln_scan", task, config=config)
+        finally:
+            streaming.emit("vuln_scan", "lane_end", {"name": name})
+    persist_phase(msgs, phase="vuln_scan", target=target)
+    return {"vuln_messages": msgs}
+
+
+def vuln_collect_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
+    """Fan-in node: after all specialists finish, evaluate and build state.
+
+    Runs once after the parallel barrier; operates on the union of specialist
+    message logs accumulated on ``vuln_messages``.
+    """
+    target = state["target"]
+    ips, subdomains = prepare_scan_targets(state)
+    messages: list[Any] = list(state.get("vuln_messages", []))
+
+    from ..translators import persist_phase
+
+    persist_phase(messages, phase="vuln_scan", target=target)
+
+    summary = agent_summary(messages)
+    scan_targets = [target, *subdomains[:SUBDOMAIN_CAP], *ips]
+    evaluation = evaluator.evaluate_phase("vuln_scan", summary, scan_targets, config=config)
+    emit_evaluation("vuln_scan", evaluation)
+
+    streaming.emit("vuln_scan", "summary", {"content": summary})
+    streaming.emit("vuln_scan", "done", {})
     return {
         "findings": [make_finding("vuln_scan", "Vulnerability Scan Findings", summary)],
         "phase_evaluations": [evaluation.model_dump()],
@@ -129,25 +242,26 @@ def _retry_vuln_scan(
         "vuln_scan: judge rated output as empty (score=%.1f) — retrying with enriched prompt",
         evaluation.score,
     )
-    gaps_text = "; ".join(evaluation.gaps) if evaluation.gaps else "thin output"
     loop_guidance, approach_guidance = _load_retry_guidance()
-    retry_prompt = (
-        f"Your first vulnerability scan pass on {target} was insufficient.\n"
-        f"Quality assessment: {evaluation.completeness} (score: {evaluation.score:.1f})\n"
-        f"Gaps identified: {gaps_text}\n"
-        f"Reasoning: {evaluation.reasoning}\n\n"
+    body = (
         f"## Loop Detection\n\n{loop_guidance}\n\n"
         f"## Strategy Adjustment\n\n{approach_guidance}\n\n"
-        f"IMPORTANT: If a tool failed in the first pass (error, missing "
-        f"dependency, timeout), try an ALTERNATIVE tool or different "
-        f"parameters. For example:\n"
-        f"- feroxbuster failed → use ffuf_scan instead (or vice-versa)\n"
-        f"- testssl timed out → retry with checks='protocols,vulnerabilities'\n"
-        f"- nuclei returned nothing → try with specific tags for detected tech\n\n"
+        "IMPORTANT: If a tool failed in the first pass (error, missing "
+        "dependency, timeout), try an ALTERNATIVE tool or different "
+        "parameters. For example:\n"
+        "- feroxbuster failed → use ffuf_scan instead (or vice-versa)\n"
+        "- testssl timed out → retry with checks='protocols,vulnerabilities'\n"
+        "- nuclei returned nothing → try with specific tags for detected tech\n\n"
         f"Please re-scan {target} focusing on the identified gaps. "
-        f"Use ALL available tools from your playbook."
+        "Use ALL available tools from your playbook."
     )
-    streaming.emit("vuln_scan", "retry", {"reason": gaps_text})
+    retry_prompt = build_retry_prompt(
+        phase="vuln_scan",
+        intro=f"Your first vulnerability scan pass on {target} was insufficient.",
+        evaluation=evaluation,
+        body=body,
+    )
+    streaming.emit("vuln_scan", "retry", {"reason": "judge: empty output"})
     return run_and_stream_agent(agent, "vuln_scan", retry_prompt, config=config)
 
 

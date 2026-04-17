@@ -84,7 +84,7 @@ phases, and streams events to the CLI.
 | `src/fackel/agents/vuln_scan/` | Vulnerability scan ReAct agent construction |
 | `src/fackel/agents/triage/` | Triage structured output (no tools) |
 | `src/fackel/agents/report/` | Report synthesis (no tools) |
-| `src/fackel/agents/prompts/` | Two-tier prompt loading and caching |
+| `src/fackel/prompts/` | Two-tier prompt loading and caching |
 | `src/fackel/agents/config.py` | `build_llm()` factory, `get_model()`, `default_middleware()` |
 | `src/fackel/tooling/` | Tool infrastructure: subprocess runner, validators (`ToolException`), sanitizers, env/binary guards, configurable timeouts |
 | `src/fackel/` | Provider key management, report writer |
@@ -206,7 +206,7 @@ rather than overwriting. This ensures no phase can destroy another phase's data.
 
 ## Prompt system
 
-Defined in `src/fackel/agents/prompts/__init__.py`.
+Defined in `src/fackel/prompts/__init__.py`.
 
 ### Architecture
 
@@ -222,7 +222,7 @@ Prompts are loaded from disk and cached via `@lru_cache(maxsize=16)`.
 
 ### Soul prompt
 
-`src/fackel/agents/prompts/soul.md` — shared by all agents.
+`src/fackel/prompts/soul.md` — shared by all agents.
 
 Defines:
 
@@ -230,12 +230,12 @@ Defines:
 |---------|---------|
 | **Identity** | Security professional in a multi-agent workflow. Focus exclusively on assigned role. Only scan targets explicitly provided. |
 | **Reasoning** | Think → Act → Observe. Broad first for coverage, then deeper on high-severity. Failure resilience — one tool failure must never block the phase. Economy — no duplicate calls. |
-| **Stop criteria** | Playbook complete, no new information (last 2+ calls), all targets covered, or 15+ tool calls. |
+| **Stop criteria** | Playbook complete, no new information (last 2+ calls), all targets covered, or the tool-call budget is reached (`FACKEL_MAX_AGENT_ITERATIONS`, default 50). |
 | **Anti-hallucination** | 5 mandatory rules: never fabricate, only use tool outputs, report failures, no speculation, distinguish info from risk. |
 
 ### Skill prompts
 
-Located in `src/fackel/agents/prompts/skills/`.
+Located in `src/fackel/prompts/skills/`.
 
 | File | Agent | Content |
 |------|-------|---------|
@@ -262,17 +262,21 @@ to a module-level `_event_callback`. The CLI sets this callback via
 
 ### Event types
 
+Glyphs and colours below come from `src/cli/theme.py` (Nerd Font by default, with
+an ASCII fallback when `FACKEL_NERD_FONT=0`); the table shows the ASCII forms.
+
 | Event Type | Data | Rendered As |
 |------------|------|-------------|
-| `start` | `{phase}` | Section header: `▶ Phase Name` |
-| `tool_call` | `{name, args}` | `🔧 tool_name(arg=val, ...)` |
-| `tool_result` | `{name, preview}` | `← tool_name: preview...` (verbose only) |
-| `tool_error` | `{name, error}` | `✗ tool_name: error` (red) |
-| `reasoning` | `{text}` | `💭 line` (verbose only, italic) |
+| `start` | `{phase, lane?}` | Phase header: pipeline stepper + rule `▸ Phase Name` |
+| `lane_start` / `lane_end` | `{name, lane}` | Opens/closes a parallel agent lane; closes with `✓ name — N tools, T.Ts` |
+| `tool_call` | `{tool, args}` | Row `→ tool_name` (running) in the lane's tool table |
+| `tool_result` | `{tool, content}` | Row settles to `✓ tool_name … T.Ts`; preview shown in verbose |
+| `tool_error` | `{tool, error}` | Row `✗ tool_name` (red) with the error tail; duplicates collapsed |
+| `token` / `reasoning` | `{content, lane?}` | Streamed into the dim *thinking* panel / compact lane line |
 | `summary` | `{content}` | Rich panel with Markdown |
-| `evaluation` | `{completeness, score, recommendation}` | `📊 Quality: completeness (score: X.X) → recommendation` |
-| `tool_approval` | `{data}` | `⏸ Tool execution pending approval` |
-| `done` | `{phase}` | `✓ Phase complete` (green) |
+| `evaluation` | `{completeness, score, recommendation}` | `Quality: completeness (score: X.X) → recommendation` |
+| `tool_approval` | `{tool, args}` | Pauses the live area for the inline approval prompt |
+| `done` | `{phase}` | `✓ Phase complete` (green) with elapsed time |
 
 ### Agent streaming
 

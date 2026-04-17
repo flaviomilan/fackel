@@ -636,6 +636,7 @@ install_system_pkg "whois" "whois" "whois"
 # ---- Go tools (core) ----
 header "Go Tools — Core (ProjectDiscovery)"
 install_go_tool "subfinder" "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+install_go_tool "dnsx"      "github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
 install_go_tool "naabu"     "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"
 install_go_tool "nuclei"    "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
 install_go_tool "httpx"     "github.com/projectdiscovery/httpx/cmd/httpx@latest"

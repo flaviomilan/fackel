@@ -32,6 +32,7 @@ PROVIDER_KEYS: tuple[ProviderKeySpec, ...] = (
     ProviderKeySpec("WPScan", ("WPSCAN_API_TOKEN",), ("wpscan_scan",)),
     ProviderKeySpec("SecurityTrails", ("SECURITYTRAILS_API_KEY",), ("securitytrails_history",)),
     ProviderKeySpec("AlienVaultOTX", ("OTX_API_KEY",), ("otx_passive_dns",)),
+    ProviderKeySpec("Hunter", ("HUNTER_API_KEY",), ("hunter_email_search",)),
     ProviderKeySpec("HaveIBeenPwned", ("HIBP_API_KEY",), ("analyze_email",), hard_fail=False),
     ProviderKeySpec("EmailRep", ("EMAILREP_API_KEY",), ("analyze_email",), hard_fail=False),
 )

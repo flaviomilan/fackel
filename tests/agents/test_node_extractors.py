@@ -15,8 +15,11 @@ from fackel.agents.orchestrator.extractors import (
     extract_ip_classifications,
     extract_ips,
     extract_san_domains,
+    extract_subdomains,
     extract_tech_fingerprints,
 )
+from fackel.agents.orchestrator.translators import translate_phase_messages
+from fackel.domain import InformationType
 
 
 def _tool_msg(name: str, payload: dict) -> ToolMessage:
@@ -588,3 +591,91 @@ class TestExtractHistoricalIps:
             },
         )
         assert extract_historical_ips([msg], []) == []
+
+
+class TestExtractionParity:
+    """The two OSINT extraction pipelines must agree.
+
+    ``extractors.py`` feeds ``ScanState`` (drives routing & the port-scan
+    handoff); ``translators.py`` feeds the ``InformationStore`` (drives the
+    judge & report). Given the same tool payloads they must extract the same
+    IPs and subdomains — otherwise "what gets scanned" diverges from "what
+    gets reported". This test guards that contract.
+    """
+
+    BASE = "example.com"
+
+    def _fixture(self) -> list[ToolMessage]:
+        return [
+            _tool_msg(
+                "dns_resolve",
+                {
+                    "tool": "dns_resolve",
+                    "status": "ok",
+                    "data": {"ips": ["93.184.216.34", "1.1.1.1"]},
+                },
+            ),
+            _tool_msg(
+                "subfinder_enum",
+                {
+                    "tool": "subfinder_enum",
+                    "status": "ok",
+                    "data": {
+                        "subdomains": [
+                            "www.example.com",
+                            "API.example.com",  # case-normalised
+                            "*.cdn.example.com",  # wildcard stripped
+                            "200-1-2-3.example.com",  # reverse-PTR — filtered
+                            "other.notexample.com",  # out of scope — filtered
+                            "example.com",  # base itself — filtered
+                        ]
+                    },
+                },
+            ),
+            _tool_msg(
+                "shodan_lookup",
+                {"tool": "shodan_lookup", "status": "ok", "data": {"ip": "8.8.8.8"}},
+            ),
+            _tool_msg(
+                "dnsdumpster_lookup",
+                {
+                    "tool": "dnsdumpster_lookup",
+                    "status": "ok",
+                    "data": {
+                        "hosts": [
+                            {"ip": "9.9.9.9", "hostname": "mail.example.com"},
+                            {"ip": "not-an-ip"},  # invalid — filtered by both
+                        ],
+                        "details": [{"subdomain": "dev.example.com"}],
+                    },
+                },
+            ),
+        ]
+
+    def _translated(self, msgs: list[ToolMessage], info_type: InformationType) -> set[str]:
+        _execs, candidates = translate_phase_messages(
+            msgs, phase="osint", scan_id="test", target=self.BASE
+        )
+        return {c.normalized_value for c in candidates if c.type == info_type}
+
+    def test_ip_parity(self) -> None:
+        msgs = self._fixture()
+        assert set(extract_ips(msgs)) == self._translated(msgs, InformationType.IP_ADDRESS)
+
+    def test_subdomain_parity(self) -> None:
+        msgs = self._fixture()
+        assert set(extract_subdomains(msgs, self.BASE)) == self._translated(
+            msgs, InformationType.SUBDOMAIN
+        )
+
+    def test_expected_values(self) -> None:
+        """Anchor the parity to concrete expected sets (catches if BOTH drift)."""
+        msgs = self._fixture()
+        assert set(extract_ips(msgs)) == {"93.184.216.34", "1.1.1.1", "8.8.8.8", "9.9.9.9"}
+        assert set(extract_subdomains(msgs, self.BASE)) == {
+            "www.example.com",
+            "api.example.com",
+            "cdn.example.com",
+            "mail.example.com",
+            "dev.example.com",
+        }

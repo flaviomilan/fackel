@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tools.vuln.dalfox_tool import _map_severity, dalfox_scan
+from fackel.tools.vuln.dalfox_tool import _map_severity, dalfox_scan
 
 
 class TestDalfoxScan:
     """Verify DalFox CLI construction and result parsing."""
 
-    @patch("tools.vuln.dalfox_tool.run_command")
-    @patch("tools.vuln.dalfox_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.dalfox_tool.run_command")
+    @patch("fackel.tools.vuln.dalfox_tool.require_binary", return_value=None)
     def test_basic_command_construction(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         dalfox_scan.invoke({"target": "https://example.com/search?q=test"})
@@ -21,16 +21,16 @@ class TestDalfoxScan:
         assert "url" in cmd
         assert "https://example.com/search?q=test" in cmd
 
-    @patch("tools.vuln.dalfox_tool.run_command")
-    @patch("tools.vuln.dalfox_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.dalfox_tool.run_command")
+    @patch("fackel.tools.vuln.dalfox_tool.require_binary", return_value=None)
     def test_adds_scheme_when_missing(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         dalfox_scan.invoke({"target": "example.com"})
         cmd = mock_run.call_args[0][0]
         assert "https://example.com" in cmd
 
-    @patch("tools.vuln.dalfox_tool.run_command")
-    @patch("tools.vuln.dalfox_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.dalfox_tool.run_command")
+    @patch("fackel.tools.vuln.dalfox_tool.require_binary", return_value=None)
     def test_findings_parsed_from_jsonl(self, _bin, mock_run):
         finding = {
             "type": "verified",
@@ -48,8 +48,8 @@ class TestDalfoxScan:
         assert result["data"]["findings"][0]["param"] == "q"
         assert result["data"]["findings"][0]["cwe"] == "CWE-79"
 
-    @patch("tools.vuln.dalfox_tool.run_command")
-    @patch("tools.vuln.dalfox_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.dalfox_tool.run_command")
+    @patch("fackel.tools.vuln.dalfox_tool.require_binary", return_value=None)
     def test_no_findings_returns_message(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         result = dalfox_scan.invoke({"target": "https://example.com"})
@@ -57,8 +57,8 @@ class TestDalfoxScan:
         assert result["data"]["findings"] == []
         assert "message" in result["data"]
 
-    @patch("tools.vuln.dalfox_tool.run_command")
-    @patch("tools.vuln.dalfox_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.dalfox_tool.run_command")
+    @patch("fackel.tools.vuln.dalfox_tool.require_binary", return_value=None)
     def test_multiple_findings(self, _bin, mock_run):
         findings = [
             {"type": "reflected", "param": "q", "payload": "<img src=x>"},
@@ -69,8 +69,8 @@ class TestDalfoxScan:
         result = dalfox_scan.invoke({"target": "https://example.com/search?q=a&id=1"})
         assert result["data"]["total"] == 2
 
-    @patch("tools.vuln.dalfox_tool.run_command", side_effect=Exception("timeout"))
-    @patch("tools.vuln.dalfox_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.dalfox_tool.run_command", side_effect=Exception("timeout"))
+    @patch("fackel.tools.vuln.dalfox_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _run):
         result = dalfox_scan.invoke({"target": "https://example.com"})
         assert "timeout" in result

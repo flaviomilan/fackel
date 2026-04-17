@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tools.vuln.wpscan_tool import _extract_vulns, wpscan_scan
+from fackel.tools.vuln.wpscan_tool import _extract_vulns, wpscan_scan
 
 
 class TestWPScanScan:
     """Verify WPScan CLI construction and result parsing."""
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_basic_command_construction(self, _env, _bin, mock_run):
         mock_run.return_value = (0, "{}", "")
         wpscan_scan.invoke({"target": "https://example.com"})
@@ -23,9 +23,9 @@ class TestWPScanScan:
         assert "--format" in cmd
         assert "json" in cmd
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_adds_scheme_when_missing(self, _env, _bin, mock_run):
         mock_run.return_value = (0, "{}", "")
         wpscan_scan.invoke({"target": "example.com"})
@@ -33,9 +33,9 @@ class TestWPScanScan:
         url_idx = cmd.index("--url") + 1
         assert cmd[url_idx] == "https://example.com"
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_parses_wordpress_version(self, _env, _bin, mock_run):
         data = {
             "version": {
@@ -53,9 +53,9 @@ class TestWPScanScan:
         assert result["data"]["wordpress_version"]["number"] == "6.4"
         assert result["data"]["total_vulnerabilities"] == 1
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_parses_plugins(self, _env, _bin, mock_run):
         data = {
             "plugins": {
@@ -74,9 +74,9 @@ class TestWPScanScan:
         assert result["data"]["plugins"][0]["name"] == "contact-form-7"
         assert result["data"]["plugins"][0]["outdated"] is True
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_parses_users(self, _env, _bin, mock_run):
         data = {"users": {"1": {"username": "admin"}, "2": {"username": "editor"}}}
         mock_run.return_value = (0, json.dumps(data), "")
@@ -84,24 +84,24 @@ class TestWPScanScan:
         assert "admin" in result["data"]["users"]
         assert "editor" in result["data"]["users"]
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_empty_output_nonzero_code_returns_error(self, _env, _bin, mock_run):
         mock_run.return_value = (1, "", "scan failed")
         result = wpscan_scan.invoke({"target": "https://example.com"})
         assert "scan failed" in result
 
-    @patch("tools.vuln.wpscan_tool.run_command", side_effect=Exception("timeout"))
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command", side_effect=Exception("timeout"))
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_command_exception_returns_error(self, _env, _bin, _run):
         result = wpscan_scan.invoke({"target": "https://example.com"})
         assert "timeout" in result
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_malformed_json_returns_error(self, _env, _bin, mock_run):
         mock_run.return_value = (0, "not json", "")
         result = wpscan_scan.invoke({"target": "https://example.com"})
@@ -117,9 +117,9 @@ class TestWPScanScan:
         assert results[0]["title"] == "XSS in widget"
         assert results[1]["cvss"] == "9.8"
 
-    @patch("tools.vuln.wpscan_tool.run_command")
-    @patch("tools.vuln.wpscan_tool.require_binary", return_value=None)
-    @patch("tools.vuln.wpscan_tool.require_env", return_value="token123")
+    @patch("fackel.tools.vuln.wpscan_tool.run_command")
+    @patch("fackel.tools.vuln.wpscan_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.wpscan_tool.require_env", return_value="token123")
     def test_enumerate_options_passed(self, _env, _bin, mock_run):
         mock_run.return_value = (0, "{}", "")
         wpscan_scan.invoke({"target": "https://example.com", "enumerate": "ap,at,u"})

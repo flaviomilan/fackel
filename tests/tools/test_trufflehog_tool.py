@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tools.osint.trufflehog_tool import trufflehog_scan
+from fackel.tools.osint.trufflehog_tool import trufflehog_scan
 
 
 class TestTrufflehogScan:
     """Verify TruffleHog CLI construction and result parsing."""
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_git_repo_command(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         trufflehog_scan.invoke({"target": "https://github.com/org/repo"})
@@ -21,8 +21,8 @@ class TestTrufflehogScan:
         assert "git" in cmd
         assert "https://github.com/org/repo" in cmd
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_github_org_command(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         trufflehog_scan.invoke({"target": "https://github.com/orgname"})
@@ -30,24 +30,24 @@ class TestTrufflehogScan:
         assert "trufflehog" in cmd
         assert "github" in cmd
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_verified_only_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         trufflehog_scan.invoke({"target": "https://github.com/org/repo", "only_verified": True})
         cmd = mock_run.call_args[0][0]
         assert "--only-verified" in cmd
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_no_verified_flag_when_false(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         trufflehog_scan.invoke({"target": "https://github.com/org/repo", "only_verified": False})
         cmd = mock_run.call_args[0][0]
         assert "--only-verified" not in cmd
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_parses_findings(self, _bin, mock_run):
         finding = {
             "DetectorType": "AWS",
@@ -71,48 +71,48 @@ class TestTrufflehogScan:
         assert result["data"]["findings"][0]["detector"] == "AWS"
         assert result["data"]["findings"][0]["file"] == "config.py"
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_no_results_returns_ok(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         result = trufflehog_scan.invoke({"target": "https://github.com/org/repo"})
         assert result["status"] == "ok"
         assert result["data"]["total"] == 0
 
-    @patch("tools.osint.trufflehog_tool.run_command", side_effect=Exception("timeout"))
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command", side_effect=Exception("timeout"))
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _run):
         result = trufflehog_scan.invoke({"target": "https://github.com/org/repo"})
         assert "timeout" in result
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_truncates_raw_value(self, _bin, mock_run):
         finding = {"Raw": "x" * 200, "Verified": False, "SourceMetadata": {}}
         mock_run.return_value = (0, json.dumps(finding) + "\n", "")
         result = trufflehog_scan.invoke({"target": "https://github.com/org/repo"})
         assert len(result["data"]["findings"][0]["raw"]) <= 100
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_empty_target_returns_error(self, _bin, mock_run):
         result = trufflehog_scan.invoke({"target": ""})
         assert "must not be empty" in result
 
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_plain_domain_rejected(self, _bin):
         """Plain domains (not Git hosts) must be rejected."""
         result = trufflehog_scan.invoke({"target": "eversafe.info"})
         assert "Plain domains are not supported" in result
 
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_ip_address_rejected(self, _bin):
         """IP addresses must be rejected — trufflehog needs a Git repo."""
         result = trufflehog_scan.invoke({"target": "192.168.1.1"})
         assert "Plain domains are not supported" in result
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_gitlab_repo_accepted(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         trufflehog_scan.invoke({"target": "https://gitlab.com/org/repo"})
@@ -120,8 +120,8 @@ class TestTrufflehogScan:
         assert "git" in cmd
         assert "https://gitlab.com/org/repo" in cmd
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_dotgit_url_accepted(self, _bin, mock_run):
         """A URL ending in .git should be accepted as a git target."""
         mock_run.return_value = (0, "", "")
@@ -129,8 +129,8 @@ class TestTrufflehogScan:
         cmd = mock_run.call_args[0][0]
         assert "git" in cmd
 
-    @patch("tools.osint.trufflehog_tool.run_command")
-    @patch("tools.osint.trufflehog_tool.require_binary", return_value=None)
+    @patch("fackel.tools.osint.trufflehog_tool.run_command")
+    @patch("fackel.tools.osint.trufflehog_tool.require_binary", return_value=None)
     def test_bare_github_path_normalised(self, _bin, mock_run):
         """A bare 'github.com/org/repo' should get https:// prefix."""
         mock_run.return_value = (0, "", "")

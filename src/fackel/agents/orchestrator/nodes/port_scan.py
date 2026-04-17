@@ -54,6 +54,10 @@ def port_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
     agent = build(approve_tools=is_tool_approval_enabled())
     messages = run_and_stream_agent(agent, "port_scan", prompt, config=config)
 
+    from ..translators import persist_phase
+
+    persist_phase(messages, phase="port_scan", target=state["target"])
+
     summary = agent_summary(messages)
     streaming.emit("port_scan", "summary", {"content": summary})
 

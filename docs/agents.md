@@ -27,7 +27,7 @@ All ReAct agents follow the same construction pattern:
 from langchain.agents import create_agent
 
 from fackel.agents.config import build_llm, default_middleware
-from fackel.agents.prompts import load_prompt
+from fackel.prompts import load_prompt
 from fackel.provider_keys import filter_tools
 
 def build(model_name: str | None = None, *, approve_tools: bool = False) -> CompiledStateGraph:

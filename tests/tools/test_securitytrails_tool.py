@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from tools.recon.securitytrails_tool import securitytrails_history
+from fackel.tools.recon.securitytrails_tool import securitytrails_history
 
 
 def _ok_response(json_data: dict, status: int = 200) -> MagicMock:
@@ -74,7 +74,7 @@ class TestSecurityTrailsHappyPath:
     """Successful SecurityTrails API responses."""
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.get_session")
+    @patch("fackel.tools.recon.securitytrails_tool.get_session")
     def test_returns_all_record_types(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = [
@@ -102,7 +102,7 @@ class TestSecurityTrailsHappyPath:
         assert data["ns_records"][0]["value"] == "ns1.cloudflare.com"
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.get_session")
+    @patch("fackel.tools.recon.securitytrails_tool.get_session")
     def test_passes_api_key_in_header(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"records": []})
@@ -113,7 +113,7 @@ class TestSecurityTrailsHappyPath:
             assert call.kwargs["headers"]["APIKEY"] == "test-key-123"
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.get_session")
+    @patch("fackel.tools.recon.securitytrails_tool.get_session")
     def test_empty_records(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"records": []})
@@ -126,7 +126,7 @@ class TestSecurityTrailsHappyPath:
         assert result["data"]["ns_records"] == []
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.get_session")
+    @patch("fackel.tools.recon.securitytrails_tool.get_session")
     def test_strips_trailing_dot(self, mock_gs: MagicMock) -> None:
         """Nameservers/hosts with trailing dots are normalised."""
         mock_get = mock_gs.return_value.get
@@ -154,7 +154,7 @@ class TestSecurityTrailsErrors:
     """Error handling."""
 
     @patch.dict("os.environ", {"SECURITYTRAILS_API_KEY": "test-key-123"})
-    @patch("tools.recon.securitytrails_tool.get_session")
+    @patch("fackel.tools.recon.securitytrails_tool.get_session")
     def test_partial_failure_still_returns_ok(self, mock_gs: MagicMock) -> None:
         """If one record type fails, others still succeed."""
         mock_get = mock_gs.return_value.get

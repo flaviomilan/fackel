@@ -1,47 +1,47 @@
 # Tool — SSRF Scanning
 
-## Objetivo
+## Purpose
 
-Detectar vulnerabilidades de Server-Side Request Forgery (SSRF) que
-permitem um atacante fazer o servidor alvo enviar requests para
-recursos internos ou arbitrários.
+Detect Server-Side Request Forgery (SSRF) vulnerabilities that
+allow an attacker to make the target server send requests to
+internal or arbitrary resources.
 
-## Ferramentas
+## Tools
 
-| Ferramenta       | Propósito                                         |
-|------------------|---------------------------------------------------|
-| `ssrf_detect`    | Detecção via nuclei templates (ssrf, oast tags)   |
-| `nuclei_scan`    | Com `-tags ssrf` para cobertura adicional         |
-| `open_redirect_scan` | Open redirect → pode escalar para SSRF       |
-| `ssti_scan`      | SSTI → frequentemente chained com SSRF            |
+| Tool                | Purpose                                         |
+|---------------------|---------------------------------------------------|
+| `ssrf_detect`       | Detection via nuclei templates (ssrf, oast tags)   |
+| `nuclei_scan`       | With `-tags ssrf` for additional coverage         |
+| `open_redirect_scan` | Open redirect → can escalate to SSRF       |
+| `ssti_scan`         | SSTI → frequently chained with SSRF            |
 
-## Regras de Uso
+## Usage Rules
 
-1. **ssrf_detect em endpoints que aceitam URLs como parâmetros** —
-   parâmetros como url=, redirect=, callback=, next=, file=, path=.
-2. **Blind SSRF via OOB** — nuclei usa callbacks OAST para detectar
-   blind SSRF (o servidor faz request para domínio controlado).
-3. **Correlacionar com open redirect** — open redirect pode ser
-   chained para SSRF bypass de whitelists.
-4. **Verificar cloud metadata** — SSRF para 169.254.169.254 em
-   ambientes cloud (AWS, GCP, Azure) é critical.
+1. **ssrf_detect on endpoints accepting URLs as parameters** —
+   parameters like url=, redirect=, callback=, next=, file=, path=.
+2. **Blind SSRF via OOB** — nuclei uses OAST callbacks to detect
+   blind SSRF (server makes request to controlled domain).
+3. **Correlate with open redirect** — open redirect can be
+   chained to bypass SSRF whitelists.
+4. **Check cloud metadata** — SSRF to 169.254.169.254 in
+   cloud environments (AWS, GCP, Azure) is critical.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Não tentar acessar recursos internos manualmente.
-- Somente detecção — não exfiltrar dados via SSRF.
-- Respeitar rate limiting do alvo.
+- Do not attempt manual access to internal resources.
+- Detection only — do not exfiltrate data via SSRF.
+- Respect target rate limiting.
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                    | Ação                                       |
+| Scenario                   | Action                                     |
 |----------------------------|--------------------------------------------|
-| WAF bloqueando callbacks   | Documentar WAF, tentar encoding alternativo|
-| Sem parâmetros URL         | Usar crawling para descobrir endpoints     |
-| nuclei sem findings        | Documentar como "não detectável por scan auto" |
+| WAF blocking callbacks     | Document WAF, try alternative encoding    |
+| No URL parameters          | Use crawling to discover endpoints         |
+| nuclei no findings         | Document as "not detectable by auto scan"  |
 
-## Normalização
+## Normalization
 
-- Tipo: blind_ssrf, full_read_ssrf, partial_ssrf.
+- Type: blind_ssrf, full_read_ssrf, partial_ssrf.
 - Severity: critical (full read/cloud metadata), high (blind SSRF), medium (partial).
-- Template ID preservado para referência.
+- Template ID preserved for reference.

@@ -305,3 +305,6 @@ pip-selfcheck.json
 reports/
 .vscode/
 node_modules/
+
+# Scan runtime artifacts (resume state written by external tools)
+resume.cfg

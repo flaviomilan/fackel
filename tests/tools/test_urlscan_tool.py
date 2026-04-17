@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import requests
 
 from fackel.tooling.circuit_breaker import reset_all as reset_circuits
-from tools.recon.urlscan_tool import urlscan_search
+from fackel.tools.recon.urlscan_tool import urlscan_search
 
 
 def _ok_response(json_data: dict, status: int = 200) -> MagicMock:
@@ -79,7 +79,7 @@ _SEARCH_RESPONSE = {
 class TestUrlscanSearchHappyPath:
     """Successful Urlscan.io search responses."""
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_returns_parsed_results(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response(_SEARCH_RESPONSE)
@@ -100,7 +100,7 @@ class TestUrlscanSearchHappyPath:
         assert first["title"] == "Example Domain"
         assert first["technologies"] == ["h2", "TLSv1.3"]
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_passes_correct_query_params(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"total": 0, "results": []})
@@ -111,7 +111,7 @@ class TestUrlscanSearchHappyPath:
         assert call_args.kwargs["params"]["q"] == "domain:example.com"
         assert call_args.kwargs["params"]["size"] == "10"
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_empty_results(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"total": 0, "results": []})
@@ -122,7 +122,7 @@ class TestUrlscanSearchHappyPath:
         assert result["data"]["total"] == 0
         assert result["data"]["results"] == []
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_caps_at_max_results(self, mock_gs: MagicMock) -> None:
         """Even if API returns more than 10, we cap at _MAX_RESULTS."""
         mock_get = mock_gs.return_value.get
@@ -143,7 +143,7 @@ class TestUrlscanSearchHappyPath:
 
         assert len(result["data"]["results"]) == 10
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_handles_missing_fields_gracefully(self, mock_gs: MagicMock) -> None:
         """Missing fields produce empty strings, not KeyErrors."""
         mock_get = mock_gs.return_value.get
@@ -171,7 +171,7 @@ class TestUrlscanSearchErrors:
     def teardown_method(self) -> None:
         reset_circuits()
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_http_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.HTTPError("429 Too Many Requests")
@@ -181,7 +181,7 @@ class TestUrlscanSearchErrors:
         assert isinstance(result, str)
         assert "429" in result
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_connection_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.ConnectionError("Connection refused")
@@ -191,7 +191,7 @@ class TestUrlscanSearchErrors:
         assert isinstance(result, str)
         assert "Connection refused" in result
 
-    @patch("tools.recon.urlscan_tool.get_session")
+    @patch("fackel.tools.recon.urlscan_tool.get_session")
     def test_non_json_response(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         resp = MagicMock(spec=requests.Response)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.scanning.graphql_scanner import (
+from fackel.tools.scanning.graphql_scanner import (
     _probe_alias_batching,
     _probe_array_batching,
     _probe_field_suggestions,
@@ -17,7 +17,7 @@ from tools.scanning.graphql_scanner import (
 class TestProbeIntrospection:
     """Verify introspection detection logic."""
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_detects_exposed_schema(self, mock_session):
         schema = {
             "data": {
@@ -43,7 +43,7 @@ class TestProbeIntrospection:
         assert issues[0]["severity"] == "medium"
         assert summary["has_mutations"] is True
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_disabled_introspection(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 403
@@ -53,7 +53,7 @@ class TestProbeIntrospection:
         assert enabled is False
         assert issues == []
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_handles_request_error(self, mock_session):
         import requests
 
@@ -67,7 +67,7 @@ class TestProbeIntrospection:
 class TestProbeAliasBatching:
     """Verify alias batching detection."""
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_detects_alias_batching(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -78,7 +78,7 @@ class TestProbeAliasBatching:
         assert len(issues) == 1
         assert issues[0]["severity"] == "low"
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_no_alias_batching(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -92,7 +92,7 @@ class TestProbeAliasBatching:
 class TestProbeArrayBatching:
     """Verify array batching detection."""
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_detects_array_batching(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -105,7 +105,7 @@ class TestProbeArrayBatching:
         issues = _probe_array_batching("https://example.com/graphql", {})
         assert len(issues) == 1
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_no_array_batching(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 400
@@ -118,7 +118,7 @@ class TestProbeArrayBatching:
 class TestProbeGetMethod:
     """Verify GET method query detection."""
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_detects_get_method(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -136,7 +136,7 @@ class TestProbeGetMethod:
 class TestProbeFieldSuggestions:
     """Verify field suggestion detection."""
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_detects_field_suggestions(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -146,7 +146,7 @@ class TestProbeFieldSuggestions:
         issues = _probe_field_suggestions("https://example.com/graphql", {})
         assert len(issues) == 1
 
-    @patch("tools.scanning.graphql_scanner.get_session")
+    @patch("fackel.tools.scanning.graphql_scanner.get_session")
     def test_no_field_suggestions(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -160,22 +160,24 @@ class TestProbeFieldSuggestions:
 class TestGraphqlScan:
     """Verify the full graphql_scan tool function."""
 
-    @patch("tools.scanning.graphql_scanner._probe_field_suggestions", return_value=[])
-    @patch("tools.scanning.graphql_scanner._probe_get_method", return_value=[])
-    @patch("tools.scanning.graphql_scanner._probe_array_batching", return_value=[])
-    @patch("tools.scanning.graphql_scanner._probe_alias_batching", return_value=[])
-    @patch("tools.scanning.graphql_scanner._probe_introspection", return_value=(False, [], {}))
+    @patch("fackel.tools.scanning.graphql_scanner._probe_field_suggestions", return_value=[])
+    @patch("fackel.tools.scanning.graphql_scanner._probe_get_method", return_value=[])
+    @patch("fackel.tools.scanning.graphql_scanner._probe_array_batching", return_value=[])
+    @patch("fackel.tools.scanning.graphql_scanner._probe_alias_batching", return_value=[])
+    @patch(
+        "fackel.tools.scanning.graphql_scanner._probe_introspection", return_value=(False, [], {})
+    )
     def test_no_issues_detected(self, *_probes):
         result = graphql_scan.invoke({"url": "https://example.com/graphql"})
         assert result["status"] == "ok"
         assert result["data"]["issues"] == []
 
-    @patch("tools.scanning.graphql_scanner._probe_field_suggestions", return_value=[])
-    @patch("tools.scanning.graphql_scanner._probe_get_method", return_value=[])
-    @patch("tools.scanning.graphql_scanner._probe_array_batching", return_value=[])
-    @patch("tools.scanning.graphql_scanner._probe_alias_batching", return_value=[])
+    @patch("fackel.tools.scanning.graphql_scanner._probe_field_suggestions", return_value=[])
+    @patch("fackel.tools.scanning.graphql_scanner._probe_get_method", return_value=[])
+    @patch("fackel.tools.scanning.graphql_scanner._probe_array_batching", return_value=[])
+    @patch("fackel.tools.scanning.graphql_scanner._probe_alias_batching", return_value=[])
     @patch(
-        "tools.scanning.graphql_scanner._probe_introspection",
+        "fackel.tools.scanning.graphql_scanner._probe_introspection",
         return_value=(
             True,
             [{"issue": "Introspection enabled", "severity": "medium", "detail": "exposed"}],

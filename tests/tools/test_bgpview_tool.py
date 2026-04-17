@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import requests
 
 from fackel.tooling.circuit_breaker import reset_all as reset_circuits
-from tools.recon.bgpview_tool import _parse_holder, _parse_rir, bgp_lookup
+from fackel.tools.recon.bgpview_tool import _parse_holder, _parse_rir, bgp_lookup
 
 
 def _ok_response(json_data: dict, status: int = 200) -> MagicMock:
@@ -78,7 +78,7 @@ class TestParseHolder:
 class TestBgpLookupHappyPath:
     """Successful RIPEstat API responses."""
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_returns_parsed_data(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response(
@@ -111,7 +111,7 @@ class TestBgpLookupHappyPath:
         assert data["cidr"] == 20
         assert data["rir"] == "ARIN"
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_multiple_asns_picks_first(self, mock_gs: MagicMock) -> None:
         """When multiple ASNs announce the prefix, the first one is used."""
         mock_get = mock_gs.return_value.get
@@ -134,7 +134,7 @@ class TestBgpLookupHappyPath:
         assert data["asn_name"] == "PRIMARY"
         assert data["rir"] == "APNIC"
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_no_asns(self, mock_gs: MagicMock) -> None:
         """IP with no announcing ASN — fields default gracefully."""
         mock_get = mock_gs.return_value.get
@@ -156,7 +156,7 @@ class TestBgpLookupHappyPath:
         assert data["cidr"] == 0
         assert data["rir"] == "IANA"
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_holder_without_separator(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response(
@@ -183,7 +183,7 @@ class TestBgpLookupErrors:
     def teardown_method(self) -> None:
         reset_circuits()
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_http_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _error_response(500)
@@ -191,7 +191,7 @@ class TestBgpLookupErrors:
         assert isinstance(result, str)
         assert "request failed" in result.lower()
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_non_json_response(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         resp = _ok_response({})
@@ -201,7 +201,7 @@ class TestBgpLookupErrors:
         assert isinstance(result, str)
         assert "non-json" in result.lower()
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_connection_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.ConnectionError("Connection refused")
@@ -209,7 +209,7 @@ class TestBgpLookupErrors:
         assert isinstance(result, str)
         assert "request failed" in result.lower()
 
-    @patch("tools.recon.bgpview_tool.get_session")
+    @patch("fackel.tools.recon.bgpview_tool.get_session")
     def test_timeout_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.Timeout("timed out")

@@ -114,16 +114,39 @@ class TestTimeoutGuard:
             guard.check()  # should not raise
 
     def test_guard_threading_fallback_raises_on_expiry(self):
-        """Force the threading path and verify it detects expiry."""
+        """Force the threading path (use_signals=False) and verify it detects expiry."""
         from fackel.agents.orchestrator.main import ScanTimeoutError, _TimeoutGuard
 
-        guard = _TimeoutGuard(1)
-        # Force threading path
-        with patch("fackel.agents.orchestrator.main._HAS_SIGALRM", False), guard:
-            # Manually trigger expiry
-            guard._expired.set()
+        # use_signals=False forces the threading.Timer path (e.g. worker thread).
+        guard = _TimeoutGuard(1, install_signal_handlers=False, use_signals=False)
+        with guard:
+            guard._expired.set()  # manually trigger expiry
             with pytest.raises(ScanTimeoutError):
                 guard.check()
+
+    def test_zero_timeout_is_disabled(self):
+        """A timeout of 0 disables the guard — no alarm/timer, check() no-ops."""
+        from fackel.agents.orchestrator.main import _TimeoutGuard
+
+        guard = _TimeoutGuard(0)
+        assert guard._enabled is False
+        with guard:
+            guard.check()  # never raises when disabled
+
+    def test_negative_timeout_is_disabled(self):
+        from fackel.agents.orchestrator.main import _TimeoutGuard
+
+        assert _TimeoutGuard(-5)._enabled is False
+
+    def test_disabled_threading_path_does_not_arm_timer(self):
+        """Regression: timeout=0 on the threading path must NOT start a Timer
+        (a ``Timer(0)`` would fire immediately and raise spuriously)."""
+        from fackel.agents.orchestrator.main import _TimeoutGuard
+
+        guard = _TimeoutGuard(0)
+        with patch("fackel.agents.orchestrator.main._HAS_SIGALRM", False), guard:
+            assert guard._timer is None
+            guard.check()  # no expiry possible
 
 
 # ---------------------------------------------------------------------------
@@ -149,15 +172,19 @@ class TestResetOrchestrator:
 
 
 class TestEstimateTokens:
-    """Verify the rough token estimator for trim_messages."""
+    """Verify the token estimator for trim_messages."""
 
     def test_string_content(self):
         from langchain_core.messages import HumanMessage
 
         from fackel.agents.orchestrator.streaming import _estimate_tokens
 
-        msgs = [HumanMessage(content="a" * 400)]
-        assert _estimate_tokens(msgs) == 100  # 400 / 4
+        msgs = [HumanMessage(content="hello world " * 50)]
+        result = _estimate_tokens(msgs)
+        # tiktoken (cl100k_base) puts "hello world " at ~2 tokens; the
+        # heuristic fallback gives len/3+1.  Either way, it must be a
+        # positive estimate proportional to input length.
+        assert 50 < result < 500
 
     def test_empty_messages(self):
         from fackel.agents.orchestrator.streaming import _estimate_tokens
@@ -168,8 +195,9 @@ class TestEstimateTokens:
         from fackel.agents.orchestrator.streaming import _estimate_tokens
 
         msg = MagicMock()
-        msg.content = [{"text": "a" * 80}]
-        assert _estimate_tokens([msg]) == 20  # 80 / 4
+        msg.content = [{"text": "hello world " * 10}]
+        result = _estimate_tokens([msg])
+        assert result > 0
 
 
 # ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ validators
     plus pure IP / domain helpers.
 """
 
+from fackel.tooling.binaries import TOOL_BINARIES, available_binaries
 from fackel.tooling.ddgs import DDGS  # type: ignore[attr-defined]
 from fackel.tooling.execution import (
     format_tool_output,
@@ -36,6 +37,9 @@ from fackel.tooling.sanitizers import (
 )
 from fackel.tooling.validators import (
     TargetType,
+    ensure_scheme,
+    guard_dns_rebinding,
+    guard_request_target,
     guard_target,
     is_reverse_ptr_subdomain,
     is_valid_domain,
@@ -45,9 +49,14 @@ from fackel.tooling.validators import (
 
 __all__ = [
     "DDGS",
+    "TOOL_BINARIES",
     "TargetType",
+    "available_binaries",
+    "ensure_scheme",
     "format_tool_output",
     "get_tool_timeout",
+    "guard_dns_rebinding",
+    "guard_request_target",
     "guard_target",
     "is_reverse_ptr_subdomain",
     "is_valid_domain",

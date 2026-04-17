@@ -1,65 +1,65 @@
-# Orchestrator — Detecção de Loop
+# Orchestrator — Loop Detection
 
-## Objetivo
+## Objective
 
-Identificar e quebrar loops no pipeline onde as mesmas ferramentas são
-chamadas repetidamente sem produzir novos resultados.
+Identify and break loops in the pipeline where the same tools are called
+repeatedly without producing new results.
 
 ## Inputs
 
-| Campo                | Tipo         | Descrição                               |
-|----------------------|--------------|-----------------------------------------|
-| `tool_history`       | `list[dict]` | Histórico de chamadas (tool, target, timestamp) |
-| `findings_per_call`  | `dict`       | Novos achados por chamada               |
-| `current_iteration`  | `int`        | Iteração atual                          |
-| `${user_context}`    | `string`     | Contexto operacional (opcional)         |
+| Field                | Type         | Description                                     |
+|----------------------|--------------|-------------------------------------------------|
+| `tool_history`       | `list[dict]` | Call history (tool, target, timestamp)          |
+| `findings_per_call`  | `dict`       | New findings per call                           |
+| `current_iteration`  | `int`        | Current iteration                               |
+| `${user_context}`    | `string`     | Operational context (optional)                  |
 
 ## Outputs
 
-| Campo                | Tipo         | Descrição                               |
-|----------------------|--------------|-----------------------------------------|
-| `loop_detected`      | `bool`       | Se loop foi detectado                   |
-| `loop_type`          | `string`     | Tipo: exact_repeat, oscillation, drift  |
-| `offending_tools`    | `list[str]`  | Tools envolvidas no loop                |
-| `recommended_action` | `string`     | Ação corretiva                          |
+| Field                | Type         | Description                                     |
+|----------------------|--------------|-------------------------------------------------|
+| `loop_detected`      | `bool`       | Whether a loop was detected                     |
+| `loop_type`          | `string`     | Type: exact_repeat, oscillation, drift          |
+| `offending_tools`    | `list[str]`  | Tools involved in the loop                      |
+| `recommended_action` | `string`     | Corrective action                               |
 
-## Regras
+## Rules
 
-1. **Exact repeat** — mesma tool, mesmo target, mesmos params chamada
-   2+ vezes → loop claro.
-2. **Oscillation** — tool A → tool B → tool A → tool B sem novos
-   achados → oscilação improdutiva.
-3. **Drift** — target muda ligeiramente a cada iteração mas resultados
-   não mudam → expansão sem valor.
-4. **Tolerância**: 1 repeat é aceitável (retry legítimo), 2+ é loop.
-5. **Ação padrão**: parar tools em loop, avançar para próxima fase.
-6. **Não contar como loop**: mesma tool em targets diferentes (legítimo).
+1. **Exact repeat** — same tool, same target, same params called 2+ times
+   → clear loop.
+2. **Oscillation** — tool A → tool B → tool A → tool B with no new findings
+   → unproductive oscillation.
+3. **Drift** — target changes slightly each iteration but results do not
+   change → expansion without value.
+4. **Tolerance**: 1 repeat is acceptable (legitimate retry); 2+ is a loop.
+5. **Default action**: stop the looping tools, advance to the next phase.
+6. **Do not count as a loop**: same tool on different targets (legitimate).
 
-## Critérios de Qualidade
+## Quality Criteria
 
-- Detecção precisa (sem falsos positivos em retry legítimo).
-- Tipo de loop identificado corretamente.
-- Ação corretiva específica e acionável.
+- Precise detection (no false positives on legitimate retries).
+- Loop type identified correctly.
+- Corrective action specific and actionable.
 
 ## Template
 
 ```
-DETECÇÃO DE LOOP
-================
+LOOP DETECTION
+==============
 
-Analisar histórico de chamadas:
+Analyse the call history:
 
-1. Agrupar por (tool, target):
-   - Se count > 2 com mesmos achados → exact_repeat
-   - Se alternância A→B→A→B com delta=0 → oscillation
-   - Se target drift sem novos achados → drift
+1. Group by (tool, target):
+   - If count > 2 with the same findings → exact_repeat
+   - If alternating A→B→A→B with delta=0 → oscillation
+   - If target drift with no new findings → drift
 
-2. Se loop detectado:
-   - Identificar tools offending
-   - Recomendar: skip tools em loop, avançar fase
-   - Ou: mudar estratégia (diferentes params/targets)
+2. If a loop is detected:
+   - Identify the offending tools
+   - Recommend: skip the looping tools, advance the phase
+   - Or: change strategy (different params/targets)
 
-3. Se não detectado:
-   - Confirmar que progresso está sendo feito
-   - Reportar métricas de eficiência
+3. If not detected:
+   - Confirm progress is being made
+   - Report efficiency metrics
 ```

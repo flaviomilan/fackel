@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from tools.recon.whois import (
+from fackel.tools.recon.whois import (
     _build_rdap_data,
     _extract_rdap_event,
     _extract_rdap_nameservers,
@@ -126,7 +126,7 @@ class TestRdapServerForTld:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.recon.whois.urllib.request.urlopen", return_value=mock_resp):
+        with patch("fackel.tools.recon.whois.urllib.request.urlopen", return_value=mock_resp):
             url = _rdap_server_for_tld("info")
             assert url == "https://rdap.identitydigital.services/rdap"
 
@@ -137,18 +137,18 @@ class TestRdapServerForTld:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.recon.whois.urllib.request.urlopen", return_value=mock_resp):
+        with patch("fackel.tools.recon.whois.urllib.request.urlopen", return_value=mock_resp):
             assert _rdap_server_for_tld("xyz") is None
 
     def test_returns_none_on_network_error(self):
-        with patch("tools.recon.whois.urllib.request.urlopen", side_effect=OSError):
+        with patch("fackel.tools.recon.whois.urllib.request.urlopen", side_effect=OSError):
             assert _rdap_server_for_tld("info") is None
 
 
 class TestWhoisLookupTraditional:
     """When python-whois succeeds, RDAP should be skipped."""
 
-    @patch("tools.recon.whois._whois_query")
+    @patch("fackel.tools.recon.whois._whois_query")
     def test_traditional_whois_success(self, mock_query):
         record = MagicMock()
         record.registrar = "GoDaddy.com, LLC"
@@ -165,7 +165,7 @@ class TestWhoisLookupTraditional:
         assert result["data"]["source"] == "whois"
         assert result["data"]["parsed"] is True
 
-    @patch("tools.recon.whois._whois_query")
+    @patch("fackel.tools.recon.whois._whois_query")
     def test_traditional_whois_empty_falls_through(self, mock_query):
         """When whois returns no parsed data, result still has parsed=False."""
         record = MagicMock()
@@ -176,7 +176,7 @@ class TestWhoisLookupTraditional:
         record.__str__ = lambda self: "terms of use only"
         mock_query.return_value = record
 
-        with patch("tools.recon.whois._rdap_query", return_value=None):
+        with patch("fackel.tools.recon.whois._rdap_query", return_value=None):
             result = whois_lookup.invoke({"domain": "example.info"})
             assert isinstance(result, str)
 
@@ -184,8 +184,8 @@ class TestWhoisLookupTraditional:
 class TestWhoisLookupRdapFallback:
     """When python-whois fails, RDAP should provide data."""
 
-    @patch("tools.recon.whois._whois_query", side_effect=Exception("WHOIS failed"))
-    @patch("tools.recon.whois._rdap_query", return_value=SAMPLE_RDAP)
+    @patch("fackel.tools.recon.whois._whois_query", side_effect=Exception("WHOIS failed"))
+    @patch("fackel.tools.recon.whois._rdap_query", return_value=SAMPLE_RDAP)
     def test_rdap_fallback_on_whois_failure(self, _rdap, _whois):
         result = whois_lookup.invoke({"domain": "example.info"})
 
@@ -196,8 +196,8 @@ class TestWhoisLookupRdapFallback:
         assert result["data"]["creation_date"] == "2022-08-31T13:38:25Z"
         assert result["data"]["parsed"] is True
 
-    @patch("tools.recon.whois._whois_query", side_effect=Exception("WHOIS failed"))
-    @patch("tools.recon.whois._rdap_query", return_value=None)
+    @patch("fackel.tools.recon.whois._whois_query", side_effect=Exception("WHOIS failed"))
+    @patch("fackel.tools.recon.whois._rdap_query", return_value=None)
     def test_both_fail_returns_error(self, _rdap, _whois):
         result = whois_lookup.invoke({"domain": "example.xyz"})
 
@@ -217,8 +217,8 @@ class TestWhoisInputValidation:
     def test_url_extracts_host(self):
         """guard_target for DOMAIN type should extract host from URL."""
         with (
-            patch("tools.recon.whois._whois_query", side_effect=Exception("fail")),
-            patch("tools.recon.whois._rdap_query", return_value=SAMPLE_RDAP),
+            patch("fackel.tools.recon.whois._whois_query", side_effect=Exception("fail")),
+            patch("fackel.tools.recon.whois._rdap_query", return_value=SAMPLE_RDAP),
         ):
             result = whois_lookup.invoke({"domain": "https://example.info/path"})
             assert result["status"] == "ok"

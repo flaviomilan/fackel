@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tools.scanning.s3scanner_tool import s3scanner_scan
+from fackel.tools.scanning.s3scanner_tool import s3scanner_scan
 
 
 class TestS3ScannerScan:
     """Verify S3Scanner CLI construction and result parsing."""
 
-    @patch("tools.scanning.s3scanner_tool.run_command")
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command")
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_basic_command_construction(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         s3scanner_scan.invoke({"bucket": "example-backup"})
@@ -24,16 +24,16 @@ class TestS3ScannerScan:
         assert "--provider" in cmd
         assert "aws" in cmd
 
-    @patch("tools.scanning.s3scanner_tool.run_command")
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command")
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_custom_provider(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         s3scanner_scan.invoke({"bucket": "my-bucket", "provider": "gcp"})
         cmd = mock_run.call_args[0][0]
         assert "gcp" in cmd
 
-    @patch("tools.scanning.s3scanner_tool.run_command")
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command")
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_parses_json_results(self, _bin, mock_run):
         scan_result = {
             "bucket": "example-backup",
@@ -52,24 +52,24 @@ class TestS3ScannerScan:
         assert result["data"]["results"][0]["permissions"]["read"] is True
         assert result["data"]["results"][0]["permissions"]["write"] is False
 
-    @patch("tools.scanning.s3scanner_tool.run_command")
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command")
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_no_results_returns_ok(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         result = s3scanner_scan.invoke({"bucket": "nonexistent-bucket"})
         assert result["status"] == "ok"
         assert result["data"]["results"] == []
 
-    @patch("tools.scanning.s3scanner_tool.run_command")
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command")
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_nonzero_code_no_output_returns_error(self, _bin, mock_run):
         mock_run.return_value = (1, "", "scan failed")
         result = s3scanner_scan.invoke({"bucket": "example-backup"})
         assert result["status"] == "ok"
         assert "scan failed" in result["data"]["message"]
 
-    @patch("tools.scanning.s3scanner_tool.run_command", side_effect=Exception("timeout"))
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command", side_effect=Exception("timeout"))
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _run):
         result = s3scanner_scan.invoke({"bucket": "example-backup"})
         assert "timeout" in result
@@ -82,16 +82,16 @@ class TestS3ScannerScan:
         result = s3scanner_scan.invoke({"bucket": "test", "provider": "alibaba"})
         assert "invalid provider" in result
 
-    @patch("tools.scanning.s3scanner_tool.run_command")
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command")
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_plain_text_fallback(self, _bin, mock_run):
         mock_run.return_value = (0, "bucket exists but not accessible", "")
         result = s3scanner_scan.invoke({"bucket": "example-backup"})
         assert result["status"] == "ok"
         assert "bucket exists but not accessible" in result["data"]["message"]
 
-    @patch("tools.scanning.s3scanner_tool.run_command")
-    @patch("tools.scanning.s3scanner_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.s3scanner_tool.run_command")
+    @patch("fackel.tools.scanning.s3scanner_tool.require_binary", return_value=None)
     def test_digitalocean_provider(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         s3scanner_scan.invoke({"bucket": "my-spaces", "provider": "digitalocean"})

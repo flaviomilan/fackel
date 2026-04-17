@@ -6,15 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from tools.recon.virustotal_tool import virustotal_subdomain_enum
+from fackel.tools.recon.virustotal_tool import virustotal_subdomain_enum
 
 
 class TestVirusTotalSubdomainEnum:
     """Verify VirusTotal API integration and subdomain parsing."""
 
-    @patch("tools.recon.virustotal_tool.circuit_breaker")
-    @patch("tools.recon.virustotal_tool.get_session")
-    @patch("tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
+    @patch("fackel.tools.recon.virustotal_tool.circuit_breaker")
+    @patch("fackel.tools.recon.virustotal_tool.get_session")
+    @patch("fackel.tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
     def test_parses_subdomains(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -39,9 +39,9 @@ class TestVirusTotalSubdomainEnum:
         assert "sub1.example.com" in result["data"]["subdomains"]
         assert "mail.example.com" in result["data"]["subdomains"]
 
-    @patch("tools.recon.virustotal_tool.circuit_breaker")
-    @patch("tools.recon.virustotal_tool.get_session")
-    @patch("tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
+    @patch("fackel.tools.recon.virustotal_tool.circuit_breaker")
+    @patch("fackel.tools.recon.virustotal_tool.get_session")
+    @patch("fackel.tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
     def test_empty_results(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -58,9 +58,9 @@ class TestVirusTotalSubdomainEnum:
         assert result["data"]["count"] == 0
         assert result["data"]["subdomains"] == []
 
-    @patch("tools.recon.virustotal_tool.circuit_breaker")
-    @patch("tools.recon.virustotal_tool.get_session")
-    @patch("tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
+    @patch("fackel.tools.recon.virustotal_tool.circuit_breaker")
+    @patch("fackel.tools.recon.virustotal_tool.get_session")
+    @patch("fackel.tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
     def test_request_error_raises_tool_exception(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -70,9 +70,9 @@ class TestVirusTotalSubdomainEnum:
         result = virustotal_subdomain_enum.invoke({"domain": "example.com"})
         assert "request failed" in result.lower()
 
-    @patch("tools.recon.virustotal_tool.circuit_breaker")
-    @patch("tools.recon.virustotal_tool.get_session")
-    @patch("tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
+    @patch("fackel.tools.recon.virustotal_tool.circuit_breaker")
+    @patch("fackel.tools.recon.virustotal_tool.get_session")
+    @patch("fackel.tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
     def test_non_json_response(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -85,9 +85,9 @@ class TestVirusTotalSubdomainEnum:
         result = virustotal_subdomain_enum.invoke({"domain": "example.com"})
         assert "non-json" in result.lower()
 
-    @patch("tools.recon.virustotal_tool.circuit_breaker")
-    @patch("tools.recon.virustotal_tool.get_session")
-    @patch("tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
+    @patch("fackel.tools.recon.virustotal_tool.circuit_breaker")
+    @patch("fackel.tools.recon.virustotal_tool.get_session")
+    @patch("fackel.tools.recon.virustotal_tool.require_env", return_value="test-vt-key")
     def test_entries_without_id_skipped(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)

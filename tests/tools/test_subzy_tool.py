@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tools.recon.subzy_tool import subzy_check
+from fackel.tools.recon.subzy_tool import subzy_check
 
 
 class TestSubzyCheck:
     """Verify Subzy CLI construction and result parsing."""
 
-    @patch("tools.recon.subzy_tool.run_command")
-    @patch("tools.recon.subzy_tool.require_binary", return_value=None)
+    @patch("fackel.tools.recon.subzy_tool.run_command")
+    @patch("fackel.tools.recon.subzy_tool.require_binary", return_value=None)
     def test_basic_command_construction(self, _bin, mock_run):
         mock_run.return_value = (0, "[]", "")
         subzy_check.invoke({"target": "example.com"})
@@ -21,8 +21,8 @@ class TestSubzyCheck:
         assert "run" in cmd
         assert "example.com" in cmd
 
-    @patch("tools.recon.subzy_tool.run_command")
-    @patch("tools.recon.subzy_tool.require_binary", return_value=None)
+    @patch("fackel.tools.recon.subzy_tool.run_command")
+    @patch("fackel.tools.recon.subzy_tool.require_binary", return_value=None)
     def test_parses_vulnerable_finding(self, _bin, mock_run):
         results = [
             {
@@ -39,8 +39,8 @@ class TestSubzyCheck:
         assert result["data"]["vulnerable"] == 1
         assert result["data"]["findings"][0]["service"] == "heroku"
 
-    @patch("tools.recon.subzy_tool.run_command")
-    @patch("tools.recon.subzy_tool.require_binary", return_value=None)
+    @patch("fackel.tools.recon.subzy_tool.run_command")
+    @patch("fackel.tools.recon.subzy_tool.require_binary", return_value=None)
     def test_parses_non_vulnerable_findings(self, _bin, mock_run):
         results = [
             {
@@ -57,8 +57,8 @@ class TestSubzyCheck:
         assert result["data"]["vulnerable"] == 0
         assert result["data"]["total"] == 1
 
-    @patch("tools.recon.subzy_tool.run_command")
-    @patch("tools.recon.subzy_tool.require_binary", return_value=None)
+    @patch("fackel.tools.recon.subzy_tool.run_command")
+    @patch("fackel.tools.recon.subzy_tool.require_binary", return_value=None)
     def test_no_results_returns_ok(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         result = subzy_check.invoke({"target": "example.com"})
@@ -66,21 +66,21 @@ class TestSubzyCheck:
         assert result["data"]["total"] == 0
         assert "no takeover" in result["data"]["message"]
 
-    @patch("tools.recon.subzy_tool.run_command")
-    @patch("tools.recon.subzy_tool.require_binary", return_value=None)
+    @patch("fackel.tools.recon.subzy_tool.run_command")
+    @patch("fackel.tools.recon.subzy_tool.require_binary", return_value=None)
     def test_nonzero_code_no_results_returns_error(self, _bin, mock_run):
         mock_run.return_value = (1, "", "failed to enumerate")
         result = subzy_check.invoke({"target": "example.com"})
         assert "failed to enumerate" in result
 
-    @patch("tools.recon.subzy_tool.run_command", side_effect=Exception("timeout"))
-    @patch("tools.recon.subzy_tool.require_binary", return_value=None)
+    @patch("fackel.tools.recon.subzy_tool.run_command", side_effect=Exception("timeout"))
+    @patch("fackel.tools.recon.subzy_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _run):
         result = subzy_check.invoke({"target": "example.com"})
         assert "timeout" in result
 
-    @patch("tools.recon.subzy_tool.run_command")
-    @patch("tools.recon.subzy_tool.require_binary", return_value=None)
+    @patch("fackel.tools.recon.subzy_tool.run_command")
+    @patch("fackel.tools.recon.subzy_tool.require_binary", return_value=None)
     def test_malformed_json_returns_ok_empty(self, _bin, mock_run):
         mock_run.return_value = (0, "not json", "")
         result = subzy_check.invoke({"target": "example.com"})
@@ -94,8 +94,8 @@ class TestSubzyCheck:
     def test_rejects_url_target(self):
         """URL is accepted after host extraction (guard_target strips scheme/path)."""
         with (
-            patch("tools.recon.subzy_tool.require_binary"),
-            patch("tools.recon.subzy_tool.run_command") as mock_run,
+            patch("fackel.tools.recon.subzy_tool.require_binary"),
+            patch("fackel.tools.recon.subzy_tool.run_command") as mock_run,
         ):
             mock_run.return_value = (0, "[]", "")
             result = subzy_check.invoke({"target": "https://example.com/path"})

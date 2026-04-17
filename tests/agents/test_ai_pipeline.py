@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from fackel.agents.triage.agent import (
     RiskScore,
     TriageResult,
@@ -205,7 +207,20 @@ class TestTriageNodeStructuredPassthrough:
 
 
 class TestOsintNodeLAAJ:
-    """osint_node now includes LLM-as-a-judge evaluation and retry."""
+    """osint_node now includes LLM-as-a-judge evaluation and retry.
+
+    These cover the single-agent path (quality-gated retry), so the specialist
+    decomposition is disabled for the class.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _single_agent_mode(self, monkeypatch):
+        import fackel.settings as settings_mod
+
+        monkeypatch.setenv("FACKEL_OSINT_SPECIALISTS", "false")
+        settings_mod.get_settings.cache_clear()
+        yield
+        settings_mod.get_settings.cache_clear()
 
     @patch("fackel.agents.orchestrator.streaming.emit")
     @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")

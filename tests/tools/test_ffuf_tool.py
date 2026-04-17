@@ -6,15 +6,15 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.scanning.ffuf_tool import _find_wordlist, ffuf_scan
+from fackel.tools.scanning.ffuf_tool import _find_wordlist, ffuf_scan
 
 
 class TestFfufScan:
     """Verify ffuf CLI construction and result parsing."""
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_basic_command_construction(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke({"target": "https://example.com/FUZZ"})
@@ -23,9 +23,9 @@ class TestFfufScan:
         assert "-u" in cmd
         assert "FUZZ" in cmd[cmd.index("-u") + 1]
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_appends_fuzz_when_missing(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke({"target": "https://example.com"})
@@ -33,18 +33,18 @@ class TestFfufScan:
         target_url = cmd[cmd.index("-u") + 1]
         assert target_url.endswith("/FUZZ")
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_adds_scheme_when_missing(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke({"target": "example.com/FUZZ"})
         cmd = mock_run.call_args[0][0]
         assert "https://example.com/FUZZ" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_custom_method(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke({"target": "https://example.com/FUZZ", "method": "POST"})
@@ -52,9 +52,9 @@ class TestFfufScan:
         assert "-X" in cmd
         assert "POST" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_extensions_added(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke({"target": "https://example.com/FUZZ", "extensions": "php,html"})
@@ -62,9 +62,9 @@ class TestFfufScan:
         assert "-e" in cmd
         assert "php,html" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_filter_codes(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke(
@@ -77,9 +77,9 @@ class TestFfufScan:
         assert "-fc" in cmd
         assert "404,500" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_filter_size(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke(
@@ -92,9 +92,9 @@ class TestFfufScan:
         assert "-fs" in cmd
         assert "0,1234" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_filter_words(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke(
@@ -107,9 +107,9 @@ class TestFfufScan:
         assert "-fw" in cmd
         assert "42" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_custom_headers(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke(
@@ -124,9 +124,9 @@ class TestFfufScan:
         assert "Authorization: Bearer tok123" in cmd
         assert "X-Custom: val" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_recursion_enabled(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke(
@@ -142,9 +142,9 @@ class TestFfufScan:
         idx = cmd.index("-recursion-depth")
         assert cmd[idx + 1] == "3"
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_rate_limiting(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke(
@@ -157,18 +157,18 @@ class TestFfufScan:
         assert "-rate" in cmd
         assert "100" in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_recursion_not_added_when_disabled(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke({"target": "https://example.com/FUZZ"})
         cmd = mock_run.call_args[0][0]
         assert "-recursion" not in cmd
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_findings_parsed_from_json(self, _bin, mock_run, _wl):
         output = json.dumps(
             {
@@ -203,9 +203,9 @@ class TestFfufScan:
         assert result["data"]["findings"][0]["url"] == "https://example.com/admin"
         assert result["data"]["findings"][1]["redirect_location"] == "https://example.com/api/"
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_no_findings_returns_message(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, json.dumps({"results": []}), "")
         result = ffuf_scan.invoke({"target": "https://example.com/FUZZ"})
@@ -214,24 +214,24 @@ class TestFfufScan:
         assert "message" in result["data"]
 
     @patch(
-        "tools.scanning.ffuf_tool.run_command",
+        "fackel.tools.scanning.ffuf_tool.run_command",
         side_effect=Exception("timeout"),
     )
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _wl, _run):
         result = ffuf_scan.invoke({"target": "https://example.com/FUZZ"})
         assert "timeout" in result
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_missing_wordlist_returns_error(self, _bin, _wl):
         result = ffuf_scan.invoke({"target": "https://example.com/FUZZ"})
         assert "wordlist" in result.lower()
 
-    @patch("tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
-    @patch("tools.scanning.ffuf_tool.run_command")
-    @patch("tools.scanning.ffuf_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.ffuf_tool._find_wordlist", return_value="/mock/wordlist.txt")
+    @patch("fackel.tools.scanning.ffuf_tool.run_command")
+    @patch("fackel.tools.scanning.ffuf_tool.require_binary", return_value=None)
     def test_threads_clamped_to_50(self, _bin, mock_run, _wl):
         mock_run.return_value = (0, "", "")
         ffuf_scan.invoke({"target": "https://example.com/FUZZ", "threads": 100})
@@ -257,11 +257,11 @@ class TestFindWordlist:
             assert Path(result).is_file()
             assert "common.txt" in result
 
-    @patch("tools.scanning._wordlists._BUNDLED", new=Path("/nonexistent/bundled.txt"))
-    @patch("tools.scanning._wordlists.DEFAULT_WORDLISTS", new=())
+    @patch("fackel.tools.scanning._wordlists._BUNDLED", new=Path("/nonexistent/bundled.txt"))
+    @patch("fackel.tools.scanning._wordlists.DEFAULT_WORDLISTS", new=())
     def test_no_wordlist_returns_empty(self):
         """When no wordlist exists anywhere, empty string is returned."""
-        from tools.scanning._wordlists import find_wordlist
+        from fackel.tools.scanning._wordlists import find_wordlist
 
         assert find_wordlist("") == ""
 
@@ -272,6 +272,7 @@ class TestFindWordlist:
         bundled = (
             Path(__file__).resolve().parents[2]
             / "src"
+            / "fackel"
             / "tools"
             / "scanning"
             / "wordlists"

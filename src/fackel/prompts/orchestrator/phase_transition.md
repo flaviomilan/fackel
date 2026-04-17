@@ -1,78 +1,78 @@
-# Orchestrator — Transição de Fase
+# Orchestrator — Phase Transition
 
-## Objetivo
+## Objective
 
-Decidir quando o pipeline deve transicionar entre fases (recon →
-enumeration → scanning → validation → reporting), garantindo que
-critérios de saída da fase atual foram satisfeitos.
+Decide when the pipeline should transition between phases (recon →
+enumeration → scanning → validation → reporting), ensuring the current
+phase's exit criteria are satisfied.
 
 ## Inputs
 
-| Campo                | Tipo         | Descrição                               |
-|----------------------|--------------|-----------------------------------------|
-| `current_phase`      | `string`     | Fase atual do pipeline                  |
-| `phase_objectives`   | `list[str]`  | Objetivos da fase atual                 |
-| `objectives_met`     | `dict`       | Status de cada objetivo (bool + evidência)|
-| `phase_duration`     | `int`        | Tempo na fase atual (iterações)         |
-| `${user_context}`    | `string`     | Contexto operacional (opcional)         |
+| Field                | Type         | Description                               |
+|----------------------|--------------|-------------------------------------------|
+| `current_phase`      | `string`     | Current pipeline phase                    |
+| `phase_objectives`   | `list[str]`  | Objectives of the current phase           |
+| `objectives_met`     | `dict`       | Status of each objective (bool + evidence)|
+| `phase_duration`     | `int`        | Time in the current phase (iterations)    |
+| `${user_context}`    | `string`     | Operational context (optional)            |
 
 ## Outputs
 
-| Campo                | Tipo         | Descrição                               |
-|----------------------|--------------|-----------------------------------------|
-| `transition`         | `bool`       | Se deve transicionar                    |
-| `next_phase`         | `string`     | Próxima fase                            |
-| `unmet_objectives`   | `list[str]`  | Objetivos não alcançados                |
-| `carry_forward`      | `list[dict]` | Items para resolver na próxima fase      |
-| `phase_summary`      | `string`     | Resumo da fase que está terminando      |
+| Field                | Type         | Description                               |
+|----------------------|--------------|-------------------------------------------|
+| `transition`         | `bool`       | Whether to transition                     |
+| `next_phase`         | `string`     | Next phase                                |
+| `unmet_objectives`   | `list[str]`  | Objectives not achieved                   |
+| `carry_forward`      | `list[dict]` | Items to resolve in the next phase        |
+| `phase_summary`      | `string`     | Summary of the phase that is ending       |
 
-## Regras
+## Rules
 
-1. **Critérios de saída por fase**:
-   - **Recon**: domínios mapeados, IPs identificados, WHOIS coletado
-   - **Enumeration**: subdomínios enumerados, portas escaneadas, serviços
-     detectados
-   - **Scanning**: vulns verificadas, tecnologias fingerprinted, web
-     crawled
-   - **Validation**: achados cruzados, falsos positivos filtrados,
-     severidade atribuída
-   - **Reporting**: relatório compilado, recomendações geradas
-2. **Critério de 80%** — transicionar quando 80% dos objetivos da fase
-   estão satisfeitos.
-3. **Não transicionar se**:
-   - Menos de 50% dos objetivos alcançados.
-   - Vuln critical encontrada que requer investigação na fase atual.
-4. **Timeout de fase** — se >5 iterações na mesma fase sem progresso,
-   transicionar com carry_forward.
-5. **Carry forward** — objetivos não alcançados são documentados e
-   encaminhados como pendência.
+1. **Exit criteria per phase**:
+   - **Recon**: domains mapped, IPs identified, WHOIS collected
+   - **Enumeration**: subdomains enumerated, ports scanned, services
+     detected
+   - **Scanning**: vulns verified, technologies fingerprinted, web crawled
+   - **Validation**: findings cross-referenced, false positives filtered,
+     severity assigned
+   - **Reporting**: report compiled, recommendations generated
+2. **80% criterion** — transition when 80% of the phase's objectives are
+   satisfied.
+3. **Do not transition if**:
+   - Fewer than 50% of objectives achieved.
+   - A critical vuln was found that requires investigation in the current
+     phase.
+4. **Phase timeout** — if >5 iterations in the same phase without progress,
+   transition with carry_forward.
+5. **Carry forward** — unmet objectives are documented and forwarded as
+   open items.
 
-## Critérios de Qualidade
+## Quality Criteria
 
-- Decisão baseada em objetivos mensuráveis.
-- Carry forward documentado explicitamente.
-- Phase summary preciso e conciso.
-- Transições não pulam fases (recon → scanning é proibido).
+- Decision based on measurable objectives.
+- Carry forward documented explicitly.
+- Phase summary precise and concise.
+- Transitions do not skip phases (recon → scanning is forbidden).
 
 ## Template
 
 ```
-TRANSIÇÃO DE FASE
-==================
+PHASE TRANSITION
+================
 
-Fase atual: ${current_phase}
-Iterações: ${phase_duration}
+Current phase: ${current_phase}
+Iterations: ${phase_duration}
 
-Objetivos da fase:
-| Objetivo                | Status | Evidência          |
+Phase objectives:
+| Objective               | Status | Evidence           |
 |-------------------------|--------|--------------------|
-| [objetivo 1]            | ✅/❌  | [referência]       |
-| [objetivo 2]            | ✅/❌  | [referência]       |
+| [objective 1]           | ✅/❌  | [reference]        |
+| [objective 2]           | ✅/❌  | [reference]        |
 
-Progresso: [X/Y objetivos] = [Z%]
+Progress: [X/Y objectives] = [Z%]
 
-Decisão: [TRANSICIONAR | CONTINUAR]
-Próxima fase: [fase] (se transicionar)
-Carry forward: [objetivos não alcançados]
-Resumo: [o que foi alcançado nesta fase]
+Decision: [TRANSITION | CONTINUE]
+Next phase: [phase] (if transitioning)
+Carry forward: [unmet objectives]
+Summary: [what was achieved in this phase]
 ```

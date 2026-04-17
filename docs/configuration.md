@@ -77,11 +77,63 @@ export FACKEL_MODEL_REPORT=claude-sonnet-4-20250514
 export FACKEL_MODEL_JUDGE=claude-sonnet-4-20250514
 ```
 
-#### Using non-OpenAI providers
+#### LLM providers
 
-Fackel uses LangChain's `ChatOpenAI`, which supports any OpenAI-compatible API.
-Set `OPENAI_API_BASE` (or `OPENAI_BASE_URL`) alongside the model name to use
-alternative providers.
+Fackel uses LangChain's `init_chat_model` and supports **OpenAI** (default), **Ollama** (local-first), and **GitHub Models API** (Copilot).
+
+**OpenAI** is the default. Set `OPENAI_API_KEY` and optionally `FACKEL_DEFAULT_MODEL`:
+
+```bash
+export OPENAI_API_KEY=sk-...
+export FACKEL_DEFAULT_MODEL=gpt-5-mini
+```
+
+**Ollama** runs LLMs locally. Install [Ollama](https://ollama.ai), pull a model with tool support, then set:
+
+```bash
+export FACKEL_LLM_PROVIDER=ollama
+export FACKEL_DEFAULT_MODEL=llama3.1
+# Optional:
+export FACKEL_OLLAMA_BASE_URL=http://localhost:11434
+```
+
+**GitHub Models API (Copilot)** provides access to models like GPT-4.1, Llama, Mistral, and more
+through the [GitHub Models](https://github.com/marketplace/models) marketplace. Requires a
+GitHub Personal Access Token:
+
+```bash
+export FACKEL_LLM_PROVIDER=copilot
+export GITHUB_TOKEN=ghp_...
+export FACKEL_DEFAULT_MODEL=openai/gpt-4.1
+# Optional:
+export FACKEL_COPILOT_API_BASE=https://models.github.ai/inference
+```
+
+The `copilot` provider uses the OpenAI-compatible endpoint at `models.github.ai` under the
+hood. Model names follow the GitHub Models format (e.g. `openai/gpt-4.1`, `meta/llama-3.3-70b-instruct`).
+
+> **⚠️ Important: Token limits on free tier.** The GitHub Models free tier enforces strict
+> per-request token limits (8,000 input / 4,000 output for most models). Fackel's system
+> prompts exceed these limits (~15K+ tokens). You must
+> [opt in to paid usage](https://docs.github.com/en/billing/managing-billing-for-your-products/about-billing-for-github-models)
+> to get production-grade rate limits. Without paid usage, requests will fail with
+> `tokens_limit_reached` errors. Alternatively, use **OpenAI** or **Ollama** providers
+> which do not have these restrictions.
+
+**Model name prefix syntax:** Override the default provider per-model:
+
+- `gpt-5-mini` — uses `FACKEL_LLM_PROVIDER` (default: OpenAI)
+- `openai:gpt-5-mini` — force OpenAI
+- `ollama:llama3.1` — force Ollama
+- `copilot:openai/gpt-4o` — force GitHub Models API
+
+Example:
+
+```bash
+export FACKEL_MODEL_OSINT=openai:gpt-4o-mini
+export FACKEL_MODEL_REPORT=copilot:openai/gpt-4o
+export FACKEL_MODEL_VULN_SCAN=ollama:qwen2.5
+```
 
 ### Provider API keys
 
@@ -132,8 +184,11 @@ overridden via a `FACKEL_*` environment variable.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FACKEL_SCAN_TIMEOUT` | `3600` | Global scan timeout in seconds. Uses SIGALRM. |
-| `FACKEL_MAX_AGENT_ITERATIONS` | `50` | Maximum tool calls per agent phase. |
+| `FACKEL_SCAN_TIMEOUT` | `3600` | Global scan timeout in seconds (SIGALRM on POSIX). Set to `0` to disable. Override per-run with `fackel scan --timeout <s>`. |
+| `FACKEL_MAX_AGENT_ITERATIONS` | `50` | Maximum tool calls per agent phase. Set to `0` to disable the limit (also lifts LangGraph's recursion cap). |
+| `FACKEL_MAX_PIVOTS` | `2` | Max entity-driven OSINT pivot passes (`0` disables the agentic pivot loop). |
+| `FACKEL_OSINT_SPECIALISTS` | `true` | Run OSINT as focused specialist sub-agents (narrow toolsets) instead of one 31-tool agent. Set `false` for the single-agent path. |
+| `FACKEL_VULN_SPECIALISTS` | `true` | Run vuln-scan as parallel specialist sub-agents (surface, nuclei, web-injection, app/config, TLS) fanned out via LangGraph `Send`, instead of one monolithic agent. Vuln scanning is **active**: parallel is faster but sends concurrent traffic to the target (more likely to trip WAF/rate-limits). Per-tool HITL approval (`FACKEL_APPROVE_TOOLS`) forces the single-agent path regardless. Set `false` for the single-agent path. |
 | `FACKEL_BUDGET_WARNING_RATIO` | `0.8` | Fraction of budget at which agents receive a warning prompt. |
 
 #### Default LLM model
@@ -146,6 +201,10 @@ overridden via a `FACKEL_*` environment variable.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `FACKEL_LLM_PROVIDER` | `openai` | Default LLM provider when model name has no prefix. Supported: `"openai"`, `"ollama"`, `"copilot"`. |
+| `FACKEL_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server base URL. |
+| `FACKEL_COPILOT_API_BASE` | `https://models.github.ai/inference` | GitHub Models API base URL. Only used when provider is `"copilot"`. |
+| `GITHUB_TOKEN` | *(none)* | GitHub Personal Access Token. Required when provider is `"copilot"`. |
 | `FACKEL_LLM_REQUEST_TIMEOUT` | `120` | Per-request timeout for LLM calls (seconds). |
 | `FACKEL_LLM_MAX_RETRIES` | `1` | Number of retries on transient LLM errors. |
 | `FACKEL_LLM_RETRY_DELAY` | `5.0` | Initial delay between LLM retries (seconds). |
@@ -191,6 +250,12 @@ overridden via a `FACKEL_*` environment variable.
 |----------|---------|-------------|
 | `FACKEL_LOG_FORMAT` | `text` | Log format: `"text"` for human-readable, `"json"` for structured. |
 
+#### CLI presentation
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FACKEL_NERD_FONT` | `true` | Render the terminal UI with [Nerd Font](https://www.nerdfonts.com/) glyphs (phase/status icons, pipeline stepper). Set to `false` (or `0`) when the terminal font lacks Nerd Font patches — the harness falls back to an alignment-safe ASCII glyph set. |
+
 ### Checkpointer
 
 | Variable | Default | Description |
@@ -230,7 +295,7 @@ export LANGSMITH_TRACING=true
 export LANGSMITH_API_KEY=lsv2_pt_...
 export LANGSMITH_PROJECT=fackel-prod
 
-fackel example.com
+fackel scan example.com
 ```
 
 All agent phases (OSINT, Port Scan, Vuln Scan, Triage, Report) appear as
@@ -251,8 +316,12 @@ guide.  Point ``LANGSMITH_ENDPOINT`` at your instance.
 
 ## CLI options
 
+Running `fackel` with no command launches the **interactive harness** (equivalent
+to `fackel repl`); see the [README](../README.md#interactive-harness-recommended)
+for its slash commands. The options below apply to the one-shot `scan` command:
+
 ```
-fackel <target> [OPTIONS]
+fackel scan <target> [OPTIONS]
 ```
 
 | Argument / Option | Type | Default | Description |
@@ -275,14 +344,14 @@ fackel <target> [OPTIONS]
 
 Standard mode shows tool calls and completion status. Verbose (`-v`) adds:
 
-- **LLM reasoning** — the model's chain-of-thought before each tool call (`💭`)
-- **Tool result previews** — truncated tool output (`← tool_name: ...`)
+- **LLM reasoning** — the model's chain-of-thought, streamed into a dim *thinking* panel
+- **Tool result previews** — truncated tool output alongside each completed call
 - **Agent summaries** — full structured summaries from each phase
 
 ### Check providers
 
 ```bash
-fackel example.com --check-providers --no-active-scan
+fackel scan example.com --check-providers --no-active-scan
 ```
 
 Prints a table showing which provider API keys are configured and which tools
@@ -435,13 +504,13 @@ docker build --build-arg INSTALL_MODE=minimal -t fackel:minimal .
 
 ```bash
 # Run a scan (pass API keys via --env-file or -e)
-docker run --rm --env-file .env fackel example.com
+docker run --rm --env-file .env fackel scan example.com
 
 # With custom report output
-docker run --rm --env-file .env -v ./reports:/app/reports fackel example.com -o /app/reports/scan.md
+docker run --rm --env-file .env -v ./reports:/app/reports fackel scan example.com -o /app/reports/scan.md
 
 # Persist checkpoint database across runs
-docker run --rm --env-file .env -v fackel-data:/data fackel example.com
+docker run --rm --env-file .env -v fackel-data:/data fackel scan example.com
 ```
 
 ### Volumes

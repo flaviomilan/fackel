@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tools.scanning.feroxbuster_tool import feroxbuster_scan
+from fackel.tools.scanning.feroxbuster_tool import feroxbuster_scan
 
 
 class TestFeroxbusterCommandConstruction:
     """Verify the subprocess command is built correctly."""
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_target_url_passed(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com"})
@@ -22,8 +22,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("-u")
         assert cmd[idx + 1] == "https://example.com"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_json_and_silent_flags(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com"})
@@ -33,8 +33,8 @@ class TestFeroxbusterCommandConstruction:
         assert "--silent" in cmd
         assert "--no-state" in cmd
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_depth_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com", "depth": 3})
@@ -43,8 +43,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("--depth")
         assert cmd[idx + 1] == "3"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_depth_clamped_to_max(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com", "depth": 99})
@@ -53,8 +53,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("--depth")
         assert cmd[idx + 1] == "4"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_threads_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com", "threads": 30})
@@ -63,8 +63,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("--threads")
         assert cmd[idx + 1] == "30"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_threads_clamped_to_max(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com", "threads": 100})
@@ -73,8 +73,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("--threads")
         assert cmd[idx + 1] == "50"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_extensions_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com", "extensions": "php,html"})
@@ -83,8 +83,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("--extensions")
         assert cmd[idx + 1] == "php,html"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_time_limit_present(self, _bin, mock_run):
         """feroxbuster must receive --time-limit so it stops gracefully before the subprocess timeout."""
         mock_run.return_value = (0, "", "")
@@ -95,8 +95,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("--time-limit")
         assert cmd[idx + 1].endswith("s")
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_time_limit_less_than_subprocess_timeout(self, _bin, mock_run):
         """The feroxbuster time-limit must be shorter than the subprocess timeout."""
         mock_run.return_value = (0, "", "")
@@ -108,8 +108,8 @@ class TestFeroxbusterCommandConstruction:
         subprocess_timeout = mock_run.call_args[1].get("timeout", 300)
         assert ferox_secs < subprocess_timeout
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_filter_status_flags(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com", "filter_status": "404,500"})
@@ -120,8 +120,8 @@ class TestFeroxbusterCommandConstruction:
         filtered_codes = {cmd[i + 1] for i in status_indices}
         assert filtered_codes == {"404", "500"}
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_rate_limit_flag(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "https://example.com", "rate": 100})
@@ -130,8 +130,8 @@ class TestFeroxbusterCommandConstruction:
         idx = cmd.index("--rate-limit")
         assert cmd[idx + 1] == "100"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_scheme_auto_added(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         feroxbuster_scan.invoke({"target": "example.com"})
@@ -144,8 +144,8 @@ class TestFeroxbusterCommandConstruction:
 class TestFeroxbusterOutputParsing:
     """Verify JSON output is parsed correctly."""
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_response_entries_parsed(self, _bin, mock_run):
         entries = [
             {
@@ -175,8 +175,8 @@ class TestFeroxbusterOutputParsing:
         assert result["data"]["total"] == 2
         assert result["data"]["results"][0]["url"] == "https://example.com/admin"
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_non_response_entries_filtered(self, _bin, mock_run):
         """Only 'response' type entries should be included in results."""
         entries = [
@@ -189,8 +189,8 @@ class TestFeroxbusterOutputParsing:
 
         assert result["data"]["total"] == 1
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_no_results_returns_message(self, _bin, mock_run):
         mock_run.return_value = (0, "", "no connections")
 
@@ -199,8 +199,8 @@ class TestFeroxbusterOutputParsing:
         assert result["status"] == "ok"
         assert result["data"]["results"] == []
 
-    @patch("tools.scanning.feroxbuster_tool.run_command")
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.run_command")
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_nonzero_exit_no_output_is_error(self, _bin, mock_run):
         mock_run.return_value = (1, "", "fatal error")
 
@@ -209,10 +209,10 @@ class TestFeroxbusterOutputParsing:
         assert isinstance(result, str)
         assert "fatal error" in result
 
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_subprocess_exception(self, _bin):
         with patch(
-            "tools.scanning.feroxbuster_tool.run_command",
+            "fackel.tools.scanning.feroxbuster_tool.run_command",
             side_effect=OSError("command not found"),
         ):
             result = feroxbuster_scan.invoke({"target": "https://example.com"})
@@ -222,7 +222,7 @@ class TestFeroxbusterOutputParsing:
 class TestFeroxbusterInputValidation:
     """Guard target rejects invalid inputs."""
 
-    @patch("tools.scanning.feroxbuster_tool.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.feroxbuster_tool.require_binary", return_value=None)
     def test_empty_target_rejected(self, _bin):
         result = feroxbuster_scan.invoke({"target": ""})
         assert isinstance(result, str)

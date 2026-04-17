@@ -8,47 +8,61 @@ from typing import Any
 
 import typer
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.rule import Rule
 from rich.table import Table
 
 from fackel.agents.orchestrator.streaming import set_event_callback, set_tool_approval
 
+from . import presenter
 from .renderer import EventRenderer
 
 app = typer.Typer(help="Fackel CLI")
 console = Console()
 
-_VERSION = "0.1.0"
+_VERSION = presenter.resolve_version()
 
 
-def _print_banner() -> None:
-    """Display the Fackel startup banner."""
-    console.print()
-    console.print(
-        Panel(
-            "[bold bright_red]🔥 FACKEL[/bold bright_red]"
-            f"  [dim]v{_VERSION}[/dim]\n"
-            "[dim]Autonomous OSINT & Security Intelligence[/dim]",
-            border_style="red",
-            padding=(0, 2),
-        )
-    )
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"fackel {_VERSION}")
+        raise typer.Exit()
 
 
-def _print_scan_header(target: str, *, active_scan: bool, approve_tools: bool) -> None:
-    """Display a structured scan configuration summary."""
-    table = Table(show_header=False, box=None, padding=(0, 1))
-    table.add_column("Key", style="bold", width=12)
-    table.add_column("Value")
-    table.add_row("Target", f"[bold cyan]{target}[/bold cyan]")
-    mode = "[green]Active[/green]" if active_scan else "[yellow]Passive only[/yellow]"
-    table.add_row("Mode", mode)
-    if approve_tools:
-        table.add_row("Approval", "[yellow]Per-tool approval[/yellow]")
-    console.print(table)
-    console.print()
+@app.callback(invoke_without_command=True)
+def _main(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the Fackel version and exit.",
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show LLM reasoning and tool details (interactive mode)"
+    ),
+) -> None:
+    """Fackel — autonomous OSINT & security intelligence.
+
+    Run with no subcommand to launch the interactive harness (parallel agent
+    lanes, inline approvals, /ask, context management)."""
+    if ctx.invoked_subcommand is None:
+        from .harness import launch
+
+        launch(verbose=verbose)
+        raise typer.Exit()
+
+
+@app.command()
+def repl(
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show LLM reasoning and tool output details"
+    ),
+) -> None:
+    """Launch the interactive harness (same as running ``fackel`` with no command)."""
+    from .harness import launch
+
+    launch(verbose=verbose)
 
 
 def _print_provider_status(
@@ -76,16 +90,7 @@ def _make_approval_prompt(
         renderer._persist_content()
         renderer._stop_live()
         question = interrupt_data.get("question", "Proceed with active scanning?")
-        console.print()
-        console.print(
-            Panel(
-                f"[bold yellow]{question}[/bold yellow]",
-                title="[bold yellow]⚠ Approval Required[/bold yellow]",
-                border_style="yellow",
-                padding=(1, 2),
-                expand=True,
-            )
-        )
+        presenter.render_gate_approval(console, question)
         approved = typer.confirm("  Approve?", default=True)
         if approved:
             console.print(
@@ -102,37 +107,18 @@ def _make_approval_prompt(
     def tool_approval_prompt(interrupt_data: dict[str, Any]) -> str:
         renderer._persist_content()
         renderer._stop_live()
-        description = interrupt_data.get("description", str(interrupt_data))
+        description = interrupt_data.get("description", "")
+        if description == str(interrupt_data):
+            description = ""
         tool_name = interrupt_data.get("tool", "")
         args = interrupt_data.get("args", {})
-
-        body_parts: list[str] = []
-        if tool_name:
-            body_parts.append(f"[bold]Tool:[/bold]  [cyan]{tool_name}[/cyan]")
-        if args:
-            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
-            body_parts.append(f"[bold]Args:[/bold]  [dim]{args_str}[/dim]")
-        if description and description != str(interrupt_data):
-            body_parts.append(f"\n{description}")
-
-        body = "\n".join(body_parts) if body_parts else description
-        console.print()
-        console.print(
-            Panel(
-                body,
-                title="[bold yellow]🔧 Tool Approval Required[/bold yellow]",
-                border_style="yellow",
-                padding=(1, 2),
-                expand=True,
-            )
-        )
+        presenter.render_tool_approval(console, tool_name, args, description=description)
         approved = typer.confirm("  Approve tool execution?", default=True)
-        if approved:
-            tool_label = f"[cyan]{tool_name}[/cyan] " if tool_name else ""
-            console.print(f"  [bold green]✓ Approved[/bold green]  {tool_label}")
-        else:
-            tool_label = f"[cyan]{tool_name}[/cyan] " if tool_name else ""
-            console.print(f"  [bold red]✗ Rejected[/bold red]  {tool_label}")
+        verdict = (
+            "[bold green]✓ Approved[/bold green]" if approved else "[bold red]✗ Rejected[/bold red]"
+        )
+        tool_label = f"[cyan]{tool_name}[/cyan] " if tool_name else ""
+        console.print(f"  {verdict}  {tool_label}")
         console.print()
         return "approve" if approved else "reject"
 
@@ -164,6 +150,14 @@ def scan(
         "--approve-tools",
         help="Require per-tool-call approval for active scanning tools",
     ),
+    timeout: int | None = typer.Option(
+        None,
+        "--timeout",
+        help=(
+            "Global scan timeout in seconds; 0 (or negative) disables it. "
+            "Overrides FACKEL_SCAN_TIMEOUT (default 3600)."
+        ),
+    ),
 ) -> None:
     """Run an autonomous scan against a target.
 
@@ -179,12 +173,14 @@ def scan(
 
     configure_logging(verbose=verbose)
 
-    _print_banner()
+    presenter.print_banner(console)
 
     if check_providers:
         _print_provider_status(get_provider_key_status())
 
-    _print_scan_header(target, active_scan=active_scan, approve_tools=approve_tools)
+    presenter.print_scan_header(
+        console, target, active_scan=active_scan, approve_tools=approve_tools
+    )
 
     from fackel.provider_keys import get_unavailable_tool_names
 
@@ -216,6 +212,7 @@ def scan(
         active_scan,
         approval_prompt,
         started_at,
+        timeout,
     )
     _render_report(result, output, target, started_at)
 
@@ -227,6 +224,7 @@ def _execute_scan(
     active_scan: bool,
     approval_prompt: Any,
     started_at: float,
+    timeout: int | None = None,
 ) -> dict[str, Any]:
     """Run the orchestrator and handle interrupts / errors."""
     try:
@@ -234,6 +232,7 @@ def _execute_scan(
             target,
             active_scan=active_scan,
             approval_callback=approval_prompt,
+            timeout=timeout,
         )
         return result
     except KeyboardInterrupt:
@@ -277,40 +276,105 @@ def _render_report(
     target: str,
     started_at: float,
 ) -> None:
-    """Display the LLM report on console and save the full report to disk."""
-    report = result.get("report", "")
-    duration = time.perf_counter() - started_at
+    """Display the LLM report on console and save the full report to disk.
 
-    if not report.strip():
+    Thin CLI wrapper around :func:`cli.presenter.present_report` that enforces the
+    one-shot exit semantics (non-zero exit when no report was produced)."""
+    duration = time.perf_counter() - started_at
+    if not presenter.present_report(console, result, target, duration, output=output):
         typer.echo("\nError: no report generated.", err=True)
         raise typer.Exit(code=1)
 
-    console.print()
-    console.print(Rule("📝 Final Report", style="bold green"))
-    console.print(Markdown(report))
-    console.print()
-    console.print(
-        Panel(
-            f"[green]✓ Scan complete[/green]  [dim]{duration:.1f}s elapsed[/dim]",
-            border_style="green",
-            padding=(0, 2),
-        )
-    )
 
-    from fackel.report_writer import build_full_report
+@app.command()
+def scans() -> None:
+    """List persisted scans available for diffing/monitoring."""
+    from fackel.persistence import list_scans
+    from fackel.settings import get_settings
 
-    full_md = build_full_report(result)
+    data_dir = Path(get_settings().data_dir).expanduser()
+    ids = list_scans(data_dir)
+    if not ids:
+        console.print(f"[yellow]No persisted scans found in {data_dir}[/yellow]")
+        return
+    table = Table(title=f"Persisted scans ({data_dir})")
+    table.add_column("scan_id", style="cyan")
+    for sid in ids:
+        table.add_row(sid)
+    console.print(table)
 
-    if output is None:
-        reports_dir = Path("reports")
-        reports_dir.mkdir(exist_ok=True)
-        safe_target = target.replace("/", "_").replace(":", "_")
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        output = reports_dir / f"{safe_target}_{ts}.md"
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(full_md, encoding="utf-8")
-    console.print(f"[green]📄 Full report saved to {output}[/green]")
+@app.command()
+def diff(
+    baseline: str = typer.Argument(..., help="Baseline scan id (earlier)"),
+    current: str = typer.Argument(..., help="Current scan id (later)"),
+) -> None:
+    """Show what changed between two scans (new / resolved / changed entities)."""
+    from fackel.persistence import diff_scans, format_diff, list_scans, load_scan
+    from fackel.settings import get_settings
+
+    data_dir = Path(get_settings().data_dir).expanduser()
+    available = set(list_scans(data_dir))
+    for scan_id in (baseline, current):
+        if scan_id not in available:
+            console.print(f"[red]Scan '{scan_id}' not found in {data_dir}[/red]")
+            console.print("[dim]Run 'fackel scans' to list available scans.[/dim]")
+            raise typer.Exit(code=1)
+
+    result = diff_scans(load_scan(baseline, data_dir), load_scan(current, data_dir))
+    console.print(format_diff(result))
+
+
+def _require_scan(scan_id: str) -> tuple[Any, Path]:
+    """Resolve a scan id to its loaded store, exiting cleanly if missing."""
+    from fackel.persistence import list_scans, load_scan
+    from fackel.settings import get_settings
+
+    data_dir = Path(get_settings().data_dir).expanduser()
+    if scan_id not in set(list_scans(data_dir)):
+        console.print(f"[red]Scan '{scan_id}' not found in {data_dir}[/red]")
+        console.print("[dim]Run 'fackel scans' to list available scans.[/dim]")
+        raise typer.Exit(code=1)
+    return load_scan(scan_id, data_dir), data_dir
+
+
+@app.command()
+def graph(
+    scan_id: str = typer.Argument(..., help="Scan id to export"),
+    fmt: str = typer.Option("mermaid", "--format", "-f", help="Output format: mermaid | json"),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write to file instead of stdout"
+    ),
+) -> None:
+    """Export a scan's knowledge graph as a Mermaid diagram or JSON."""
+    import json as _json
+
+    from fackel.persistence.graph_export import to_json, to_mermaid
+
+    store, _ = _require_scan(scan_id)
+    rendered = _json.dumps(to_json(store), indent=2) if fmt == "json" else to_mermaid(store)
+
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        console.print(f"[green]📈 Graph ({fmt}) written to {output}[/green]")
+    else:
+        console.print(rendered)
+
+
+@app.command()
+def ask(
+    scan_id: str = typer.Argument(..., help="Scan id to query"),
+    question: str = typer.Argument(..., help="Natural-language question about the attack surface"),
+) -> None:
+    """Ask a natural-language question about a scan's knowledge graph."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    from fackel.agents.query import answer_query
+
+    store, _ = _require_scan(scan_id)
+    console.print(answer_query(store, question))
 
 
 if __name__ == "__main__":

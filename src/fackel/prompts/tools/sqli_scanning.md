@@ -1,50 +1,58 @@
 # Tool — SQL Injection Scanning
 
-## Objetivo
+## Purpose
 
-Detectar vulnerabilidades de SQL Injection em parâmetros de URL,
-formulários POST, cookies e headers HTTP.
+Detect SQL Injection vulnerabilities in URL parameters,
+POST forms, cookies, and HTTP headers.
 
-## Ferramentas
+## Tools
 
-| Ferramenta    | Propósito                                              |
+| Tool          | Purpose                                              |
 |---------------|--------------------------------------------------------|
-| `sqlmap_scan` | Detecção automatizada de SQLi (boolean, time, error, UNION) |
-| `nuclei_scan` | Templates específicos de SQLi com `-tags sqli`         |
+| `sqlmap_scan` | Automated SQLi detection (boolean, time, error, UNION) |
+| `nuclei_scan` | Specific SQLi templates with `-tags sqli`         |
 
-## Regras de Uso
+## Usage Rules
 
-1. **sqlmap somente em endpoints com parâmetros** — URLs sem parâmetros
-   não produzem resultados úteis.
-2. **Modo batch obrigatório** — `--batch` é always-on para automação.
-3. **Level e Risk conservadores**:
+1. **sqlmap only on endpoints with parameters** — URLs without parameters
+   do not produce useful results.
+2. **Batch mode mandatory** — `--batch` is always-on for automation.
+3. **Conservative level and risk**:
    - Level 1 (default): GET/POST params
-   - Level 2: inclui Cookie header
-   - Nunca usar level > 3 ou risk > 2 sem autorização explícita.
-4. **nuclei como complemento** — usar `-tags sqli` para cobertura de
-   CVEs conhecidas de SQLi em CMSs e frameworks.
-5. **Confirmar findings** — SQLi requer evidência (payload + resposta).
-6. **Não extrair dados** — apenas detectar, não usar `--dump`.
+   - Level 2: includes Cookie header
+   - Never use level > 3 or risk > 2 without explicit authorization.
+4. **Restrict `technique`** — default `BEUSTQ` covers everything. To
+   reduce noise or time, restrict to a subset, e.g.
+   `technique="BEU"` (boolean + error + UNION) on slow targets.
+5. **`random_agent: true`** — rotate User-Agent on each request,
+   useful for WAFs that whitelist sqlmap's default agent.
+6. **nuclei as complement** — use `-tags sqli` for coverage of
+   known SQLi CVEs in CMSs and frameworks.
+7. **Confirm findings** — SQLi requires evidence (payload + response).
+8. **Do not extract data** — only detect, do not use `--dump`.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente endpoints autorizados.
-- NUNCA usar `--os-shell`, `--os-cmd`, `--dump` ou `--dump-all`.
-- Rate limit: respeitar WAF/rate limiting do alvo.
-- `--flush-session` para evitar cache de sessões anteriores.
+- Only authorized endpoints.
+- NEVER use `--os-shell`, `--os-cmd`, `--dump` or `--dump-all`.
+- Rate limit: respect target WAF/rate limiting.
+- `--flush-session` to avoid cache from previous sessions.
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                    | Ação                                       |
+| Scenario                   | Action                                     |
 |----------------------------|--------------------------------------------|
-| WAF bloqueando payloads    | Documentar WAF, tentar `--tamper=space2comment` |
-| sqlmap timeout             | Reduzir level, retry com timeout maior     |
-| Sem parâmetros encontrados | Usar crawling + paramspider primeiro       |
-| False positive             | Marcar como "needs manual verification"    |
+| WAF blocking payloads      | Document WAF, try `--tamper=space2comment` |
+| sqlmap timeout             | Reduce level, retry with larger timeout    |
+| No parameters found        | Use crawling + paramspider first           |
+| False positive             | Mark as "needs manual verification"        |
 
-## Normalização
+## Normalization
 
-- Technique padronizada: boolean-based blind, time-based blind,
+- Technique standardized: boolean-based blind, time-based blind,
+  error-based, UNION query, stacked queries.
+- Severity: critical (UNION/stacked), high (error-based/boolean), medium (time-based).
+- Parameter name preserved.
   error-based, UNION query, stacked queries.
 - Severity: critical (UNION/stacked), high (error-based/boolean), medium (time-based).
 - Parameter name preservado.

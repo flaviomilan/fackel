@@ -28,10 +28,17 @@ the triage agent can flag it as an unassessed area.
 | `wafw00f_detect`           | WAF/IPS identification                                     |
 | `graphql_scan`             | GraphQL: introspection, batching, schema exposure          |
 | `feroxbuster_scan`         | Directory/content brute-forcing for hidden paths           |
+| `ffuf_scan`                | Fast HTTP fuzzer: parameter, path, vhost discovery         |
 | `katana_crawl`             | Web crawling: URL discovery, JS routes, API endpoints      |
 | `s3scanner_scan`           | S3 bucket permission audit: public read/write/list         |
 | `testssl_scan`             | Deep TLS/SSL: protocols, ciphers, cert chain, known vulns  |
 | `extract_webpage_content`  | Extract text from a web page for analysis                  |
+| `security_headers_audit`   | Pure-HTTP audit of CSP, HSTS, X-Frame, etc. (no binary)    |
+| `jwt_analyzer`             | Local JWT decode: alg=none, weak secrets, expired claims   |
+| `sqlmap_scan`              | Automated SQL injection scanner (active, requires approval)|
+| `ssrf_detect`              | Nuclei-backed SSRF detection                               |
+| `open_redirect_scan`       | Nuclei-backed open-redirect detection                      |
+| `ssti_scan`                | Nuclei-backed Server-Side Template Injection detection     |
 
 > Parameter details (types, defaults, constraints) are defined in each tool's
 > schema and visible to you automatically. The playbook below explains **when**

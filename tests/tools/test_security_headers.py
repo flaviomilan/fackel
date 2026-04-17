@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 
-from tools.vuln.security_headers import (
+from fackel.tools.vuln.security_headers import (
     _analyse_csp,
     _analyse_hsts,
     _check_cors_headers,
@@ -17,12 +18,25 @@ from tools.vuln.security_headers import (
 class TestSecurityHeadersAudit:
     """Verify HTTP security headers audit logic."""
 
-    @patch("tools.vuln.security_headers.requests.get")
-    def test_missing_headers_detected(self, mock_get):
+    @pytest.fixture(autouse=True)
+    def _http(self):
+        """Patch the pooled session's GET and neutralise the DNS-rebinding
+        guard so these unit tests never touch the network.
+
+        Exposes the underlying ``get`` mock as ``self.mock_get``.
+        """
+        with (
+            patch("fackel.tools.vuln.security_headers.get_session") as mock_session,
+            patch("fackel.tools.vuln.security_headers.guard_request_target"),
+        ):
+            self.mock_get = mock_session.return_value.get
+            yield
+
+    def test_missing_headers_detected(self):
         resp = MagicMock()
         resp.headers = {}
         resp.status_code = 200
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         result = security_headers_audit.invoke({"target": "https://example.com"})
         assert result["status"] == "ok"
@@ -32,8 +46,7 @@ class TestSecurityHeadersAudit:
         assert "Content-Security-Policy" in missing_headers
         assert "X-Content-Type-Options" in missing_headers
 
-    @patch("tools.vuln.security_headers.requests.get")
-    def test_all_headers_present(self, mock_get):
+    def test_all_headers_present(self):
         resp = MagicMock()
         resp.headers = {
             "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
@@ -45,7 +58,7 @@ class TestSecurityHeadersAudit:
             "X-XSS-Protection": "1; mode=block",
         }
         resp.status_code = 200
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         result = security_headers_audit.invoke({"target": "https://example.com"})
         assert result["status"] == "ok"
@@ -54,23 +67,21 @@ class TestSecurityHeadersAudit:
         high_findings = [f for f in findings if f.get("severity") in ("high", "critical")]
         assert len(high_findings) == 0
 
-    @patch("tools.vuln.security_headers.requests.get")
-    def test_adds_scheme_when_missing(self, mock_get):
+    def test_adds_scheme_when_missing(self):
         resp = MagicMock()
         resp.headers = {}
         resp.status_code = 200
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         security_headers_audit.invoke({"target": "example.com"})
-        call_url = mock_get.call_args[0][0]
+        call_url = self.mock_get.call_args[0][0]
         assert call_url.startswith("https://")
 
-    @patch("tools.vuln.security_headers.requests.get")
-    def test_server_disclosure_detected(self, mock_get):
+    def test_server_disclosure_detected(self):
         resp = MagicMock()
         resp.headers = {"Server": "Apache/2.4.51"}
         resp.status_code = 200
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         result = security_headers_audit.invoke({"target": "https://example.com"})
         findings = result["data"]["findings"]
@@ -78,27 +89,25 @@ class TestSecurityHeadersAudit:
         assert len(disclosure) >= 1
         assert "Apache/2.4.51" in disclosure[0]["description"]
 
-    @patch("tools.vuln.security_headers.requests.get")
-    def test_x_powered_by_detected(self, mock_get):
+    def test_x_powered_by_detected(self):
         resp = MagicMock()
         resp.headers = {"X-Powered-By": "Express"}
         resp.status_code = 200
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         result = security_headers_audit.invoke({"target": "https://example.com"})
         findings = result["data"]["findings"]
         powered_by = [f for f in findings if f.get("header") == "X-Powered-By"]
         assert len(powered_by) == 1
 
-    @patch("tools.vuln.security_headers.requests.get")
-    def test_cors_wildcard_with_credentials(self, mock_get):
+    def test_cors_wildcard_with_credentials(self):
         resp = MagicMock()
         resp.headers = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Credentials": "true",
         }
         resp.status_code = 200
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         result = security_headers_audit.invoke({"target": "https://example.com"})
         findings = result["data"]["findings"]
@@ -106,31 +115,22 @@ class TestSecurityHeadersAudit:
         assert len(cors) >= 1
         assert cors[0]["severity"] == "high"
 
-    @patch(
-        "tools.vuln.security_headers.requests.get",
-        side_effect=requests.RequestException("connection refused"),
-    )
-    def test_request_exception_returns_error(self, _mock):
+    def test_request_exception_returns_error(self):
+        self.mock_get.side_effect = requests.RequestException("connection refused")
         result = security_headers_audit.invoke({"target": "https://example.com"})
         assert "connection refused" in str(result)
 
-    @patch(
-        "tools.vuln.security_headers.requests.get",
-        side_effect=requests.ConnectionError("Name or service not known"),
-    )
-    def test_connection_error_returns_structured_result(self, _mock):
+    def test_connection_error_returns_structured_result(self):
         """Unreachable hosts should return a structured result, not a tool error."""
+        self.mock_get.side_effect = requests.ConnectionError("Name or service not known")
         result = security_headers_audit.invoke({"target": "https://noc.eversafe.info"})
         assert result["status"] == "ok"
         assert "unreachable" in result["data"]["message"]
         assert result["data"]["status_code"] is None
 
-    @patch(
-        "tools.vuln.security_headers.requests.get",
-        side_effect=requests.Timeout("connect timed out"),
-    )
-    def test_timeout_returns_structured_result(self, _mock):
+    def test_timeout_returns_structured_result(self):
         """Timeout should return a structured result, not a tool error."""
+        self.mock_get.side_effect = requests.Timeout("connect timed out")
         result = security_headers_audit.invoke({"target": "https://ehealth.eversafe.info"})
         assert result["status"] == "ok"
         assert "unreachable" in result["data"]["message"]

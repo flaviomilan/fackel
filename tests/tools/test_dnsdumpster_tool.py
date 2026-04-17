@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.recon.dnsdumpster_tool import dnsdumpster_lookup
+from fackel.tools.recon.dnsdumpster_tool import dnsdumpster_lookup
 
 _HOST_HTML = """
 <table>
@@ -29,8 +29,8 @@ _HOST_HTML = """
 class TestDnsDumpsterLookup:
     """Verify DNSDumpster JWT auth + HTML parsing."""
 
-    @patch("tools.recon.dnsdumpster_tool.circuit_breaker")
-    @patch("tools.recon.dnsdumpster_tool.get_session")
+    @patch("fackel.tools.recon.dnsdumpster_tool.circuit_breaker")
+    @patch("fackel.tools.recon.dnsdumpster_tool.get_session")
     def test_parses_host_table(self, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -60,8 +60,8 @@ class TestDnsDumpsterLookup:
         assert hosts[0]["ip"] == "93.184.216.34"
         assert hosts[0]["provider"] == "CloudProvider"
 
-    @patch("tools.recon.dnsdumpster_tool.circuit_breaker")
-    @patch("tools.recon.dnsdumpster_tool.get_session")
+    @patch("fackel.tools.recon.dnsdumpster_tool.circuit_breaker")
+    @patch("fackel.tools.recon.dnsdumpster_tool.get_session")
     def test_empty_tables(self, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -85,8 +85,8 @@ class TestDnsDumpsterLookup:
         assert result["status"] == "ok"
         assert result["data"]["hosts"] == []
 
-    @patch("tools.recon.dnsdumpster_tool.circuit_breaker")
-    @patch("tools.recon.dnsdumpster_tool.get_session")
+    @patch("fackel.tools.recon.dnsdumpster_tool.circuit_breaker")
+    @patch("fackel.tools.recon.dnsdumpster_tool.get_session")
     def test_jwt_fetch_failure(self, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -103,8 +103,8 @@ class TestDnsDumpsterLookup:
         result = dnsdumpster_lookup.invoke({"domain": "example.com"})
         assert "failed to obtain auth token" in result.lower()
 
-    @patch("tools.recon.dnsdumpster_tool.circuit_breaker")
-    @patch("tools.recon.dnsdumpster_tool.get_session")
+    @patch("fackel.tools.recon.dnsdumpster_tool.circuit_breaker")
+    @patch("fackel.tools.recon.dnsdumpster_tool.get_session")
     def test_mx_and_txt_records_parsed(self, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)

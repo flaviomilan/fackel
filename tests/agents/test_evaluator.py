@@ -51,10 +51,35 @@ class TestPhaseEvaluation:
             PhaseEvaluation(
                 phase="x",
                 completeness="complete",
-                score=1.5,
+                score=-0.1,
                 recommendation="proceed",
                 reasoning="x",
             )
+
+    def test_score_normalised_from_0_100_scale(self):
+        """LLMs may return 0-100 scores; validator normalises to 0-1."""
+        ev = PhaseEvaluation(
+            phase="osint",
+            completeness="complete",
+            score=50,
+            key_findings=[],
+            gaps=[],
+            recommendation="proceed",
+            reasoning="ok",
+        )
+        assert ev.score == 0.5
+
+    def test_score_normalised_from_high_value(self):
+        ev = PhaseEvaluation(
+            phase="osint",
+            completeness="complete",
+            score=85,
+            key_findings=[],
+            gaps=[],
+            recommendation="proceed",
+            reasoning="ok",
+        )
+        assert ev.score == 0.85
 
 
 class TestEvaluatePhase:
