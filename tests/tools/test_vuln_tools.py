@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tools.vuln.nuclei_tool import nuclei_scan
-from tools.vuln.testssl_tool import _parse_severity, testssl_scan
-from tools.vuln.webpage_extractor import _extract_text, extract_webpage_content
+from fackel.tools.vuln.nuclei_tool import nuclei_scan
+from fackel.tools.vuln.testssl_tool import _parse_severity, testssl_scan
+from fackel.tools.vuln.webpage_extractor import _extract_text, extract_webpage_content
 
 
 def _testssl_run(json_content: str = "[]"):
@@ -27,8 +27,8 @@ def _testssl_run(json_content: str = "[]"):
 class TestNucleiScan:
     """Verify nuclei CLI construction and result parsing."""
 
-    @patch("tools.vuln.nuclei_tool.run_command")
-    @patch("tools.vuln.nuclei_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.nuclei_tool.run_command")
+    @patch("fackel.tools.vuln.nuclei_tool.require_binary", return_value=None)
     def test_basic_command_construction(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         nuclei_scan.invoke({"target": "example.com"})
@@ -38,24 +38,24 @@ class TestNucleiScan:
         assert "-jsonl" in cmd
         assert "-silent" in cmd
 
-    @patch("tools.vuln.nuclei_tool.run_command")
-    @patch("tools.vuln.nuclei_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.nuclei_tool.run_command")
+    @patch("fackel.tools.vuln.nuclei_tool.require_binary", return_value=None)
     def test_severity_filter_appended(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         nuclei_scan.invoke({"target": "example.com", "severity": "critical,high"})
         cmd = mock_run.call_args[0][0]
         assert "-severity" in cmd
 
-    @patch("tools.vuln.nuclei_tool.run_command")
-    @patch("tools.vuln.nuclei_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.nuclei_tool.run_command")
+    @patch("fackel.tools.vuln.nuclei_tool.require_binary", return_value=None)
     def test_tags_filter_appended(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         nuclei_scan.invoke({"target": "example.com", "tags": "cve,wordpress"})
         cmd = mock_run.call_args[0][0]
         assert "-tags" in cmd
 
-    @patch("tools.vuln.nuclei_tool.run_command")
-    @patch("tools.vuln.nuclei_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.nuclei_tool.run_command")
+    @patch("fackel.tools.vuln.nuclei_tool.require_binary", return_value=None)
     def test_findings_parsed_from_jsonl(self, _bin, mock_run):
         finding = {
             "template-id": "cve-2021-44228",
@@ -72,8 +72,8 @@ class TestNucleiScan:
         assert result["data"]["total"] == 1
         assert result["data"]["findings"][0]["template_id"] == "cve-2021-44228"
 
-    @patch("tools.vuln.nuclei_tool.run_command")
-    @patch("tools.vuln.nuclei_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.nuclei_tool.run_command")
+    @patch("fackel.tools.vuln.nuclei_tool.require_binary", return_value=None)
     def test_no_findings_returns_message(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         result = nuclei_scan.invoke({"target": "example.com"})
@@ -81,8 +81,8 @@ class TestNucleiScan:
         assert result["data"]["findings"] == []
         assert "message" in result["data"]
 
-    @patch("tools.vuln.nuclei_tool.run_command")
-    @patch("tools.vuln.nuclei_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.nuclei_tool.run_command")
+    @patch("fackel.tools.vuln.nuclei_tool.require_binary", return_value=None)
     def test_extracted_results_included(self, _bin, mock_run):
         finding = {
             "template-id": "tech-detect",
@@ -94,8 +94,8 @@ class TestNucleiScan:
         result = nuclei_scan.invoke({"target": "example.com"})
         assert result["data"]["findings"][0]["extracted_results"] == ["nginx/1.18"]
 
-    @patch("tools.vuln.nuclei_tool.run_command", side_effect=Exception("timeout"))
-    @patch("tools.vuln.nuclei_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.nuclei_tool.run_command", side_effect=Exception("timeout"))
+    @patch("fackel.tools.vuln.nuclei_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _run):
         result = nuclei_scan.invoke({"target": "example.com"})
         assert "timeout" in result
@@ -129,8 +129,8 @@ class TestParseSeverity:
 class TestTestsslScan:
     """Verify testssl.sh CLI and result parsing."""
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_basic_command(self, _bin, mock_run):
         mock_run.side_effect = _testssl_run("[]")
         testssl_scan.invoke({"target": "example.com"})
@@ -139,8 +139,8 @@ class TestTestsslScan:
         assert "--jsonfile" in cmd
         assert "--overwrite" in cmd
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_fast_mode_default(self, _bin, mock_run):
         """Default fast=True adds --fast flag."""
         mock_run.side_effect = _testssl_run("[]")
@@ -148,8 +148,8 @@ class TestTestsslScan:
         cmd = mock_run.call_args[0][0]
         assert "--fast" in cmd
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_fast_disabled(self, _bin, mock_run):
         """fast=False omits --fast flag for exhaustive scan."""
         mock_run.side_effect = _testssl_run("[]")
@@ -157,8 +157,8 @@ class TestTestsslScan:
         cmd = mock_run.call_args[0][0]
         assert "--fast" not in cmd
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_openssl_timeout_in_cmd(self, _bin, mock_run):
         """openssl_timeout is passed as --openssl-timeout=N."""
         mock_run.side_effect = _testssl_run("[]")
@@ -166,8 +166,8 @@ class TestTestsslScan:
         cmd = mock_run.call_args[0][0]
         assert "--openssl-timeout=20" in cmd
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_openssl_timeout_clamped(self, _bin, mock_run):
         """openssl_timeout is clamped to 1-30."""
         mock_run.side_effect = _testssl_run("[]")
@@ -175,8 +175,8 @@ class TestTestsslScan:
         cmd = mock_run.call_args[0][0]
         assert "--openssl-timeout=30" in cmd
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_checks_mapped_to_flags(self, _bin, mock_run):
         mock_run.side_effect = _testssl_run("[]")
         testssl_scan.invoke({"target": "example.com", "checks": "protocols,ciphers"})
@@ -184,8 +184,8 @@ class TestTestsslScan:
         assert "-p" in cmd
         assert "-E" in cmd
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_findings_parsed(self, _bin, mock_run):
         records = [
             {"id": "TLS1_3", "severity": "OK", "finding": "offered"},
@@ -197,8 +197,8 @@ class TestTestsslScan:
         assert result["data"]["summary"]["total"] == 2
         assert result["data"]["summary"]["high"] == 1
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_severity_filter(self, _bin, mock_run):
         records = [
             {"id": "TLS1_3", "severity": "OK", "finding": "offered"},
@@ -208,16 +208,16 @@ class TestTestsslScan:
         result = testssl_scan.invoke({"target": "example.com", "severity": "high"})
         assert result["data"]["summary"]["total"] == 1
 
-    @patch("tools.vuln.testssl_tool.run_command")
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command")
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_empty_output_returns_ok(self, _bin, mock_run):
         mock_run.side_effect = _testssl_run("")
         result = testssl_scan.invoke({"target": "example.com"})
         assert result["status"] == "ok"
         assert result["data"]["summary"]["total"] == 0
 
-    @patch("tools.vuln.testssl_tool.run_command", side_effect=Exception("binary not found"))
-    @patch("tools.vuln.testssl_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.testssl_tool.run_command", side_effect=Exception("binary not found"))
+    @patch("fackel.tools.vuln.testssl_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _run):
         result = testssl_scan.invoke({"target": "example.com"})
         assert "binary not found" in result
@@ -248,8 +248,8 @@ class TestExtractText:
 class TestExtractWebpageContent:
     """Verify the full tool function."""
 
-    @patch("tools.vuln.webpage_extractor.circuit_breaker")
-    @patch("tools.vuln.webpage_extractor.get_session")
+    @patch("fackel.tools.vuln.webpage_extractor.circuit_breaker")
+    @patch("fackel.tools.vuln.webpage_extractor.get_session")
     def test_successful_extraction(self, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -263,8 +263,8 @@ class TestExtractWebpageContent:
         result = extract_webpage_content.invoke({"url": "https://example.com/page"})
         assert result["status"] == "ok"
 
-    @patch("tools.vuln.webpage_extractor.circuit_breaker")
-    @patch("tools.vuln.webpage_extractor.get_session")
+    @patch("fackel.tools.vuln.webpage_extractor.circuit_breaker")
+    @patch("fackel.tools.vuln.webpage_extractor.get_session")
     def test_non_html_returns_error(self, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -277,8 +277,8 @@ class TestExtractWebpageContent:
         result = extract_webpage_content.invoke({"url": "https://example.com/api"})
         assert "not HTML" in result
 
-    @patch("tools.vuln.webpage_extractor.circuit_breaker")
-    @patch("tools.vuln.webpage_extractor.get_session")
+    @patch("fackel.tools.vuln.webpage_extractor.circuit_breaker")
+    @patch("fackel.tools.vuln.webpage_extractor.get_session")
     def test_truncates_long_content(self, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)

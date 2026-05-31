@@ -12,7 +12,12 @@ from fackel.agents.orchestrator.main import ScanInterruptedError, ScanTimeoutErr
 from fackel.agents.orchestrator.streaming import validate_tool_output
 from fackel.tooling.execution import _reset_secret_cache, _truncate, redact_secrets, run_command
 from fackel.tooling.output_sanitizer import sanitize_tool_output
-from fackel.tooling.validators import guard_dns_rebinding, is_private_ip, resolve_host
+from fackel.tooling.validators import (
+    guard_dns_rebinding,
+    guard_request_target,
+    is_private_ip,
+    resolve_host,
+)
 
 
 class TestIsPrivateIP:
@@ -254,6 +259,44 @@ class TestDnsRebinding:
             pytest.raises(ToolException, match="DNS rebinding"),
         ):
             guard_dns_rebinding("rebind.attacker.com", "test_tool")
+
+
+class TestGuardRequestTarget:
+    """Tests for guard_request_target — the SSRF rail for connect-to-target tools."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://127.0.0.1:8080/admin",
+            "http://10.0.0.5/x",
+            "http://192.168.1.1/",
+            "http://169.254.169.254/latest/meta-data/",  # cloud metadata
+            "http://[::1]/x",
+        ],
+    )
+    def test_rejects_private_ip_literals(self, url: str) -> None:
+        with pytest.raises(ToolException, match="private/reserved"):
+            guard_request_target(url, "test_tool")
+
+    def test_allows_public_ip_literal(self) -> None:
+        guard_request_target("http://8.8.8.8/x", "test_tool")
+
+    def test_extracts_host_from_url_and_guards_rebinding(self) -> None:
+        with (
+            patch(
+                "fackel.tooling.validators.resolve_host",
+                return_value=["10.0.0.9"],
+            ),
+            pytest.raises(ToolException, match="private/reserved"),
+        ):
+            guard_request_target("https://rebind.attacker.com/path?q=1", "test_tool")
+
+    def test_allows_public_host(self) -> None:
+        with patch(
+            "fackel.tooling.validators.resolve_host",
+            return_value=["93.184.216.34"],
+        ):
+            guard_request_target("https://example.com/x", "test_tool")
 
 
 class TestResolveHost:

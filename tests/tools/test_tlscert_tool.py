@@ -6,7 +6,7 @@ import contextlib
 import ssl
 from unittest.mock import MagicMock, patch
 
-from tools.recon.tlscert_tool import (
+from fackel.tools.recon.tlscert_tool import (
     _decode_der_cert,
     _extract_san_domains,
     _fingerprint_sha256,
@@ -97,8 +97,8 @@ class TestFormatDate:
 class TestDecodeDerCert:
     """Unit tests for the _decode_der_cert helper."""
 
-    @patch("tools.recon.tlscert_tool.ssl._ssl._test_decode_cert")
-    @patch("tools.recon.tlscert_tool.ssl.DER_cert_to_PEM_cert")
+    @patch("fackel.tools.recon.tlscert_tool.ssl._ssl._test_decode_cert")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.DER_cert_to_PEM_cert")
     def test_converts_der_to_cert_dict(
         self, mock_to_pem: MagicMock, mock_decode: MagicMock
     ) -> None:
@@ -112,8 +112,8 @@ class TestDecodeDerCert:
         mock_to_pem.assert_called_once_with(b"\x00\x01")
         mock_decode.assert_called_once()
 
-    @patch("tools.recon.tlscert_tool.ssl._ssl._test_decode_cert")
-    @patch("tools.recon.tlscert_tool.ssl.DER_cert_to_PEM_cert")
+    @patch("fackel.tools.recon.tlscert_tool.ssl._ssl._test_decode_cert")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.DER_cert_to_PEM_cert")
     def test_cleans_up_temp_file(self, mock_to_pem: MagicMock, mock_decode: MagicMock) -> None:
         """Temp PEM file is removed even when _test_decode_cert raises."""
         mock_to_pem.return_value = "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n"
@@ -171,8 +171,8 @@ def _build_mock_raw_socket() -> MagicMock:
 class TestTlscertLookupHappyPath:
     """Successful TLS certificate lookups."""
 
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_returns_full_cert_data(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         tls_sock = _build_mock_tls_socket()
         raw_sock = _build_mock_raw_socket()
@@ -199,8 +199,8 @@ class TestTlscertLookupHappyPath:
         assert ":" in data["fingerprint_sha256"]
         assert data["verified"] is True
 
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_custom_port(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         tls_sock = _build_mock_tls_socket()
         raw_sock = _build_mock_raw_socket()
@@ -214,8 +214,8 @@ class TestTlscertLookupHappyPath:
         assert result["status"] == "ok"
         mock_conn.assert_called_once_with(("example.com", 8443), timeout=10)
 
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_self_signed_cert_fallback(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         """When verification fails, the tool retries unverified and returns data."""
         tls_sock = _build_mock_tls_socket()
@@ -238,9 +238,9 @@ class TestTlscertLookupHappyPath:
         assert data["verified"] is False
         assert mock_ctx.call_count == 2
 
-    @patch("tools.recon.tlscert_tool._decode_der_cert")
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool._decode_der_cert")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_self_signed_der_decode_fallback(
         self,
         mock_conn: MagicMock,
@@ -279,16 +279,16 @@ class TestTlscertLookupHappyPath:
 class TestTlscertLookupErrors:
     """Error handling for TLS cert lookups."""
 
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_connection_refused(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         mock_conn.side_effect = OSError("Connection refused")
         result = tlscert_lookup.invoke({"hostname": "example.com"})
         assert isinstance(result, str)
         assert "Connection refused" in result
 
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_ssl_handshake_error(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         """Non-verification SSL errors (e.g. protocol mismatch) are not retried."""
         raw_sock = _build_mock_raw_socket()
@@ -300,8 +300,8 @@ class TestTlscertLookupErrors:
         assert isinstance(result, str)
         assert "tlsv1 alert protocol version" in result
 
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_self_signed_both_attempts_fail(
         self, mock_conn: MagicMock, mock_ctx: MagicMock
     ) -> None:
@@ -320,8 +320,8 @@ class TestTlscertLookupErrors:
         assert isinstance(result, str)
         assert "unexpected EOF" in result
 
-    @patch("tools.recon.tlscert_tool.ssl.create_default_context")
-    @patch("tools.recon.tlscert_tool.socket.create_connection")
+    @patch("fackel.tools.recon.tlscert_tool.ssl.create_default_context")
+    @patch("fackel.tools.recon.tlscert_tool.socket.create_connection")
     def test_no_cert_returned(self, mock_conn: MagicMock, mock_ctx: MagicMock) -> None:
         tls_sock = _build_mock_tls_socket(cert=None)
         tls_sock.getpeercert.side_effect = lambda binary_form=False: (

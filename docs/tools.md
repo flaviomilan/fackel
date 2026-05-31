@@ -111,7 +111,7 @@ censys, securitytrails, shodan, webpage extractor) are wrapped in a
 **per-service circuit breaker** (`src/tools/circuit_breaker.py`).
 
 ```python
-from tools.circuit_breaker import circuit_breaker
+from fackel.tools.circuit_breaker import circuit_breaker
 
 with circuit_breaker("crtsh"):
     resp = get_session().get(url, timeout=30)

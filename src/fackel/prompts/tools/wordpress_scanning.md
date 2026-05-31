@@ -1,44 +1,43 @@
 # Tool — WordPress Scanning
 
-## Objetivo
+## Purpose
 
-Identificar vulnerabilidades específicas de WordPress: plugins
-desatualizados, temas vulneráveis, enumeração de usuários, configurações
-inseguras.
+Identify WordPress-specific vulnerabilities: outdated plugins,
+vulnerable themes, user enumeration, insecure configurations.
 
-## Ferramentas
+## Tools
 
-| Ferramenta       | Propósito                                        |
+| Tool             | Purpose                                        |
 |------------------|--------------------------------------------------|
-| `wpscan_scan`    | Scanner especializado WordPress — plugins, temas, users |
+| `wpscan_scan`    | Specialized WordPress scanner — plugins, themes, users |
 
-## Regras de Uso
+## Usage Rules
 
-1. **Executar somente quando WordPress detectado** — confirmar via
-   fingerprinting (whatweb/httpx) antes de executar.
-2. **Enumeração completa**: plugins (-e ap), temas (-e at), usuários (-e u).
-3. **Versões de plugins são críticas** — match direto com CVE databases.
-4. **API token WPScan** — se disponível, usar para dados de vulnerabilidade
-   atualizados do WPVulnDB.
-5. **Documentar TUDO** — mesmo plugins sem CVE conhecida são superfície.
+1. **Run only when WordPress detected** — confirm via
+   fingerprinting (whatweb/httpx) before running.
+2. **Complete enumeration**: plugins (-e ap), themes (-e at), users (-e u).
+3. **Plugin versions are critical** — direct match with CVE databases.
+4. **WPScan API token** — if available, use for updated vulnerability
+   data from WPVulnDB.
+5. **Document EVERYTHING** — even plugins without known CVE are surface.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente sites WordPress no escopo.
-- Não tentar brute-force de senhas.
-- Não explorar vulnerabilidades encontradas.
-- Rate limit adequado para não derrubar o site.
+- Only WordPress sites in scope.
+- Do not attempt password brute-force.
+- Do not exploit found vulnerabilities.
+- Appropriate rate limiting to not take down site.
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                    | Ação                                       |
+| Scenario                   | Action                                     |
 |----------------------------|--------------------------------------------|
-| WAF bloqueando WPScan      | Stealth mode (--random-user-agent)        |
-| Sem API token              | Executar sem — menos dados de CVE         |
-| WordPress muito customizado| Enumerar manualmente via /wp-content/      |
-| Timeout                    | Reduzir escopo a plugins + version only   |
+| WAF blocking WPScan        | Stealth mode (--random-user-agent)        |
+| No API token               | Run without — less CVE data               |
+| Very customized WordPress  | Enumerate manually via /wp-content/       |
+| Timeout                    | Reduce scope to plugins + version only    |
 
-## Estrutura de Output
+## Output Structure
 
 ```json
 {
@@ -68,16 +67,16 @@ inseguras.
 }
 ```
 
-## Normalização
+## Normalization
 
-- Plugin/theme names em slug format (lowercase, hyphens).
-- CVEs no formato padrão.
-- Versões em semver.
+- Plugin/theme names in slug format (lowercase, hyphens).
+- CVEs in standard format.
+- Versions in semver.
 
-## Anomalias
+## Anomalies
 
-- **Plugin com CVE known** → prioridade alta, especialmente RCE/SQLi.
-- **Versão WordPress desatualizada** → múltiplos CVEs potenciais.
-- **User "admin" existe** → brute-force target comum.
-- **XML-RPC habilitado** → amplificação de brute-force.
-- **Debug mode ativo** → information disclosure (wp-config.php).
+- **Plugin with known CVE** → high priority, especially RCE/SQLi.
+- **Outdated WordPress version** → multiple potential CVEs.
+- **User "admin" exists** → common brute-force target.
+- **XML-RPC enabled** → brute-force amplification.
+- **Debug mode active** → information disclosure (wp-config.php).

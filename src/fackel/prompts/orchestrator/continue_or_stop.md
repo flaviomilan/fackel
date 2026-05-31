@@ -1,76 +1,76 @@
 # Orchestrator — Continue or Stop
 
-## Objetivo
+## Objective
 
-Decidir se o pipeline deve continuar executando ferramentas ou parar
-porque cobertura suficiente foi alcançada, budget esgotou, ou
-retornos são decrescentes.
+Decide whether the pipeline should keep running tools or stop because
+sufficient coverage has been reached, the budget is exhausted, or returns
+are diminishing.
 
 ## Inputs
 
-| Campo                | Tipo         | Descrição                               |
-|----------------------|--------------|-----------------------------------------|
-| `iteration`          | `int`        | Número da iteração atual                |
-| `findings_count`     | `int`        | Total de achados coletados              |
-| `new_findings_delta` | `int`        | Novos achados na última iteração        |
-| `coverage`           | `dict`       | Cobertura por categoria                 |
-| `budget_remaining`   | `dict`       | Budget restante                         |
-| `unresolved_gaps`    | `list[dict]` | Lacunas ainda abertas                   |
-| `${user_context}`    | `string`     | Contexto operacional (opcional)         |
+| Field                | Type         | Description                               |
+|----------------------|--------------|-------------------------------------------|
+| `iteration`          | `int`        | Current iteration number                  |
+| `findings_count`     | `int`        | Total findings collected                  |
+| `new_findings_delta` | `int`        | New findings in the last iteration        |
+| `coverage`           | `dict`       | Coverage per category                     |
+| `budget_remaining`   | `dict`       | Remaining budget                          |
+| `unresolved_gaps`    | `list[dict]` | Gaps still open                           |
+| `${user_context}`    | `string`     | Operational context (optional)            |
 
 ## Outputs
 
-| Campo                | Tipo         | Descrição                               |
-|----------------------|--------------|-----------------------------------------|
-| `decision`           | `string`     | "continue" ou "stop"                    |
-| `reason`             | `string`     | Justificativa da decisão                |
-| `remaining_value`    | `float`      | Valor estimado de continuar (0-1)       |
+| Field                | Type         | Description                               |
+|----------------------|--------------|-------------------------------------------|
+| `decision`           | `string`     | "continue" or "stop"                      |
+| `reason`             | `string`     | Justification for the decision            |
+| `remaining_value`    | `float`      | Estimated value of continuing (0-1)       |
 
-## Regras
+## Rules
 
-1. **Parar quando**:
-   - 3 iterações sem novos achados significativos (retorno decrescente).
-   - Budget esgotado (0 chamadas restantes).
-   - Cobertura >= 90% em todas as categorias.
-   - Todas as hipóteses testadas.
-2. **Continuar quando**:
-   - Vulns critical encontradas que requerem investigação.
-   - Lacunas significativas em categorias importantes.
-   - Novos alvos descobertos não investigados.
-   - Budget disponível e ROI positivo.
-3. **Nunca parar se**:
-   - Vuln critical confirmada sem evidência completa.
-   - Escopo principal não foi coberto minimamente.
-4. **Nunca continuar se**:
-   - Budget zerado.
-   - Últimas 3 iterações sem delta > 0.
-   - Alvo não responde / indisponível.
+1. **Stop when**:
+   - 3 iterations with no significant new findings (diminishing returns).
+   - Budget exhausted (0 calls remaining).
+   - Coverage >= 90% across all categories.
+   - All hypotheses tested.
+2. **Continue when**:
+   - Critical vulns found that require investigation.
+   - Significant gaps in important categories.
+   - New targets discovered but not yet investigated.
+   - Budget available and ROI positive.
+3. **Never stop if**:
+   - A critical vuln is confirmed without complete evidence.
+   - The primary scope has not been minimally covered.
+4. **Never continue if**:
+   - Budget is zero.
+   - The last 3 iterations had delta = 0.
+   - The target is unresponsive / unavailable.
 
-## Critérios de Qualidade
+## Quality Criteria
 
-- Decisão binária clara (continue/stop).
-- Razão concreta, não vaga.
-- remaining_value reflete análise honesta.
+- Clear binary decision (continue/stop).
+- Concrete reason, not vague.
+- `remaining_value` reflects an honest analysis.
 
 ## Template
 
 ```
-DECISÃO: CONTINUE OR STOP
+DECISION: CONTINUE OR STOP
 ==========================
 
-Métricas:
-- Iteração: ${iteration}
-- Achados totais: ${findings_count}
-- Delta última iteração: ${new_findings_delta}
-- Cobertura: ${coverage}
-- Budget restante: ${budget_remaining}
+Metrics:
+- Iteration: ${iteration}
+- Total findings: ${findings_count}
+- Last-iteration delta: ${new_findings_delta}
+- Coverage: ${coverage}
+- Budget remaining: ${budget_remaining}
 
-Análise:
-- Retorno decrescente? [sim/não — últimas 3 deltas]
-- Lacunas críticas abertas? [lista]
-- Budget permite mais uma iteração? [sim/não]
+Analysis:
+- Diminishing returns? [yes/no — last 3 deltas]
+- Critical gaps open? [list]
+- Does the budget allow one more iteration? [yes/no]
 
-Decisão: [CONTINUE | STOP]
-Razão: [justificativa concreta]
-Valor de continuar: [0.0 - 1.0]
+Decision: [CONTINUE | STOP]
+Reason: [concrete justification]
+Value of continuing: [0.0 - 1.0]
 ```

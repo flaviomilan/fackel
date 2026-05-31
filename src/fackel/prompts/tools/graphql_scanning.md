@@ -1,44 +1,44 @@
 # Tool — GraphQL Scanning
 
-## Objetivo
+## Purpose
 
-Identificar endpoints GraphQL e testar vulnerabilidades comuns:
-introspection habilitada, query complexity attacks, information disclosure.
+Identify GraphQL endpoints and test for common vulnerabilities:
+enabled introspection, query complexity attacks, information disclosure.
 
-## Ferramentas
+## Tools
 
-| Ferramenta           | Propósito                                       |
+| Tool                 | Purpose                                       |
 |----------------------|-------------------------------------------------|
-| `graphql_scan`       | Detecção de endpoint + introspection + vulns    |
+| `graphql_scan`       | Endpoint detection + introspection + vulns    |
 
-## Regras de Uso
+## Usage Rules
 
-1. **Detectar endpoint primeiro** — testar paths comuns (/graphql,
+1. **Detect endpoint first** — test common paths (/graphql,
    /api/graphql, /v1/graphql, /query).
-2. **Introspection query** — se habilitada, extrair schema completo.
-3. **Testar vulnerabilidades**:
+2. **Introspection query** — if enabled, extract full schema.
+3. **Test vulnerabilities**:
    - Query complexity/depth limit
    - Batching attacks
    - Field suggestion (information disclosure)
-   - Authorization bypass (acessar mutations sem auth)
-4. **Preservar schema** — schema introspection é evidência valiosa.
+   - Authorization bypass (access mutations without auth)
+4. **Preserve schema** — schema introspection is valuable evidence.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente endpoints GraphQL autorizados.
-- Não executar mutations destrutivas.
-- Queries de introspection são passivas (safe to run).
+- Only authorized GraphQL endpoints.
+- Do not run destructive mutations.
+- Introspection queries are passive (safe to run).
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                      | Ação                                    |
-|------------------------------|-----------------------------------------|
-| Introspection desabilitada   | Tentar field suggestion, documentar     |
-| Endpoint não encontrado      | Testar paths alternativos               |
-| Auth required                | Documentar, testar com/sem auth         |
-| Rate limited                 | Reduzir query frequency                 |
+| Scenario                     | Action                                    |
+|------------------------------|--------------------------------------------|
+| Introspection disabled       | Try field suggestion, document             |
+| Endpoint not found           | Test alternative paths                     |
+| Auth required                | Document, test with/without auth           |
+| Rate limited                 | Reduce query frequency                     |
 
-## Estrutura de Output
+## Output Structure
 
 ```json
 {
@@ -61,15 +61,15 @@ introspection habilitada, query complexity attacks, information disclosure.
 }
 ```
 
-## Normalização
+## Normalization
 
-- Endpoint como path relativo.
-- Vulnerability types padronizados.
+- Endpoint as relative path.
+- Vulnerability types standardized.
 - Severity: critical, high, medium, low, info.
 
-## Anomalias
+## Anomalies
 
-- **Introspection em produção** → information disclosure (medium+).
-- **Mutations sem auth** → potencial data manipulation (critical).
-- **Sem depth limit** → DoS via nested queries (high).
-- **Field suggestions revelam schema** → info disclosure mesmo sem introspection.
+- **Introspection in production** → information disclosure (medium+).
+- **Mutations without auth** → potential data manipulation (critical).
+- **No depth limit** → DoS via nested queries (high).
+- **Field suggestions reveal schema** → info disclosure even without introspection.

@@ -8,7 +8,7 @@ import hmac
 import json
 import time
 
-from tools.vuln.jwt_analyzer import _b64url_decode, _check_weak_secret, jwt_analyzer
+from fackel.tools.vuln.jwt_analyzer import _b64url_decode, _check_weak_secret, jwt_analyzer
 
 DEFAULT_TEST_SECRET = "".join(["sec", "ret"])
 STRONG_TEST_SECRET = "".join(["v3ry-$tr0ng", "-R4nd0m-S3cr3t", "-K3y-That-Is-Long!"])

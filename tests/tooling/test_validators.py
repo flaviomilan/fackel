@@ -3,7 +3,26 @@
 import pytest
 from langchain_core.tools import ToolException
 
-from fackel.tooling import TargetType, guard_target
+from fackel.tooling import TargetType, ensure_scheme, guard_target
+
+
+class TestEnsureScheme:
+    """Tests for ensure_scheme() URL normalisation."""
+
+    def test_adds_https_to_bare_host(self):
+        assert ensure_scheme("example.com") == "https://example.com"
+
+    def test_adds_https_to_host_with_path(self):
+        assert ensure_scheme("example.com/app.js") == "https://example.com/app.js"
+
+    def test_preserves_existing_https(self):
+        assert ensure_scheme("https://example.com") == "https://example.com"
+
+    def test_preserves_existing_http(self):
+        assert ensure_scheme("http://example.com") == "http://example.com"
+
+    def test_custom_default_scheme(self):
+        assert ensure_scheme("example.com", default_scheme="http") == "http://example.com"
 
 
 class TestGuardTargetDomain:

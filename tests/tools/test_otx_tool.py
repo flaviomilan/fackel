@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import requests
 
 from fackel.tooling.circuit_breaker import reset_all as reset_circuits
-from tools.recon.otx_tool import otx_passive_dns
+from fackel.tools.recon.otx_tool import otx_passive_dns
 
 
 def _ok_response(json_data: dict, status: int = 200) -> MagicMock:
@@ -61,7 +61,7 @@ class TestOtxPassiveDnsHappyPath:
     """Successful OTX API responses."""
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.get_session")
+    @patch("fackel.tools.recon.otx_tool.get_session")
     def test_returns_parsed_records(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response(_PASSIVE_DNS_RESPONSE)
@@ -83,7 +83,7 @@ class TestOtxPassiveDnsHappyPath:
         assert first["asn"] == "AS15133"
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.get_session")
+    @patch("fackel.tools.recon.otx_tool.get_session")
     def test_passes_api_key_in_header(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"passive_dns": []})
@@ -94,7 +94,7 @@ class TestOtxPassiveDnsHappyPath:
         assert call_args.kwargs["headers"]["X-OTX-API-KEY"] == "test-otx-key"
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.get_session")
+    @patch("fackel.tools.recon.otx_tool.get_session")
     def test_empty_records(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response({"passive_dns": []})
@@ -106,7 +106,7 @@ class TestOtxPassiveDnsHappyPath:
         assert result["data"]["records"] == []
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.get_session")
+    @patch("fackel.tools.recon.otx_tool.get_session")
     def test_deduplicates_records(self, mock_gs: MagicMock) -> None:
         """Duplicate (address, record_type, hostname) combos are filtered."""
         mock_get = mock_gs.return_value.get
@@ -147,7 +147,7 @@ class TestOtxPassiveDnsErrors:
         reset_circuits()
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.get_session")
+    @patch("fackel.tools.recon.otx_tool.get_session")
     def test_http_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.HTTPError("403 Forbidden")
@@ -158,7 +158,7 @@ class TestOtxPassiveDnsErrors:
         assert "403" in result
 
     @patch.dict("os.environ", {"OTX_API_KEY": "test-otx-key"})
-    @patch("tools.recon.otx_tool.get_session")
+    @patch("fackel.tools.recon.otx_tool.get_session")
     def test_non_json_response(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         resp = MagicMock(spec=requests.Response)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from fackel.agents.orchestrator.nodes._helpers import (
     get_phase_evaluation,
     make_finding,
@@ -129,11 +131,28 @@ class TestRouteAfterOsint:
 
 
 class TestRouteAfterPortScan:
-    """Verify routing decisions after port scan phase."""
+    """Verify routing decisions after port scan phase.
 
-    def test_no_evaluation_proceeds_to_vuln_scan(self):
+    With ``FACKEL_VULN_SPECIALISTS`` on (the default), proceeding routes to the
+    parallel ``vuln_dispatch`` entry; otherwise (or under HITL approval) it routes
+    to the monolithic ``vuln_scan`` node.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _specialists_on(self, monkeypatch):
+        """Pin the default (specialists on, approval off) unless a test overrides."""
+        from fackel.agents.orchestrator import streaming
+        from fackel.settings import get_settings
+
+        monkeypatch.setenv("FACKEL_VULN_SPECIALISTS", "true")
+        get_settings.cache_clear()
+        streaming.set_tool_approval(False)
+        yield
+        get_settings.cache_clear()
+
+    def test_no_evaluation_proceeds_to_vuln_dispatch(self):
         state = {"phase_evaluations": [], "target": "example.com"}
-        assert route_after_port_scan(state) == "vuln_scan"
+        assert route_after_port_scan(state) == "vuln_dispatch"
 
     def test_proceed_recommendation(self):
         state = {
@@ -142,7 +161,7 @@ class TestRouteAfterPortScan:
             ],
             "target": "example.com",
         }
-        assert route_after_port_scan(state) == "vuln_scan"
+        assert route_after_port_scan(state) == "vuln_dispatch"
 
     def test_skip_downstream_goes_to_triage(self):
         state = {
@@ -160,7 +179,25 @@ class TestRouteAfterPortScan:
             ],
             "target": "example.com",
         }
+        assert route_after_port_scan(state) == "vuln_dispatch"
+
+    def test_specialists_off_uses_monolithic(self, monkeypatch):
+        from fackel.settings import get_settings
+
+        monkeypatch.setenv("FACKEL_VULN_SPECIALISTS", "false")
+        get_settings.cache_clear()
+        state = {"phase_evaluations": [], "target": "example.com"}
         assert route_after_port_scan(state) == "vuln_scan"
+
+    def test_hitl_approval_forces_monolithic(self):
+        from fackel.agents.orchestrator import streaming
+
+        streaming.set_tool_approval(True)
+        try:
+            state = {"phase_evaluations": [], "target": "example.com"}
+            assert route_after_port_scan(state) == "vuln_scan"
+        finally:
+            streaming.set_tool_approval(False)
 
 
 class TestRunVulnScanWithRetry:
@@ -241,7 +278,7 @@ class TestRunVulnScanWithRetry:
 
         assert mock_run.call_count == 2  # initial + retry
         assert evaluation.completeness == "partial"
-        mock_streaming.emit.assert_any_call("vuln_scan", "retry", {"reason": "no vuln data"})
+        mock_streaming.emit.assert_any_call("vuln_scan", "retry", {"reason": "judge: empty output"})
 
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.emit_evaluation")
     @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")

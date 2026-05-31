@@ -1,88 +1,97 @@
 # Tool — API Fuzzing & Directory Discovery
 
-## Objetivo
+## Purpose
 
-Descobrir diretórios ocultos, arquivos sensíveis, endpoints de API
-e virtual hosts via brute-force com wordlists.
+Discover hidden directories, sensitive files, API endpoints,
+and virtual hosts via brute-force with wordlists.
 
-## Ferramentas
+## Tools
 
-| Ferramenta        | Propósito                                          |
+| Tool              | Purpose                                            |
 |-------------------|----------------------------------------------------|
-| `ffuf_scan`       | Fuzzing rápido de diretórios/arquivos/API          |
-| `feroxbuster_scan`| Directory brute-force recursivo                    |
+| `ffuf_scan`       | Fast fuzzing of directories/files/APIs             |
+| `feroxbuster_scan`| Recursive directory brute-force                    |
 
-## Quando Usar Cada Ferramenta
+## When to Use Each Tool
 
-- **`ffuf_scan` primeiro** quando o objetivo é:
-  - API endpoint discovery (suporta FUZZ keyword posicional)
-  - Testar múltiplos métodos HTTP (GET, POST, PUT, DELETE, OPTIONS)
-  - Endpoints autenticados (suporta headers customizados)
+- **`ffuf_scan` first** when the goal is:
+  - API endpoint discovery (supports positional FUZZ keyword)
+  - Test multiple HTTP methods (GET, POST, PUT, DELETE, OPTIONS)
+  - Authenticated endpoints (supports custom headers)
   - Virtual host discovery (header `Host: FUZZ.example.com`)
-- **`feroxbuster_scan` primeiro** quando o objetivo é:
-  - Directory tree recursivo com profundidade (depth 1-4)
-  - Content discovery geral (backup files, admin panels, configs)
-  - Brute-force extenso com extensions automáticas
-- **Fallback mútuo** — se um falhar (dependência, timeout, WAF), usar
-  o outro imediatamente. São intercambiáveis para discovery básico.
+- **`feroxbuster_scan` first** when the goal is:
+  - Recursive directory tree with depth (depth 1-4)
+  - General content discovery (backup files, admin panels, configs)
+  - Extensive brute-force with automatic extensions
+- **Mutual fallback** — if one fails (dependency, timeout, WAF), use
+  the other immediately. They are interchangeable for basic discovery.
 
-## Regras de Uso
+## Usage Rules
 
-1. **ffuf para API endpoint discovery** — usar com wordlists de API:
-   - `https://api.example.com/v1/FUZZ` para endpoints REST
-   - `https://example.com/FUZZ` para diretórios
-2. **Testar múltiplos métodos HTTP em APIs** — GET para leitura,
-   POST/PUT para escrita, DELETE para remoção, OPTIONS para CORS.
-   Status 405 (Method Not Allowed) confirma endpoint válido.
-3. **Headers para endpoints autenticados** (somente `ffuf_scan`):
-   - `Authorization: Bearer <token>` para APIs REST
-   - `Cookie: session=<value>` para aplicações web
-   - Testar endpoints autenticados quando tokens disponíveis.
-4. **Virtual host discovery** com ffuf:
-   - URL: `https://<IP>/` com header `Host: FUZZ.example.com`
-   - Wordlist de subdomínios (não de diretórios)
-   - Filtrar por `filter_size` — vhosts inexistentes retornam mesmo tamanho.
-5. **Extensões relevantes** — `.php,.html,.js,.json,.xml,.txt,.bak,.conf`
-   baseado na tecnologia detectada.
-6. **Match codes seletivos** — default: 200,204,301,302,307,401,403,405.
-   - 401/403 indicam recursos protegidos mas existentes.
-   - 405 indica endpoint válido mas método errado.
-7. **Filtragem de false positives** — workflow iterativo:
-   - Scan inicial sem filtros de tamanho.
-   - Se muitos resultados com mesmo tamanho/words → custom 404 page.
-   - Re-scan com `filter_size` ou `filter_words` para excluir padrão.
-   - Exemplo: 200 resultados todos com length 1234 → `filter_size: "1234"`.
-8. **Threads adaptativas** — default 20 para targets normais.
-   - Reduzir para 5-10 sob WAF ou rate limiting.
-   - Aumentar até 50 apenas em targets robustos sem proteção.
-9. **Correlacionar com tecnologia detectada** — WordPress → wp-admin,
+1. **ffuf for API endpoint discovery** — use with API wordlists:
+   - `https://api.example.com/v1/FUZZ` for REST endpoints
+   - `https://example.com/FUZZ` for directories
+2. **Test multiple HTTP methods on APIs** — GET for reading,
+   POST/PUT for writing, DELETE for removal, OPTIONS for CORS.
+   Status 405 (Method Not Allowed) confirms valid endpoint.
+3. **Headers for authenticated endpoints** (only `ffuf_scan`):
+   - `Authorization: Bearer <token>` for REST APIs
+   - `Cookie: session=<value>` for web applications
+   - Test authenticated endpoints when tokens are available.
+4. **Virtual host discovery** with ffuf:
+   - URL: `https://<IP>/` with header `Host: FUZZ.example.com`
+   - Subdomain wordlist (not directory wordlist)
+   - Filter by `filter_size` — nonexistent vhosts return same size.
+5. **Relevant extensions** — `.php,.html,.js,.json,.xml,.txt,.bak,.conf`
+   based on detected technology.
+6. **Selective match codes** — default: 200,204,301,302,307,401,403,405.
+   - 401/403 indicate protected but existing resources.
+   - 405 indicates valid endpoint but wrong method.
+7. **False positive filtering** — iterative workflow:
+   - Initial scan without size filters.
+   - If many results with same size/words → custom 404 page.
+   - Re-scan with `filter_size` or `filter_words` to exclude pattern.
+   - Example: 200 results all with length 1234 → `filter_size: "1234"`.
+8. **Adaptive threads** — default 20 for normal targets.
+   - Reduce to 5-10 under WAF or rate limiting.
+   - Increase up to 50 only on robust targets without protection.
+9. **Correlate with detected technology** — WordPress → wp-admin,
    wp-content; Laravel → .env, artisan; etc.
+10. **Status-code allowlist/denylist** — `match_codes` keeps only the
+    codes you list (e.g. `"200,301"`); `filter_codes` discards them
+    (e.g. `"404"`). Combine to suppress noisy 404 walls quickly.
+11. **Recursion (ffuf)** — set `recursion: true` with
+    `recursion_depth` (1-3) when you need to walk discovered
+    directories without launching feroxbuster. Higher depths cost
+    quadratic requests; never exceed 3 without justification.
+12. **feroxbuster status filter** — pass `filter_status="404,403"`
+    to drop boring responses when the target floods them.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente hosts autorizados.
-- Threads: default 20, máximo 50. Reduzir sob WAF.
-- Wordlists padrão (SecLists common.txt ou dirb/common.txt).
-- Não executar fuzzing recursivo sem justificativa.
-- Respeitar rate limiting e WAF.
+- Only authorized hosts.
+- Threads: default 20, maximum 50. Reduce under WAF.
+- Standard wordlists (SecLists common.txt or dirb/common.txt).
+- Do not run recursive fuzzing without justification.
+- Respect rate limiting and WAF.
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                    | Ação                                       |
+| Scenario                   | Action                                     |
 |----------------------------|--------------------------------------------|
-| WAF bloqueando requests    | Reduzir threads para 5-10, documentar WAF  |
-| Wordlist não encontrada    | Ambas usam wordlist bundled automaticamente|
-| feroxbuster falhou         | Usar ffuf_scan como alternativa            |
-| ffuf falhou                | Usar feroxbuster_scan como alternativa     |
-| Muitos resultados (>500)   | Filtrar por status 200 ou filter_size      |
-| Custom 404 detectado       | Re-scan com filter_size do tamanho padrão  |
-| ffuf/feroxbuster timeout   | Reduzir wordlist ou extensões              |
+| WAF blocking requests      | Reduce threads to 5-10, document WAF       |
+| Wordlist not found         | Both use bundled wordlist automatically    |
+| feroxbuster failed         | Use ffuf_scan as alternative               |
+| ffuf failed                | Use feroxbuster_scan as alternative        |
+| Many results (>500)        | Filter by status 200 or filter_size        |
+| Custom 404 detected        | Re-scan with filter_size of standard size  |
+| ffuf/feroxbuster timeout   | Reduce wordlist or extensions              |
 
-> **IMPORTANTE**: ffuf e feroxbuster são complementares e intercambiáveis.
-> Se um falhar (dependência, timeout, erro), use o outro imediatamente.
-> Ambos agora incluem wordlist automática — não devem falhar por wordlist.
+> **IMPORTANT**: ffuf and feroxbuster are complementary and interchangeable.
+> If one fails (dependency, timeout, error), use the other immediately.
+> Both now include automatic wordlist — should not fail due to wordlist.
 
-## Estrutura de Output
+## Output Structure
 
 ### ffuf_scan
 
@@ -150,8 +159,8 @@ e virtual hosts via brute-force com wordlists.
 }
 ```
 
-### Classificação de Severidade
+### Severity Classification
 
 - **high**: admin panels, config files (.env, .htaccess), backup files (.sql, .bak)
-- **medium**: diretórios ocultos, endpoints protegidos (401/403)
-- **info**: recursos comuns, redirects
+- **medium**: hidden directories, protected endpoints (401/403)
+- **info**: common resources, redirects

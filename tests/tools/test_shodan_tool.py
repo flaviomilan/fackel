@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.recon.shodan_tool import shodan_lookup
+from fackel.tools.recon.shodan_tool import shodan_lookup
 
 
 class TestShodanLookup:
     """Verify Shodan API integration for IP and query modes."""
 
-    @patch("tools.recon.shodan_tool.shodan.Shodan")
-    @patch("tools.recon.shodan_tool.require_env", return_value="test-key")
+    @patch("fackel.tools.recon.shodan_tool.shodan.Shodan")
+    @patch("fackel.tools.recon.shodan_tool.require_env", return_value="test-key")
     def test_ip_host_lookup(self, _env, mock_shodan_cls):
         mock_api = MagicMock()
         mock_shodan_cls.return_value = mock_api
@@ -48,8 +48,8 @@ class TestShodanLookup:
         assert result["data"]["services"][0]["port"] == 443
         assert result["data"]["services"][0]["product"] == "nginx"
 
-    @patch("tools.recon.shodan_tool.shodan.Shodan")
-    @patch("tools.recon.shodan_tool.require_env", return_value="test-key")
+    @patch("fackel.tools.recon.shodan_tool.shodan.Shodan")
+    @patch("fackel.tools.recon.shodan_tool.require_env", return_value="test-key")
     def test_search_query_mode(self, _env, mock_shodan_cls):
         mock_api = MagicMock()
         mock_shodan_cls.return_value = mock_api
@@ -73,8 +73,8 @@ class TestShodanLookup:
         assert len(result["data"]["matches"]) == 1
         assert result["data"]["matches"][0]["ip"] == "1.2.3.4"
 
-    @patch("tools.recon.shodan_tool.shodan.Shodan")
-    @patch("tools.recon.shodan_tool.require_env", return_value="test-key")
+    @patch("fackel.tools.recon.shodan_tool.shodan.Shodan")
+    @patch("fackel.tools.recon.shodan_tool.require_env", return_value="test-key")
     def test_api_error_raises_tool_exception(self, _env, mock_shodan_cls):
         mock_api = MagicMock()
         mock_shodan_cls.return_value = mock_api
@@ -83,8 +83,8 @@ class TestShodanLookup:
         result = shodan_lookup.invoke({"query": "93.184.216.34"})
         assert "invalid api key" in result.lower()
 
-    @patch("tools.recon.shodan_tool.shodan.Shodan")
-    @patch("tools.recon.shodan_tool.require_env", return_value="test-key")
+    @patch("fackel.tools.recon.shodan_tool.shodan.Shodan")
+    @patch("fackel.tools.recon.shodan_tool.require_env", return_value="test-key")
     def test_host_empty_services(self, _env, mock_shodan_cls):
         mock_api = MagicMock()
         mock_shodan_cls.return_value = mock_api
@@ -104,8 +104,8 @@ class TestShodanLookup:
         assert result["data"]["services"] == []
         assert result["data"]["ports"] == []
 
-    @patch("tools.recon.shodan_tool.shodan.Shodan")
-    @patch("tools.recon.shodan_tool.require_env", return_value="test-key")
+    @patch("fackel.tools.recon.shodan_tool.shodan.Shodan")
+    @patch("fackel.tools.recon.shodan_tool.require_env", return_value="test-key")
     def test_search_empty_matches(self, _env, mock_shodan_cls):
         mock_api = MagicMock()
         mock_shodan_cls.return_value = mock_api

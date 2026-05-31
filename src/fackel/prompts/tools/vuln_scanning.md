@@ -1,109 +1,115 @@
 # Tool — Vulnerability Scanning
 
-## Objetivo
+## Purpose
 
-Identificar vulnerabilidades conhecidas em serviços, aplicações web e
-configurações do alvo usando scanners automatizados.
+Identify known vulnerabilities in target services, web applications, and
+configurations using automated scanners.
 
-## Ferramentas
+## Tools
 
-| Ferramenta                | Propósito                                                 |
+| Tool                      | Purpose                                                 |
 |---------------------------|-----------------------------------------------------------|
-| `nuclei_scan`             | Templates de vulnerabilidades (CVEs, misconfigs)          |
-| `testssl_scan`            | Análise de configuração TLS/SSL                           |
-| `security_headers_audit`  | Auditoria de headers de segurança HTTP (CSP, HSTS, etc.) |
-| `sqlmap_scan`             | Detecção automatizada de SQL Injection                    |
-| `ssrf_detect`             | Detecção de Server-Side Request Forgery via nuclei        |
-| `open_redirect_scan`      | Detecção de Open Redirect via nuclei                      |
-| `ssti_scan`               | Detecção de Server-Side Template Injection via nuclei     |
-| `jwt_analyzer`            | Análise de segurança de JWT tokens                        |
+| `nuclei_scan`             | Vulnerability templates (CVEs, misconfigs)          |
+| `testssl_scan`            | TLS/SSL configuration analysis                           |
+| `security_headers_audit`  | HTTP security headers audit (CSP, HSTS, etc.) |
+| `sqlmap_scan`             | Automated SQL Injection detection                    |
+| `ssrf_detect`             | Server-Side Request Forgery detection via nuclei        |
+| `open_redirect_scan`      | Open Redirect detection via nuclei                      |
+| `ssti_scan`               | Server-Side Template Injection detection via nuclei     |
+| `jwt_analyzer`            | JWT token security analysis                        |
 
-## Regras de Uso
+## Usage Rules
 
-1. **nuclei é o scanner principal** — executar com templates relevantes
-   para as tecnologias detectadas.
-2. **Templates seletivos** — usar tags baseadas no fingerprinting:
-   - WordPress detectado → `-tags wordpress`
+1. **nuclei is primary scanner** — run with templates relevant
+   to detected technologies.
+2. **Selective templates** — use tags based on fingerprinting:
+   - WordPress detected → `-tags wordpress`
    - Apache → `-tags apache`
-   - GraphQL detectado → `-tags graphql`
-   - Genérico → `-tags cve,misconfig,exposure`
-3. **Scans especializados via nuclei** — para coberturas específicas:
-   - SQLi suspect → `ssrf_detect` ou `nuclei_scan -tags sqli`
-   - Redirect params detectados → `open_redirect_scan`
-   - Template engine detectado → `ssti_scan -tags ssti`
+   - GraphQL detected → `-tags graphql`
+   - Generic → `-tags cve,misconfig,exposure`
+3. **Specialized scans via nuclei** — for specific coverage:
+   - SQLi suspect → `ssrf_detect` or `nuclei_scan -tags sqli`
+   - Redirect params detected → `open_redirect_scan`
+   - Template engine detected → `ssti_scan -tags ssti`
    - SSRF suspect → `ssrf_detect -tags ssrf`
-4. **testssl em hosts HTTPS** — verificar cipher suites, protocolos,
-   certificados, vulnerabilidades TLS.
-5. **security_headers_audit em todos os hosts web** — análise pura HTTP
-   sem dependência de binários externos.
-6. **sqlmap em endpoints com parâmetros** — usar `--batch --level=1
-   --risk=1` para automação segura. Ferramenta ativa: requer aprovação.
-7. **jwt_analyzer quando JWT detectado** — decodificar, verificar alg:none,
-   claims expirados, segredos fracos. Ferramenta passiva sem binários.
-8. **Categorizar severidade** — critical, high, medium, low, info.
-9. **Evidência obrigatória** — cada finding deve ter prova (request/response).
+4. **testssl on HTTPS hosts** — verify cipher suites, protocols,
+   certificates, TLS vulnerabilities.
+5. **security_headers_audit on all web hosts** — pure HTTP analysis
+   without external binary dependency.
+6. **sqlmap on endpoints with parameters** — use `--batch --level=1
+   --risk=1` for safe automation. Active tool: requires approval.
+7. **jwt_analyzer when JWT detected** — decode, check alg:none,
+   expired claims, weak secrets. Passive tool without binaries.
+8. **Categorize severity** — critical, high, medium, low, info.
+9. **Mandatory evidence** — each finding must have proof (request/response).
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente hosts autorizados.
-- Não usar templates de exploit/RCE sem autorização explícita.
-- Rate limit: máximo 10 requests/segundo por host.
-- Não executar fuzzing extensivo sem justificativa.
-- sqlmap **somente** com `--batch` e `--level ≤ 2` em modo automatizado.
+- Only authorized hosts.
+- Do not use exploit/RCE templates without explicit authorization.
+- Rate limit: maximum 10 requests/second per host.
+- Do not run extensive fuzzing without justification.
+- sqlmap **only** with `--batch` and `--level ≤ 2` in automated mode.
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                    | Ação                                       |
+| Scenario                   | Action                                     |
 |----------------------------|--------------------------------------------|
-| WAF bloqueando nuclei      | Reduzir rate, documentar WAF               |
-| Templates timeout          | Retry com timeout maior ou tags específicas |
-| Muitos findings (>100)     | Filtrar por severity >= medium             |
-| testssl timeout            | Tentar com checks='protocols,vulnerabilities' |
-| testssl sem resultado      | Retry com fast=False e openssl_timeout=20  |
-| nuclei vazio               | Retry com tags da tecnologia detectada     |
-| False positive provável    | Marcar como "needs verification"           |
+| WAF blocking nuclei        | Reduce rate, document WAF                 |
+| Templates timeout          | Retry with larger timeout or specific tags |
+| Many findings (>100)       | Filter by severity >= medium              |
+| testssl timeout            | Try with checks='protocols,vulnerabilities' |
+| testssl no result          | Retry with fast=False and openssl_timeout=20  |
+| nuclei empty               | Retry with tags of detected technology    |
+| Likely false positive      | Mark as "needs verification"              |
 
-## Estrutura de Output
+## Output Structure
 
 ```json
 {
   "tool": "nuclei_scan",
   "target": "https://example.com",
+  "status": "ok|error",
   "data": {
+    "total": 12,
     "findings": [
       {
         "template_id": "CVE-2024-1234",
+        "matcher_name": "cloudflare",
         "name": "WordPress Plugin RCE",
         "severity": "critical",
-        "url": "https://example.com/wp-content/plugins/vuln/",
         "matched_at": "https://example.com/wp-content/plugins/vuln/readme.txt",
-        "evidence": "Version: 2.3.1 (vulnerable < 2.5.0)",
-        "tags": ["cve", "wordpress", "rce"]
+        "type": "http",
+        "host": "example.com",
+        "ip": "203.0.113.10",
+        "tags": ["cve", "wordpress", "rce"],
+        "description": "...",
+        "extracted_results": ["v2.3.1"],
+        "curl_command": "curl -X GET https://..."
       }
-    ],
-    "total_findings": 12,
-    "by_severity": {
-      "critical": 1,
-      "high": 3,
-      "medium": 5,
-      "low": 3
-    }
+    ]
   }
 }
 ```
 
-## Normalização
+- No findings: `data: {"findings": [], "message": "no vulnerabilities found"}`.
+- `extracted_results` and `curl_command` only appear when template produces them —
+  do not assume presence before reading.
+- No fields `url`, `evidence`, or `by_severity` in envelope —
+  derive severity count from `findings` in agent.
 
-- CVE IDs no formato CVE-YYYY-NNNNN.
-- Severity padronizado: critical, high, medium, low, info.
-- URLs completas (não relativas).
-- Tags preservadas para cruzamento.
+## Normalization
 
-## Anomalias
+- CVE IDs in CVE-YYYY-NNNNN format.
+- Severity standardized: critical, high, medium, low, info.
+- Full URLs (not relative).
+- Tags preserved for cross-reference.
 
-- **CVE critical confirmado** → prioridade máxima no relatório.
-- **TLS 1.0/1.1 habilitado** → compliance issue (PCI DSS).
-- **Self-signed cert em produção** → trust issue, potencial MitM.
-- **Cipher suites fracas** (RC4, DES, NULL) → risco de interceptação.
-- **Múltiplas vulns no mesmo componente** → sistema sem patching.
-- **Info disclosure** (stack traces, version headers) → facilita exploração.
+## Anomalies
+
+- **Confirmed critical CVE** → maximum priority in report.
+- **TLS 1.0/1.1 enabled** → compliance issue (PCI DSS).
+- **Self-signed cert in production** → trust issue, potential MitM.
+- **Weak cipher suites** (RC4, DES, NULL) → interception risk.
+- **Multiple vulns in same component** → system not patched.
+- **Info disclosure** (stack traces, version headers) → facilitates exploitation.

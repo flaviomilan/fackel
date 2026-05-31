@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.recon.fofa_tool import fofa_search
+from fackel.tools.recon.fofa_tool import fofa_search
 
 
 class TestFofaSearch:
     """Verify FOFA API integration and result parsing."""
 
-    @patch("tools.recon.fofa_tool.circuit_breaker")
-    @patch("tools.recon.fofa_tool.get_session")
-    @patch("tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
+    @patch("fackel.tools.recon.fofa_tool.circuit_breaker")
+    @patch("fackel.tools.recon.fofa_tool.get_session")
+    @patch("fackel.tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
     def test_parses_results(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -58,9 +58,9 @@ class TestFofaSearch:
         assert result["data"]["results"][0]["ip"] == "1.2.3.4"
         assert result["data"]["results"][0]["port"] == "443"
 
-    @patch("tools.recon.fofa_tool.circuit_breaker")
-    @patch("tools.recon.fofa_tool.get_session")
-    @patch("tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
+    @patch("fackel.tools.recon.fofa_tool.circuit_breaker")
+    @patch("fackel.tools.recon.fofa_tool.get_session")
+    @patch("fackel.tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
     def test_empty_results(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -76,9 +76,9 @@ class TestFofaSearch:
         assert result["status"] == "ok"
         assert result["data"]["results"] == []
 
-    @patch("tools.recon.fofa_tool.circuit_breaker")
-    @patch("tools.recon.fofa_tool.get_session")
-    @patch("tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
+    @patch("fackel.tools.recon.fofa_tool.circuit_breaker")
+    @patch("fackel.tools.recon.fofa_tool.get_session")
+    @patch("fackel.tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
     def test_api_error_returns_tool_exception(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -93,9 +93,9 @@ class TestFofaSearch:
         result = fofa_search.invoke({"query": "domain=example.com"})
         assert "invalid query" in result
 
-    @patch("tools.recon.fofa_tool.circuit_breaker")
-    @patch("tools.recon.fofa_tool.get_session")
-    @patch("tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
+    @patch("fackel.tools.recon.fofa_tool.circuit_breaker")
+    @patch("fackel.tools.recon.fofa_tool.get_session")
+    @patch("fackel.tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
     def test_account_error_shows_clear_message(self, _env, mock_session, mock_cb):
         """F-point exhaustion or invalid account gives an actionable message."""
         mock_cb.return_value.__enter__ = MagicMock()
@@ -115,9 +115,9 @@ class TestFofaSearch:
         assert "account error" in result
         assert "F-point balance" in result
 
-    @patch("tools.recon.fofa_tool.circuit_breaker")
-    @patch("tools.recon.fofa_tool.get_session")
-    @patch("tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
+    @patch("fackel.tools.recon.fofa_tool.circuit_breaker")
+    @patch("fackel.tools.recon.fofa_tool.get_session")
+    @patch("fackel.tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
     def test_http_failure_returns_error(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)
@@ -127,9 +127,9 @@ class TestFofaSearch:
         result = fofa_search.invoke({"query": "domain=example.com"})
         assert "connection timeout" in result
 
-    @patch("tools.recon.fofa_tool.circuit_breaker")
-    @patch("tools.recon.fofa_tool.get_session")
-    @patch("tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
+    @patch("fackel.tools.recon.fofa_tool.circuit_breaker")
+    @patch("fackel.tools.recon.fofa_tool.get_session")
+    @patch("fackel.tools.recon.fofa_tool.require_env", side_effect=["user@example.com", "fake-key"])
     def test_truncates_long_banners(self, _env, mock_session, mock_cb):
         mock_cb.return_value.__enter__ = MagicMock()
         mock_cb.return_value.__exit__ = MagicMock(return_value=False)

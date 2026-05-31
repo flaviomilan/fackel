@@ -28,10 +28,13 @@ import ipaddress
 import logging
 import re
 import socket
+from collections.abc import Callable
 from enum import Enum
 from urllib.parse import urlparse
 
 from langchain_core.tools import ToolException
+
+_ErrFn = Callable[[str], ToolException]
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +109,19 @@ class TargetType(Enum):
     HOST_OR_URL = "host_or_url"
 
 
+def ensure_scheme(value: str, *, default_scheme: str = "https") -> str:
+    """Prefix *value* with ``{default_scheme}://`` if it has no scheme.
+
+    Tools that accept a host-or-URL target and pass it to an HTTP client or
+    a URL-oriented binary use this to normalise bare hosts (``example.com``)
+    into full URLs (``https://example.com``).  Values that already start with
+    ``http://`` or ``https://`` are returned unchanged.
+    """
+    if value.startswith(("http://", "https://")):
+        return value
+    return f"{default_scheme}://{value}"
+
+
 def _extract_host(value: str) -> str:
     """Return the bare hostname / IP from a value that may include a scheme.
 
@@ -150,79 +166,95 @@ def guard_target(
     raw = value.strip()
 
     if accept is TargetType.URL:
-        parsed = urlparse(raw)
-        if parsed.scheme not in ("http", "https"):
-            raise _err(f"expected a full URL (http/https), got: {raw}")
-        if not parsed.hostname:
-            raise _err(f"URL has no hostname: {raw}")
-        host = parsed.hostname
-        if _SHELL_META_RE.search(host):
-            raise _err(f"target contains forbidden characters: {host!r}")
-        return raw
-
+        return _guard_url(raw, _err)
     if accept is TargetType.HOST_OR_URL:
-        parsed = urlparse(raw)
-        if parsed.scheme in ("http", "https") and parsed.hostname:
-            host = parsed.hostname
-            if _SHELL_META_RE.search(host):
-                raise _err(f"target contains forbidden characters: {host!r}")
-            return raw
-        return guard_target(raw, tool_name, TargetType.HOST)
+        return _guard_host_or_url(raw, tool_name, _err)
+    if accept is TargetType.HOST_PORT:
+        return _guard_host_port(raw, _err)
 
+    # DOMAIN / IP / HOST share host extraction + shell-meta rejection.
     host = _extract_host(raw)
-
     if _SHELL_META_RE.search(host):
         raise _err(f"target contains forbidden characters: {host!r}")
-
     if accept is TargetType.DOMAIN:
-        if is_valid_ip(host):
-            raise _err(
-                f"{tool_name} requires a domain name, not an IP address. "
-                f"Use the domain or subdomain instead of {host}."
-            )
-        if not is_valid_domain(host):
-            raise _err(f"invalid domain name: {host!r}")
-        return host
-
+        return _guard_domain(host, tool_name, _err)
     if accept is TargetType.IP:
-        if not is_valid_ip(host):
-            raise _err(f"{tool_name} requires an IP address, got: {host!r}")
-        if is_private_ip(host):
-            raise _err(
-                f"target is a private/reserved IP address ({host}). "
-                "Scanning internal networks is not permitted. "
-                "Use a public IP or domain name instead."
-            )
-        return host
-
+        return _guard_ip(host, tool_name, _err)
     if accept is TargetType.HOST:
-        if not is_valid_ip(host) and not is_valid_domain(host):
-            raise _err(f"invalid host (not a valid IP or domain): {host!r}")
-        if is_valid_ip(host) and is_private_ip(host):
-            raise _err(
-                f"target is a private/reserved IP address ({host}). "
-                "Scanning internal networks is not permitted. "
-                "Use a public IP or domain name instead."
-            )
-        return host
-
-    if accept is TargetType.HOST_PORT:
-        candidate = raw
-        port_part = ""
-        if ":" in candidate and not candidate.startswith("["):
-            last_colon = candidate.rfind(":")
-            maybe_port = candidate[last_colon + 1 :]
-            if maybe_port.isdigit():
-                candidate = candidate[:last_colon]
-                port_part = f":{maybe_port}"
-        bare = candidate.strip().rstrip(".")
-        if _SHELL_META_RE.search(bare):
-            raise _err(f"target contains forbidden characters: {bare!r}")
-        if not is_valid_ip(bare) and not is_valid_domain(bare):
-            raise _err(f"invalid host (not a valid IP or domain): {bare!r}")
-        return f"{bare}{port_part}"
+        return _guard_host(host, _err)
 
     raise _err(f"unknown target type: {accept}")  # pragma: no cover
+
+
+_PRIVATE_IP_MSG = (
+    "target is a private/reserved IP address ({host}). "
+    "Scanning internal networks is not permitted. "
+    "Use a public IP or domain name instead."
+)
+
+
+def _guard_url(raw: str, _err: _ErrFn) -> str:
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https"):
+        raise _err(f"expected a full URL (http/https), got: {raw}")
+    if not parsed.hostname:
+        raise _err(f"URL has no hostname: {raw}")
+    if _SHELL_META_RE.search(parsed.hostname):
+        raise _err(f"target contains forbidden characters: {parsed.hostname!r}")
+    return raw
+
+
+def _guard_host_or_url(raw: str, tool_name: str, _err: _ErrFn) -> str:
+    parsed = urlparse(raw)
+    if parsed.scheme in ("http", "https") and parsed.hostname:
+        if _SHELL_META_RE.search(parsed.hostname):
+            raise _err(f"target contains forbidden characters: {parsed.hostname!r}")
+        return raw
+    return guard_target(raw, tool_name, TargetType.HOST)
+
+
+def _guard_domain(host: str, tool_name: str, _err: _ErrFn) -> str:
+    if is_valid_ip(host):
+        raise _err(
+            f"{tool_name} requires a domain name, not an IP address. "
+            f"Use the domain or subdomain instead of {host}."
+        )
+    if not is_valid_domain(host):
+        raise _err(f"invalid domain name: {host!r}")
+    return host
+
+
+def _guard_ip(host: str, tool_name: str, _err: _ErrFn) -> str:
+    if not is_valid_ip(host):
+        raise _err(f"{tool_name} requires an IP address, got: {host!r}")
+    if is_private_ip(host):
+        raise _err(_PRIVATE_IP_MSG.format(host=host))
+    return host
+
+
+def _guard_host(host: str, _err: _ErrFn) -> str:
+    if not is_valid_ip(host) and not is_valid_domain(host):
+        raise _err(f"invalid host (not a valid IP or domain): {host!r}")
+    if is_valid_ip(host) and is_private_ip(host):
+        raise _err(_PRIVATE_IP_MSG.format(host=host))
+    return host
+
+
+def _guard_host_port(raw: str, _err: _ErrFn) -> str:
+    candidate = raw
+    port_part = ""
+    if ":" in candidate and not candidate.startswith("["):
+        last_colon = candidate.rfind(":")
+        maybe_port = candidate[last_colon + 1 :]
+        if maybe_port.isdigit():
+            candidate = candidate[:last_colon]
+            port_part = f":{maybe_port}"
+    bare = candidate.strip().rstrip(".")
+    if _SHELL_META_RE.search(bare):
+        raise _err(f"target contains forbidden characters: {bare!r}")
+    if not is_valid_ip(bare) and not is_valid_domain(bare):
+        raise _err(f"invalid host (not a valid IP or domain): {bare!r}")
+    return f"{bare}{port_part}"
 
 
 def sanitize_target(raw: str) -> str:
@@ -312,3 +344,36 @@ def guard_dns_rebinding(hostname: str, tool_name: str) -> None:
             f"address(es) {private_addrs}. This may be a DNS rebinding attack. "
             "Scanning internal networks is not permitted."
         )
+
+
+def guard_request_target(value: str, tool_name: str) -> None:
+    """Guard the host a tool is about to connect to against SSRF.
+
+    Accepts a bare host or a full URL and extracts the hostname.  When the
+    host is an IP literal it is rejected outright if private/reserved (e.g.
+    ``http://169.254.169.254/`` cloud-metadata, ``127.0.0.1``, RFC-1918);
+    otherwise it is checked for DNS rebinding via :func:`guard_dns_rebinding`.
+
+    Call this **immediately before** issuing the outbound request in tools
+    that connect to a *user-supplied* target (e.g. fetching a URL).  Tools
+    that query a fixed third-party API about the target do **not** need this —
+    they never connect to the target itself.
+
+    Note that :func:`guard_target` validates input *syntax* but does not
+    reject private IPs for ``URL`` / ``HOST_OR_URL`` types, so this guard is
+    the actual SSRF rail for connect-to-target tools.
+
+    Raises
+    ------
+    ToolException
+        When the target host is, or resolves to, a private/reserved address.
+    """
+    host = _extract_host(value)
+    if is_valid_ip(host):
+        if is_private_ip(host):
+            raise ToolException(
+                f"{tool_name}: target host {host!r} is a private/reserved "
+                "address. Connecting to internal networks is not permitted."
+            )
+        return
+    guard_dns_rebinding(host, tool_name)

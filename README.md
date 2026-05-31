@@ -15,6 +15,16 @@
   <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-1.x-purple.svg" />
 </p>
 
+<p align="center">
+  <video src="https://github.com/flaviomilan/fackel/raw/main/docs/assets/demo.mp4" autoplay loop muted playsinline controls width="100%">
+    <a href="docs/assets/demo.mp4">▶ Watch the Fackel interactive harness demo</a>
+  </video>
+</p>
+
+<p align="center">
+  <em>The interactive harness — parallel agent lanes, a live pipeline stepper, and inline approval gates.</em>
+</p>
+
 ---
 
 ## What is Fackel?
@@ -104,21 +114,58 @@ cp .env.example .env
 
 ### Run
 
+#### Interactive harness *(recommended)*
+
+Run `fackel` with no arguments to launch the interactive harness — a REPL around
+the agent pipeline with parallel agent lanes, inline approvals, and a knowledge
+graph you can query (shown in the demo above):
+
+```bash
+fackel
+```
+
+| Command | What it does |
+|---------|--------------|
+| `/scan <target> [--no-active] [--approve-tools]` | Run a scan |
+| `/ask <question>` | Ask a natural-language question about the last scan's knowledge graph |
+| `/scans` | List persisted scans |
+| `/diff <old> <new>` | Diff two scans — new / resolved / changed assets |
+| `/graph [scan_id]` | Export the knowledge graph (Mermaid) |
+| `/context` · `/compact` | Inspect the live context meter · summarise prior findings into session memory |
+| `/agents` · `/help` · `/quit` | List specialist agents · show help · exit |
+
+> **Tip:** the harness renders with [Nerd Font](https://www.nerdfonts.com/) glyphs.
+> No patched font? Set `FACKEL_NERD_FONT=0` for an alignment-safe ASCII fallback.
+
+#### One-shot scan
+
+For CI or scripted runs, drive a single scan straight from the shell:
+
 ```bash
 # Passive scan (OSINT only → report)
-fackel example.com --no-active-scan
+fackel scan example.com --no-active-scan
 
 # Full scan (OSINT → port scan → vuln scan → triage → report)
-fackel example.com
+fackel scan example.com
 
 # Verbose mode — see LLM reasoning in real time
-fackel example.com -v
+fackel scan example.com -v
 
 # Save report to a specific file
-fackel example.com -o report.md
+fackel scan example.com -o report.md
 
 # Check which provider API keys are configured
-fackel example.com --check-providers --no-active-scan
+fackel scan example.com --check-providers --no-active-scan
+```
+
+#### Monitor changes across scans
+
+```bash
+# List persisted scans (requires the persistence store / data dir)
+fackel scans
+
+# Diff two scans — new / resolved / changed assets and findings
+fackel diff <baseline-scan-id> <current-scan-id>
 ```
 
 ---
@@ -183,62 +230,24 @@ See [docs/architecture.md](docs/architecture.md) for full architectural details.
 
 ---
 
-## CLI output
+## Terminal UI
 
-Standard mode shows tool calls and results:
+Fackel streams the whole run to the terminal in real time (see the [demo](#what-is-fackel)
+above). The renderer is built on [Rich](https://github.com/Textualize/rich) and
+designed so you can follow autonomous agents at a glance:
 
-```
-Target: eversafe.info
-Active scan: yes
+| Element | What you see |
+|---------|--------------|
+| **Pipeline stepper** | A persistent breadcrumb — `✓ OSINT  ●  Port Scan  ○  Vuln Scan  ○  Triage  ○  Report` — so you always know where the run is. |
+| **Parallel agent lanes** | When specialists fan out (OSINT, Vuln Scan), each runs in its own live lane with its own spinner, tool activity, and reasoning — no interleaved soup. |
+| **Per-tool timing** | Every tool call settles to `✓ tool_name … 1.2s`, with errors surfaced inline and duplicate errors collapsed. |
+| **Live context meter** | A token gauge (`ctx 12.3k/120k ▓▓▓░░`) tracks how full the agent context window is as the scan runs. |
+| **Inline approval gates** | The human-in-the-loop gate pauses the live area and prompts before any active scanning — same panel whether you use the harness or `fackel scan`. |
+| **Brand wordmark** | A flame-gradient block banner on startup, with an automatic compact fallback on narrow terminals. |
 
-────────────────────────────────────────────────────────────
-▶ OSINT
-────────────────────────────────────────────────────────────
-  🔧 dns_resolve(target=eversafe.info)
-  🔧 whois_lookup(domain=eversafe.info)
-  🔧 subfinder_enum(domain=eversafe.info, all_sources=True)
-  🔧 crtsh_subdomain_enum(domain=eversafe.info)
-  ✓ OSINT complete
-
-──────────────────────────── ▶ Approval ────────────────────
-╭──────────────── ⚠ Approval Required ─────────────────────╮
-│ OSINT found 4 IP(s) and 5 subdomain(s).                  │
-│ Proceed with active scanning?                            │
-╰──────────────────────────────────────────────────────────╯
-Approve? [Y/n]: y
-
-────────────────────────────────────────────────────────────
-▶ Port Scan
-────────────────────────────────────────────────────────────
-  🔧 naabu_scan(host=104.21.36.250, top_ports=1000)
-  🔧 nmap_port_scan(host=104.21.36.250, ports=80,443)
-  📊 Quality: complete (score: 0.9) → proceed
-  ✓ Port Scan complete
-
-────────────────────────────────────────────────────────────
-▶ Vuln Scan
-────────────────────────────────────────────────────────────
-  🔧 nuclei_scan(target=eversafe.info)
-  🔧 httpx_scan(domain=eversafe.info, tech_detect=True)
-  🔧 wafw00f_detect(target=eversafe.info)
-  📊 Quality: complete (score: 0.85) → proceed
-  ✓ Vuln Scan complete
-
-════════════════════════════════════════════════════════════
-# Penetration Test Report for eversafe.info
-...
-Completed in 220.9s
-```
-
-With `-v` (verbose), LLM reasoning is also shown:
-
-```
-  💭 ### Structured Summary
-  💭 **Domain:** eversafe.info
-  💭 **Discovered IP Addresses:**
-  💭 - 104.21.36.250
-  💭 - 172.67.201.157
-```
+Pass `-v` / `--verbose` to expand each phase's LLM reasoning and full tool-result
+previews. Glyphs use a Nerd Font by default; set `FACKEL_NERD_FONT=0` for an
+alignment-safe ASCII rendering.
 
 ---
 
@@ -325,6 +334,60 @@ Each agent reads its model from an environment variable, falling back to
 ```bash
 # Use a more capable model for report generation
 export FACKEL_MODEL_REPORT=gpt-4o
+```
+
+### LLM provider
+
+Fackel uses LangChain's `init_chat_model` and supports **OpenAI** (default) and **Ollama** (local-first).
+
+#### OpenAI
+
+The default LLM provider. Requires `OPENAI_API_KEY`:
+
+```bash
+export OPENAI_API_KEY=sk-...
+export FACKEL_DEFAULT_MODEL=gpt-5-mini
+# or per-agent:
+export FACKEL_MODEL_REPORT=gpt-4o
+```
+
+#### Ollama
+
+Run LLMs locally with Ollama. Install [Ollama](https://ollama.ai), then pull a tool-calling-capable model:
+
+```bash
+ollama pull llama3.1
+# or: ollama pull qwen2.5
+```
+
+Set environment variables:
+
+```bash
+export FACKEL_LLM_PROVIDER=ollama
+export FACKEL_DEFAULT_MODEL=llama3.1
+# Optional — default is http://localhost:11434
+export FACKEL_OLLAMA_BASE_URL=http://ollama.internal:11434
+```
+
+Or use the `provider:model` prefix syntax to override per-agent:
+
+```bash
+export FACKEL_MODEL_REPORT=ollama:llama3.1
+export FACKEL_MODEL_OSINT=openai:gpt-4o-mini
+```
+
+**Model requirements:** ReAct agents need tool-calling support. Recommended Ollama models:
+`llama3.1`, `llama3.2`, `qwen2.5`, `qwen2.5-coder`, `mistral-nemo`, `mistral` (≥ v0.3), `command-r`.
+Models without tool support work for simple text generation but will fail in scanning agents.
+
+#### Per-agent override
+
+Mix providers and models across agents:
+
+```bash
+export FACKEL_MODEL_OSINT=openai:gpt-4o-mini      # Fast OpenAI model
+export FACKEL_MODEL_REPORT=ollama:qwen2.5         # Local Ollama
+export FACKEL_MODEL_VULN_SCAN=openai:gpt-4o       # Capable OpenAI model
 ```
 
 ### API keys
@@ -417,61 +480,6 @@ my_recon_tool.handle_tool_error = True  # type: ignore[attr-defined]
    its docstring and the agent's system prompt.
 
 See [docs/development.md](docs/development.md) for the full development guide.
-
----
-
-## Project structure
-
-```
-src/
-├── cli/
-│   └── main.py                      # Typer CLI with real-time Rich rendering
-├── fackel/
-│   ├── agents/
-│   │   ├── config.py                # build_llm(), get_model(), default_middleware()
-│   │   ├── prompts/
-│   │   │   ├── __init__.py          # Prompt loader with caching
-│   │   │   ├── soul.md              # Shared agent identity + rules
-│   │   │   └── skills/
-│   │   │       ├── osint.md         # OSINT playbook
-│   │   │       ├── port_scan.md     # Port scan strategy
-│   │   │       ├── vuln_scan.md     # Vuln scan playbook
-│   │   │       ├── triage.md        # Coverage gap analysis
-│   │   │       ├── report.md        # Report writing rules
-│   │   │       └── judge.md         # Quality scoring guide
-│   │   ├── orchestrator/
-│   │   │   ├── state.py             # ScanState (TypedDict + reducers)
-│   │   │   ├── graph.py             # StateGraph + SqliteSaver checkpointer
-│   │   │   ├── streaming.py         # Dual-mode agent streaming + HITL
-│   │   │   ├── evaluator.py         # LLM-as-a-judge quality scoring
-│   │   │   ├── extractors.py        # IP/subdomain/fingerprint extraction
-│   │   │   ├── main.py              # Public API: run()
-│   │   │   └── nodes/               # Graph node functions
-│   │   │       ├── osint.py         # OSINT node + quality-gated retry
-│   │   │       ├── port_scan.py     # Port scan node + evaluator
-│   │   │       ├── vuln_scan.py     # Vuln scan node + evaluator
-│   │   │       ├── triage.py        # Triage node
-│   │   │       └── report_and_gates.py  # Report node + approval gate
-│   │   ├── osint/agent.py           # OSINT ReAct agent (27 tools)
-│   │   ├── port_scan/agent.py       # Port scan ReAct agent (2 tools)
-│   │   ├── vuln_scan/agent.py       # Vuln scan ReAct agent (12 tools)
-│   │   ├── triage/agent.py          # Triage structured output
-│   │   └── report/agent.py          # Report synthesis
-│   ├── tooling/
-│   │   ├── validators.py            # guard_target() (raises ToolException)
-│   │   ├── execution.py             # run_command, require_binary, get_tool_timeout
-│   │   ├── sanitizers.py            # Input sanitisation helpers
-│   │   ├── ip_classifier.py         # IP classification (CDN, cloud, hosting)
-│   │   └── ddgs.py                  # DuckDuckGo search wrapper
-│   ├── provider_keys.py             # API key gating + tool filtering
-│   └── report_writer.py             # Full archival report builder
-└── tools/
-    ├── circuit_breaker.py           # Per-service circuit breaker
-    ├── recon/                       # 22 passive reconnaissance tools
-    ├── osint/                       # 3 open-source intelligence tools
-    ├── scanning/                    # 7 active scanning tools
-    └── vuln/                        # 5 vulnerability assessment tools
-```
 
 ---
 

@@ -16,6 +16,8 @@ repos:
         args: ["--maxkb=500"]
       - id: debug-statements
       - id: detect-private-key
+        # Sample keys live in the secret-scanner test fixtures on purpose.
+        exclude: ^tests/tools/test_js_secret_scanner\.py$
 
   # ── Ruff (lint + format) ───────────────────────────────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit

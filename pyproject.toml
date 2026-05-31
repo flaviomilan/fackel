@@ -17,17 +17,17 @@ dependencies = [
   "censys>=2.2",
   "langchain>=1.2.15",
   "langchain-openai>=1.0",
-  "langchain-community>=0.4",
+  "langchain-ollama>=0.3",
   "langgraph>=1.0.10",
   "langgraph-checkpoint-sqlite>=2.0",
   "beautifulsoup4>=4.12",
   "requests>=2.31",
   "python-dotenv>=1.2.2",
   "python-nmap>=0.7",
-  "pyyaml>=6.0",
   "pydantic>=2.6",
   "typer>=0.12",
-
+  "rich>=13.0",
+  "prompt-toolkit>=3.0",
 ]
 
 [project.scripts]
@@ -48,10 +48,6 @@ dev = [
   "types-python-nmap>=0.7",
   "types-beautifulsoup4>=4.12",
 ]
-api = [
-  "fastapi>=0.135.3",
-  "uvicorn[standard]>=0.23",
-]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -61,7 +57,7 @@ where = ["src"]
 include = ["*"]
 
 [tool.setuptools.package-data]
-"tools.scanning" = ["wordlists/*.txt"]
+"fackel.tools.scanning" = ["wordlists/*.txt"]
 
 [tool.uv]
 package = true
@@ -71,8 +67,14 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF"]
+select = ["E", "F", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "C901"]
 ignore = ["E501"]
+
+# Complexity ratchet: blocks NEW functions above this ceiling. A handful of
+# pre-existing tool-output parsers / report builders exceed it and carry an
+# explicit ``# noqa: C901``; tighten this number over time as they are split.
+[tool.ruff.lint.mccabe]
+max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]

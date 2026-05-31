@@ -6,14 +6,19 @@ Current MVP tools: naabu_scan (fast discovery), nmap_port_scan (deep analysis).
 
 from __future__ import annotations
 
+import logging
+
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
 from fackel.agents.config import build_llm, default_middleware
 from fackel.prompts import compose_prompt
-from tools.scanning.naabu_tool import naabu_scan
-from tools.scanning.nmap_scanner import nmap_port_scan
+from fackel.tooling import available_binaries
+from fackel.tools.scanning.naabu_tool import naabu_scan
+from fackel.tools.scanning.nmap_scanner import nmap_port_scan
+
+logger = logging.getLogger(__name__)
 
 TOOLS = [naabu_scan, nmap_port_scan]
 
@@ -32,10 +37,13 @@ def build(
         ``HumanInTheLoopMiddleware`` so each tool call requires explicit
         human approval before execution.
     """
+    available, missing_bins = available_binaries(TOOLS)
+    for name, binary in missing_bins:
+        logger.info("port_scan: skipping tool %s (binary %s not in PATH)", name, binary)
     llm = build_llm("port_scan", model_name=model_name)
     return create_agent(
         llm,
-        TOOLS,
+        available,
         system_prompt=compose_prompt(
             "port_scan",
             "tools/port_scanning",

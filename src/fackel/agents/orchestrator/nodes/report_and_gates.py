@@ -18,10 +18,39 @@ logger = logging.getLogger(__name__)
 
 
 def report_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
-    """Generate the final pentest report via LLM."""
+    """Generate the final pentest report via LLM, grounded in the knowledge graph."""
     from fackel.agents.report.agent import generate_report
+    from fackel.agents.report.report_data import build_asset_inventory_md, build_report_context
+    from fackel.agents.report.verification import build_verification_md, verify_findings
+    from fackel.persistence import get_current_store
 
     streaming.emit("report", "start", {})
+
+    # Source the report from the structured store (all tool output, deduplicated
+    # and confidence-scored) instead of only the lossy agent summaries.  No-op
+    # when no store is bound (e.g. unit tests bypassing orchestrator.run).
+    store = get_current_store()
+    graph_context = build_report_context(store) if store is not None else ""
+    asset_inventory = build_asset_inventory_md(store) if store is not None else ""
+
+    # Corroborate findings before writing: append a deterministic verification
+    # section so the report distinguishes verified facts from single-source ones
+    # and flags high-impact uncorroborated findings for manual confirmation.
+    if store is not None and graph_context:
+        summary = verify_findings(store)
+        streaming.emit(
+            "report",
+            "verification",
+            {
+                "verified": summary.verified,
+                "unverified": summary.unverified,
+                "flagged": len(summary.flagged),
+            },
+        )
+        verification_md = build_verification_md(summary)
+        if verification_md:
+            graph_context = f"{graph_context}\n\n{verification_md}"
+
     report = generate_report(
         target=state["target"],
         active_scan=state["active_scan"],
@@ -29,10 +58,33 @@ def report_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
         unassessed_areas=state.get("unassessed_areas", []),
         phase_evaluations=state.get("phase_evaluations", []),
         risk_score=state.get("risk_score"),
+        graph_context=graph_context or None,
         config=config,
     )
     streaming.emit("report", "done", {})
-    return {"report": report}
+    return {"report": report, "asset_inventory": asset_inventory}
+
+
+def review_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
+    """QA-review the draft report against the knowledge graph.
+
+    Verifies the draft covers every high-value finding (vulnerabilities,
+    credential leaks, high-confidence assets), incorporates any that are
+    missing, and appends a computed coverage footer.  No-op without a bound
+    store or an empty draft (so tests / passive runs are unaffected).
+    """
+    from fackel.agents.report.reviewer import review_report
+    from fackel.persistence import get_current_store
+
+    draft = state.get("report", "")
+    store = get_current_store()
+    if not draft or store is None:
+        return {}
+
+    streaming.emit("review", "start", {})
+    final = review_report(draft, store, config=config)
+    streaming.emit("review", "done", {})
+    return {"report": final}
 
 
 def approval_gate(state: ScanState) -> Command:  # type: ignore[type-arg]
@@ -102,14 +154,25 @@ def route_after_osint(state: ScanState) -> str:
 
 
 def route_after_port_scan(state: ScanState) -> str:
-    """Route after port scan: vuln_scan normally, or skip to triage if empty.
+    """Route after port scan: vuln scanning normally, or skip to triage if empty.
 
     Uses the LLM-as-a-judge evaluation stored in state by ``port_scan_node``.
-    Only skips to triage when the judge explicitly recommends it — default
-    is to proceed to vuln_scan (which can still find domain-level issues).
+    Only skips to triage when the judge explicitly recommends it — default is to
+    proceed to vuln scanning (which can still find domain-level issues).
+
+    Picks the vuln entry node: ``vuln_dispatch`` for the parallel specialist
+    fan-out (``FACKEL_VULN_SPECIALISTS`` on), or the monolithic ``vuln_scan``
+    agent.  Per-tool HITL approval forces the monolithic path, since parallel
+    branches can't share one coherent approval interrupt stream.
     """
+    from fackel.settings import get_settings
+
+    from ..streaming import is_tool_approval_enabled
+
     port_eval = get_phase_evaluation(state, "port_scan")
     if port_eval and port_eval.get("recommendation") == "skip_downstream":
         logger.info("routing: port_scan judge recommends skip → triage")
         return "triage"
+    if get_settings().vuln_specialists and not is_tool_approval_enabled():
+        return "vuln_dispatch"
     return "vuln_scan"

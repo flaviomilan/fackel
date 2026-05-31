@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tools.vuln.ssti_tool import ssti_scan
+from fackel.tools.vuln.ssti_tool import ssti_scan
 
 
 class TestSstiScan:
     """Verify SSTI detection CLI construction and result parsing."""
 
-    @patch("tools.vuln.ssti_tool.run_command")
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.run_command")
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_basic_command_construction(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         ssti_scan.invoke({"target": "https://example.com"})
@@ -21,16 +21,16 @@ class TestSstiScan:
         assert "-tags" in cmd
         assert "ssti" in cmd[cmd.index("-tags") + 1]
 
-    @patch("tools.vuln.ssti_tool.run_command")
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.run_command")
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_adds_scheme_when_missing(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         ssti_scan.invoke({"target": "example.com"})
         cmd = mock_run.call_args[0][0]
         assert "https://example.com" in cmd
 
-    @patch("tools.vuln.ssti_tool.run_command")
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.run_command")
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_findings_parsed(self, _bin, mock_run):
         finding = {
             "template-id": "ssti-jinja2",
@@ -50,8 +50,8 @@ class TestSstiScan:
         assert result["data"]["total"] == 1
         assert result["data"]["findings"][0]["extracted_results"] == ["49"]
 
-    @patch("tools.vuln.ssti_tool.run_command")
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.run_command")
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_host_and_ip_in_findings(self, _bin, mock_run):
         finding = {
             "template-id": "ssti-test",
@@ -69,8 +69,8 @@ class TestSstiScan:
         assert f["ip"] == "93.184.216.34"
         assert f["matcher_name"] == "eval-result"
 
-    @patch("tools.vuln.ssti_tool.run_command")
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.run_command")
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_no_findings_returns_message(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         result = ssti_scan.invoke({"target": "https://example.com"})
@@ -78,24 +78,24 @@ class TestSstiScan:
         assert "no SSTI" in result["data"]["message"]
 
     @patch(
-        "tools.vuln.ssti_tool.run_command",
+        "fackel.tools.vuln.ssti_tool.run_command",
         side_effect=Exception("timeout"),
     )
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_command_exception_returns_error(self, _bin, _run):
         result = ssti_scan.invoke({"target": "https://example.com"})
         assert "timeout" in result
 
-    @patch("tools.vuln.ssti_tool.run_command")
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.run_command")
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_severity_filter(self, _bin, mock_run):
         mock_run.return_value = (0, "", "")
         ssti_scan.invoke({"target": "https://example.com", "severity": "critical"})
         cmd = mock_run.call_args[0][0]
         assert "-severity" in cmd
 
-    @patch("tools.vuln.ssti_tool.run_command")
-    @patch("tools.vuln.ssti_tool.require_binary", return_value=None)
+    @patch("fackel.tools.vuln.ssti_tool.run_command")
+    @patch("fackel.tools.vuln.ssti_tool.require_binary", return_value=None)
     def test_curl_command_preserved(self, _bin, mock_run):
         finding = {
             "template-id": "ssti-generic",

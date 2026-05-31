@@ -159,8 +159,14 @@ src/
 │   ├── osint/                  # 3 open-source intelligence tools
 │   ├── scanning/               # 7 active scanning tools
 │   └── vuln/                   # 5 vulnerability assessment tools
-├── cli/
-│   └── main.py                 # Typer CLI entrypoint
+├── cli/                        # Terminal UI (Typer + Rich)
+│   ├── main.py                 # Typer commands (scan, repl, scans, diff, graph, ask)
+│   ├── harness.py              # Interactive REPL around the agent pipeline
+│   ├── renderer.py             # Real-time event renderer (phases, lanes, tools)
+│   ├── presenter.py            # Shared banner / scan header / report / approvals
+│   ├── theme.py                # Glyphs (Nerd Font + ASCII) and colour tokens
+│   ├── context_tracker.py      # Live token/context meter
+│   └── session.py              # Cross-scan session memory
 └── tests/
     └── *.py                    # pytest test files
 ```
@@ -315,7 +321,7 @@ Add the tool to the agent's tool list in the respective agent builder
 (e.g. `src/fackel/agents/osint/agent.py`):
 
 ```python
-from tools.recon.my_new_tool import my_new_tool
+from fackel.tools.recon.my_new_tool import my_new_tool
 
 tools = [
     # ... existing tools ...
@@ -345,7 +351,7 @@ ProviderKeySpec(
 - [ ] `get_tool_timeout()` for subprocess timeouts (allows env var override)
 - [ ] Provider key gating if API key needed
 - [ ] Tool added to agent tool list
-- [ ] Tested manually: `uv run python -c "from tools.recon.my_new_tool import my_new_tool"`
+- [ ] Tested manually: `uv run python -c "from fackel.tools.recon.my_new_tool import my_new_tool"`
 
 ---
 
@@ -359,8 +365,8 @@ from langchain.agents import create_agent
 
 from fackel.agents.config import build_llm, default_middleware
 from fackel.provider_keys import filter_tools
-from tools.recon.tool_a import tool_a
-from tools.recon.tool_b import tool_b
+from fackel.tools.recon.tool_a import tool_a
+from fackel.tools.recon.tool_b import tool_b
 
 TOOLS = [tool_a, tool_b]
 

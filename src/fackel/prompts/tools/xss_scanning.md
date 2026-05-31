@@ -1,46 +1,46 @@
 # Tool — XSS & CORS Scanning
 
-## Objetivo
+## Purpose
 
-Detectar vulnerabilidades de Cross-Site Scripting (XSS) e CORS
-misconfiguration em aplicações web do alvo.
+Detect Cross-Site Scripting (XSS) and CORS
+misconfiguration vulnerabilities in target web applications.
 
-## Ferramentas
+## Tools
 
-| Ferramenta      | Propósito                                          |
-|-----------------|----------------------------------------------------|
-| `dalfox_scan`   | Scanner XSS avançado — reflected, stored, DOM-based|
-| `corsy_scan`    | Detecção de CORS misconfiguration                  |
+| Tool           | Purpose                                          |
+|----------------|------------------------------------------------------|
+| `dalfox_scan`  | Advanced XSS scanner — reflected, stored, DOM-based|
+| `corsy_scan`   | CORS misconfiguration detection                  |
 
-## Regras de Uso
+## Usage Rules
 
-1. **dalfox em endpoints com parâmetros** — extrair URLs do GAU/katana
-   e alimentar dalfox.
-2. **corsy em todos os hosts web** — CORS misconfiguration é comum e
-   impactante.
-3. **Paramspider + dalfox** — usar paramspider para descobrir parâmetros,
-   depois dalfox para testar.
-4. **Confirmar findings** — XSS requer evidência (payload + response).
-5. **DOM XSS** — dalfox testa automaticamente, mas verificar sources/sinks.
+1. **dalfox on endpoints with parameters** — extract URLs from GAU/katana
+   and feed to dalfox.
+2. **corsy on all web hosts** — CORS misconfiguration is common and
+   impactful.
+3. **paramspider + dalfox** — use paramspider to discover parameters,
+   then dalfox to test.
+4. **Confirm findings** — XSS requires evidence (payload + response).
+5. **DOM XSS** — dalfox tests automatically, but verify sources/sinks.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente endpoints autorizados.
-- Não persistir payloads em stored XSS (apenas confirmar refletido).
-- Rate limit: respeitar WAF/rate limiting do alvo.
-- Não testar em formulários de pagamento ou áreas sensíveis sem
-  autorização explícita.
+- Only authorized endpoints.
+- Do not persist payloads in stored XSS (only confirm reflected).
+- Rate limit: respect target WAF/rate limiting.
+- Do not test on payment forms or sensitive areas without
+  explicit authorization.
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                   | Ação                                       |
-|---------------------------|--------------------------------------------|
-| WAF bloqueando payloads   | Tentar encoding alternativo, documentar WAF|
-| Sem parâmetros encontrados| Usar crawling mais profundo                |
-| dalfox timeout            | Reduzir scope a top endpoints              |
-| corsy sem findings        | Documentar CORS como configurado corretamente|
+| Scenario                 | Action                                     |
+|-------------------------|-------------------------------------------|
+| WAF blocking payloads   | Try alternative encoding, document WAF    |
+| No parameters found     | Use deeper crawling                       |
+| dalfox timeout          | Reduce scope to top endpoints              |
+| corsy no findings       | Document CORS as properly configured       |
 
-## Estrutura de Output
+## Output Structure
 
 ```json
 {
@@ -64,18 +64,18 @@ misconfiguration em aplicações web do alvo.
 }
 ```
 
-## Normalização
+## Normalization
 
-- Tipo padronizado: reflected_xss, stored_xss, dom_xss, cors_misconfiguration.
-- Payload preservado verbatim.
+- Type standardized: reflected_xss, stored_xss, dom_xss, cors_misconfiguration.
+- Payload preserved verbatim.
 - Severity: critical (stored XSS w/ auth bypass), high (reflected XSS),
   medium (DOM XSS), low (CORS informational).
 
-## Anomalias
+## Anomalies
 
-- **Reflected XSS sem WAF** → fácil de explorar, prioridade alta.
-- **CORS com origin: *  + credentials** → risco máximo, dados sensíveis
-  acessíveis cross-origin.
-- **Múltiplos parâmetros vulneráveis** → falta de sanitização sistêmica.
-- **DOM XSS em JS de terceiros** → supply chain risk.
-- **WAF bypass encontrado** → WAF mal configurado, falsa sensação de segurança.
+- **Reflected XSS without WAF** → easy to exploit, high priority.
+- **CORS with origin: * + credentials** → maximum risk, sensitive data
+  accessible cross-origin.
+- **Multiple vulnerable parameters** → systemic lack of sanitization.
+- **DOM XSS in third-party JS** → supply chain risk.
+- **WAF bypass found** → WAF misconfigured, false sense of security.

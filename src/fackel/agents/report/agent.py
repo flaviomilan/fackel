@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableConfig
 
 from fackel.agents.config import build_llm
 from fackel.formatting import serialize_findings
-from fackel.prompts import compose_prompt, load_section
+from fackel.prompts import compose_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ def generate_report(
     unassessed_areas: list[dict[str, Any]] | None = None,
     phase_evaluations: list[dict[str, Any]] | None = None,
     risk_score: dict[str, Any] | None = None,
+    graph_context: str | None = None,
     model_name: str | None = None,
     config: RunnableConfig | None = None,
 ) -> str:
@@ -51,8 +52,15 @@ def generate_report(
     parts = [
         f"Target: {target}",
         f"Active scanning: {'enabled' if active_scan else 'disabled'}",
-        f"\nAgent findings:\n\n{context}",
     ]
+
+    # The structured knowledge graph is the authoritative source — present it
+    # first so the report is grounded in the real data, not just the agents'
+    # free-text summaries (which are supplementary narrative below).
+    if graph_context:
+        parts.append(f"\n{graph_context}")
+
+    parts.append(f"\nAgent narrative (supplementary):\n\n{context}")
 
     if unassessed_areas:
         areas_text = "\n".join(
@@ -99,20 +107,20 @@ def generate_report(
                 risk_lines.append(f"- {factor}")
         parts.append("\n".join(risk_lines))
 
-    report_guidance = _build_report_guidance()
-    parts.append(f"\n---\n\n{report_guidance}")
+    report_system = compose_prompt(
+        "report",
+        "reporting/technical",
+        "reporting/executive",
+        "stages/final_report",
+        "stages/evidence_consolidation",
+        "reporting/actionable_summary",
+        "reporting/risk_oriented",
+    )
 
     try:
         response = llm.invoke(
             [
-                SystemMessage(
-                    content=compose_prompt(
-                        "report",
-                        "reporting/technical",
-                        "reporting/executive",
-                        "stages/final_report",
-                    )
-                ),
+                SystemMessage(content=report_system),
                 HumanMessage(content="\n".join(parts)),
             ],
             config=config,
@@ -125,17 +133,3 @@ def generate_report(
             "**Note:** The LLM report generation failed. "
             "Raw findings are included below for manual review.\n\n" + "\n\n---\n\n".join(parts)
         )
-
-
-def _build_report_guidance() -> str:
-    """Compose supplementary report guidance from prompt sections.
-
-    Loads evidence consolidation, actionable summary, and risk-oriented
-    prompt sections to enrich the report LLM's contextual understanding.
-    """
-    sections = [
-        ("Evidence Consolidation", load_section("stages/evidence_consolidation")),
-        ("Actionable Summary", load_section("reporting/actionable_summary")),
-        ("Risk-Oriented Analysis", load_section("reporting/risk_oriented")),
-    ]
-    return "\n\n---\n\n".join(f"## {title}\n\n{content}" for title, content in sections)

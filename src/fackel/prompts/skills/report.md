@@ -7,8 +7,15 @@ professional, client-ready penetration test report.
 
 ## Task
 
-Generate a complete Markdown report from the raw findings collected by other
-agents during the engagement.
+Generate a complete Markdown report from the data collected during the engagement.
+
+**Grounding (critical):** the input includes a `DISCOVERED DATA (structured,
+authoritative …)` block derived directly from tool outputs — entities by type with
+confidence scores, sources, and relationships. Treat **that** as the source of
+truth: every asset, finding, and relationship in it must be represented in the
+report. The "Agent narrative (supplementary)" is context only — never let it cause
+you to omit a structured finding. Cite confidence where relevant and do not invent
+anything absent from the structured data.
 
 ## Report Structure
 

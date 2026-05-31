@@ -1,17 +1,25 @@
 """Real-time TUI renderer for agent ReAct events.
 
-Uses a single Rich ``Live`` area to show tool batches and LLM thinking
-panels with an animated spinner.  Content is persisted via
-``console.print`` when finalized, and the transient live area is cleared.
+Uses a single Rich ``Live`` area per phase to show concurrent agents.  Parallel
+specialists each emit events tagged with a ``lane`` (see
+``fackel.agents.orchestrator.streaming.lane``); the renderer keeps **per-lane
+state** so their thinking and tool activity are shown in separate lanes instead
+of one interleaved stream.  Sequential phases (no lane) use the single ``main``
+lane, which keeps the richer thinking-panel + tool-table view.
+
+Finalized content (per-lane summaries, completed tool tables, thinking panels) is
+persisted via ``console.print`` *above* the live region; the transient live area
+(active lanes + spinner) vanishes when the phase ends.
 """
 
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
-from rich.console import Console, Group
-from rich.live import Live
+from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.rule import Rule
@@ -19,62 +27,99 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from fackel.formatting import PHASE_LABELS
+from cli import theme
 
-PHASE_ICONS: dict[str, str] = {
-    "osint": "🔍",
-    "approval": "⚠️",
-    "port_scan": "🔌",
-    "vuln_scan": "🛡️",
-    "triage": "📊",
-    "report": "📝",
-}
+_MAIN = "main"
+"""Lane id for sequential (non-parallel) phases."""
 
 _THINKING_MAX_CHARS = 500
-"""Max characters of LLM reasoning to show in the thinking panel."""
+"""Max characters of LLM reasoning to show in the main thinking panel."""
 
-_THINKING_EVENTS = frozenset({"token", "reasoning_trace", "reasoning"})
-"""Event types that contribute to the live thinking panel."""
+_LANE_THINKING_TAIL = 60
+"""Chars of thinking shown on a compact parallel-lane line."""
+
+
+@dataclass
+class _LaneState:
+    """Mutable per-agent state within the current phase."""
+
+    name: str
+    status: str = "running"  # running | done | error
+    tool_batch: list[dict[str, Any]] = field(default_factory=list)
+    thinking: str = ""
+    tool_count: int = 0
+    start: float = field(default_factory=time.perf_counter)
 
 
 class EventRenderer:
-    """Renders agent ReAct events using a single Rich ``Live`` area.
+    """Renders agent ReAct events, one Rich ``Live`` area per phase.
 
-    The live area always contains an animated spinner at the bottom.
-    Above the spinner, the current content (tool batch table or thinking
-    panel) is rendered.  When content is finalized, it is persisted via
-    ``console.print`` and the live area restarts with the spinner alone.
-
-    Because ``Live(transient=True)`` is used, the live area vanishes when
-    stopped — leaving only the explicitly persisted output on screen.
+    Each event optionally carries ``data["lane"]`` identifying which parallel
+    agent emitted it (``None`` → the ``main`` lane).  Lane state is keyed so
+    concurrent agents never share buffers.
     """
 
-    def __init__(self, console: Console, *, verbose: bool) -> None:
+    def __init__(
+        self,
+        console: Console,
+        *,
+        verbose: bool,
+        meter_provider: Callable[[], str] | None = None,
+    ) -> None:
         self._console = console
         self._verbose = verbose
-        self._streaming_tokens = False
-        self._thinking_text = ""
+        self._meter_provider = meter_provider
+        self._lanes: dict[str, _LaneState] = {}
+        self._phase: str | None = None
+        self._phase_label = ""
+        self._phase_icon = "▶"
         self._phase_start: float = 0.0
         self._seen_errors: set[str] = set()
-        self._suppressed_errors: int = 0
-        self._tool_count: int = 0
-        self._tool_batch: list[dict[str, str]] = []
-        self._current_label = ""
+        self._suppressed_errors = 0
         self._spinner_msg = ""
-        self._live: Live | None = None
-        self._live_kind: str | None = None
+        self._live: Any = None  # rich.live.Live, imported lazily
+
+    # -- lane helpers ------------------------------------------------------
+
+    def _lane(self, data: dict[str, Any]) -> _LaneState:
+        """Return (creating if needed) the lane state for an event."""
+        lane_id = data.get("lane") or _MAIN
+        lane = self._lanes.get(lane_id)
+        if lane is None:
+            lane = _LaneState(name=lane_id)
+            self._lanes[lane_id] = lane
+        return lane
+
+    def _named_lanes(self) -> list[_LaneState]:
+        return [lane for lane in self._lanes.values() if lane.name != _MAIN]
+
+    # -- live area ---------------------------------------------------------
 
     def _build_display(self) -> Group:
-        """Build the renderable shown inside the Live area."""
         spinner = Spinner("dots", text=f"  {self._spinner_msg}", style="dim")
-        if self._live_kind == "tools" and self._tool_batch:
-            return Group(self._build_tool_table(), "", spinner)
-        if self._live_kind == "thinking" and self._thinking_text.strip():
-            return Group(self._build_thinking_panel(), "", spinner)
-        return Group("", spinner)
+        footer: list[RenderableType] = []
+        meter = self._meter_provider() if self._meter_provider else ""
+        if meter:
+            footer.append(Text.from_markup(meter))
+        footer.append(spinner)
 
-    def _refresh_live(self) -> None:
-        """Start or update the single Live area."""
+        named = self._named_lanes()
+        body: RenderableType
+        if named:
+            body = self._build_lane_table(named)
+        else:
+            main = self._lanes.get(_MAIN)
+            if main and main.tool_batch:
+                body = self._build_tool_table(main)
+            elif main and main.thinking.strip():
+                body = self._build_thinking_panel(main)
+            else:
+                body = Text("")
+        return Group(body, "", *footer)
+
+    def _refresh(self) -> None:
+        from rich.live import Live
+
         display = self._build_display()
         if self._live is None:
             self._live = Live(
@@ -88,171 +133,87 @@ class EventRenderer:
             self._live.update(display)
 
     def _stop_live(self) -> None:
-        """Stop the Live area (content vanishes due to ``transient=True``)."""
+        """Stop the live area (content vanishes due to ``transient=True``)."""
         if self._live is not None:
             self._live.stop()
             self._live = None
-        self._live_kind = None
-
-    def _persist_content(self) -> None:
-        """Print the current content permanently, then stop the Live area."""
-        content: Table | Panel | None
-        if self._live_kind == "tools" and self._tool_batch:
-            content = self._build_tool_table()
-        elif self._live_kind == "thinking" and self._thinking_text.strip():
-            content = self._build_thinking_panel()
-        else:
-            content = None
-        self._stop_live()
-        if content is not None:
-            self._console.print(content)
-
-    def _end_token_stream(self) -> None:
-        """Finalize the thinking panel when a non-thinking event arrives."""
-        if self._streaming_tokens:
-            self._streaming_tokens = False
-            self._persist_content()
-            self._thinking_text = ""
 
     def shutdown(self) -> None:
-        """Clean up all live displays."""
         self._stop_live()
+
+    # -- phase framing -----------------------------------------------------
+
+    def _ensure_phase(self, phase: str) -> None:
+        """Open a new phase (print header, reset lanes) when the phase changes.
+
+        Idempotent: a no-op while *phase* is unchanged.  This frames phases
+        robustly whether the first event seen is a sequential ``start`` or a
+        parallel specialist's ``lane_start`` (each parallel agent also emits its
+        own lane-scoped ``start``)."""
+        if phase == self._phase:
+            return
+        self._stop_live()
+        self._phase = phase
+        self._phase_label = theme.phase_label(phase)
+        self._phase_icon = theme.phase_glyph(phase)
+        self._phase_start = time.perf_counter()
+        self._lanes.clear()
+        self._seen_errors.clear()
+        self._suppressed_errors = 0
+        self._spinner_msg = f"{self._phase_label}: analyzing…"
+        self._console.print()
+        if phase in theme.STEP_ORDER:
+            self._console.print(theme.render_stepper(phase), justify="center")
+        self._console.print(
+            Rule(f"{self._phase_icon} {self._phase_label}", style=theme.color("phase"))
+        )
+        self._refresh()
 
     def handle(self, phase: str, event_type: str, data: dict[str, Any]) -> None:
         """Route an agent event to the appropriate renderer."""
-        label = PHASE_LABELS.get(phase, phase)
-        icon = PHASE_ICONS.get(phase, "▶")
-
-        if event_type not in _THINKING_EVENTS and self._streaming_tokens:
-            self._end_token_stream()
-
+        if event_type != "done":
+            self._ensure_phase(phase)
         handler = self._EVENT_HANDLERS.get(event_type)
         if handler is not None:
-            handler(self, label=label, icon=icon, data=data)
+            handler(self, data=data)
 
-    def _on_start(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._persist_content()
-        self._phase_start = time.perf_counter()
-        self._seen_errors.clear()
-        self._suppressed_errors = 0
-        self._tool_count = 0
-        self._tool_batch.clear()
-        self._thinking_text = ""
-        self._current_label = label
-        self._console.print()
-        self._console.print(Rule(f"{icon} {label}", style="bold blue"))
-        self._spinner_msg = f"{label}: analyzing\u2026"
-        self._live_kind = None
-        self._refresh_live()
+    # -- main-lane content (single sequential agent) -----------------------
 
-    def _build_tool_table(self) -> Table:
-        """Build a table showing the current tool batch with live status."""
-        table = Table(
-            box=None,
-            show_header=False,
-            padding=(0, 1),
-            pad_edge=False,
-        )
+    def _build_tool_table(self, lane: _LaneState) -> Table:
+        table = Table(box=None, show_header=False, padding=(0, 1), pad_edge=False, expand=True)
         table.add_column("icon", width=4, no_wrap=True)
         table.add_column("name", min_width=20, no_wrap=True)
-        table.add_column("detail")
-        for t in self._tool_batch:
+        table.add_column("detail", ratio=1)
+        table.add_column("time", justify="right", no_wrap=True, style="dim")
+        for t in lane.tool_batch:
             status = t["status"]
             name = t["name"]
             if status == "done":
-                row_icon = "  [green]✓[/green]"
+                row_icon = (
+                    f"  [{theme.color('success')}]{theme.glyph('done')}[/{theme.color('success')}]"
+                )
                 name_mk = f"[dim]{name}[/dim]"
                 detail = f"[dim]{t.get('args_str', '')}[/dim]" if self._verbose else ""
             elif status == "error":
-                row_icon = "  [red]✗[/red]"
-                name_mk = f"[red]{name}[/red]"
+                row_icon = (
+                    f"  [{theme.color('danger')}]{theme.glyph('error')}[/{theme.color('danger')}]"
+                )
+                name_mk = f"[{theme.color('danger')}]{name}[/{theme.color('danger')}]"
                 detail = f"[dim]{t.get('error_msg', '')}[/dim]"
             else:
-                row_icon = "  [cyan]→[/cyan]"
+                row_icon = (
+                    f"  [{theme.color('accent')}]{theme.glyph('running')}[/{theme.color('accent')}]"
+                )
                 name_mk = f"[bold]{name}[/bold]"
                 detail = f"[dim]{t.get('args_str', '')}[/dim]"
-            table.add_row(row_icon, name_mk, detail)
+            table.add_row(row_icon, name_mk, detail, t.get("elapsed", ""))
         return table
 
-    def _update_spinner_for_tools(self) -> None:
-        """Set the spinner message to reflect running tool count."""
-        running = sum(1 for t in self._tool_batch if t["status"] == "running")
-        if running > 0:
-            noun = "tool" if running == 1 else "tools"
-            self._spinner_msg = f"{self._current_label}: running {running} {noun}\u2026"
-        else:
-            self._spinner_msg = f"{self._current_label}: analyzing\u2026"
-
-    def _find_pending_tool(self, name: str) -> dict[str, str] | None:
-        """Find the first tool entry with *name* that is still running."""
-        for t in self._tool_batch:
-            if t["name"] == name and t["status"] == "running":
-                return t
-        return None
-
-    def _batch_all_finished(self) -> bool:
-        """Return True when every tool in the current batch has completed."""
-        return bool(self._tool_batch) and all(
-            t["status"] in ("done", "error") for t in self._tool_batch
-        )
-
-    def _check_batch_complete(self) -> None:
-        """If all tools finished, persist the table and show spinner only."""
-        if self._batch_all_finished():
-            self._persist_content()
-            self._tool_batch.clear()
-            self._spinner_msg = f"{self._current_label}: analyzing\u2026"
-            self._live_kind = None
-            self._refresh_live()
-
-    def _on_tool_call(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._tool_count += 1
-        tool = data.get("tool", "?")
-        args = data.get("args", {})
-        args_str = ", ".join(f"{k}={v}" for k, v in args.items() if v not in ("", None))
-        self._tool_batch.append(
-            {"name": tool, "args_str": args_str, "status": "running", "error_msg": ""}
-        )
-        self._live_kind = "tools"
-        self._update_spinner_for_tools()
-        self._refresh_live()
-
-    def _on_tool_error(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        tool = data.get("tool", "?")
-        error = data.get("error", "unknown error")
-        first_line = error.strip().splitlines()[-1].strip() if error.strip() else "unknown error"
-        error_key = f"{tool}:{first_line}"
-        if error_key in self._seen_errors:
-            self._suppressed_errors += 1
-        else:
-            self._seen_errors.add(error_key)
-        entry = self._find_pending_tool(tool)
-        if entry is not None:
-            entry["status"] = "error"
-            entry["error_msg"] = first_line
-            self._update_spinner_for_tools()
-            self._refresh_live()
-        self._check_batch_complete()
-
-    def _on_tool_result(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        tool = data.get("tool", "?")
-        entry = self._find_pending_tool(tool)
-        if entry is not None:
-            entry["status"] = "done"
-            if self._verbose:
-                content = data.get("content", "")
-                preview = content[:120] + "\u2026" if len(content) > 120 else content
-                entry["args_str"] = preview
-            self._update_spinner_for_tools()
-            self._refresh_live()
-        self._check_batch_complete()
-
-    def _build_thinking_panel(self) -> Panel:
-        """Build a Panel renderable from the current thinking text."""
-        text = self._thinking_text.strip()
+    def _build_thinking_panel(self, lane: _LaneState) -> Panel:
+        text = lane.thinking.strip()
         limit = _THINKING_MAX_CHARS if not self._verbose else len(text) + 1
         if len(text) > limit:
-            text = "\u2026 " + text[len(text) - limit :].lstrip()
+            text = "… " + text[len(text) - limit :].lstrip()
         return Panel(
             Text(text, style="italic color(245)"),
             title="[color(245)]thinking[/color(245)]",
@@ -261,44 +222,167 @@ class EventRenderer:
             expand=True,
         )
 
-    def _append_thinking(self, content: str) -> None:
-        """Append content to the thinking buffer and refresh the display."""
+    # -- parallel-lane content ---------------------------------------------
+
+    def _lane_activity(self, lane: _LaneState) -> str:
+        running = [t for t in lane.tool_batch if t["status"] == "running"]
+        if running:
+            extra = f" [dim]+{len(running) - 1}[/dim]" if len(running) > 1 else ""
+            args = running[0].get("args_str", "")
+            arg_str = f"[dim]({args})[/dim]" if args and self._verbose else ""
+            run_icon = (
+                f"[{theme.color('accent')}]{theme.glyph('running')}[/{theme.color('accent')}]"
+            )
+            return f"{run_icon} {running[0]['name']}{arg_str}{extra}"
+        if lane.thinking.strip():
+            tail = lane.thinking.strip().replace("\n", " ")[-_LANE_THINKING_TAIL:]
+            return f"[dim]thinking… {tail}[/dim]"
+        return "[dim]analyzing…[/dim]"
+
+    def _build_lane_table(self, lanes: list[_LaneState]) -> Table:
+        table = Table(box=None, show_header=False, padding=(0, 1), pad_edge=False)
+        table.add_column("icon", width=3, no_wrap=True)
+        table.add_column("name", min_width=14, no_wrap=True)
+        table.add_column("activity")
+        for lane in lanes:
+            icon: RenderableType = Spinner("dots", style="cyan")
+            table.add_row(icon, f"[bold]{lane.name}[/bold]", self._lane_activity(lane))
+        return table
+
+    # -- event handlers ----------------------------------------------------
+
+    def _on_start(self, *, data: dict[str, Any]) -> None:
+        # Lane-scoped start (a parallel specialist) is handled by lane_start;
+        # a bare start just (re)affirms the phase already opened by _ensure_phase.
+        if data.get("lane"):
+            self._lane(data)
+            self._refresh()
+
+    def _on_lane_start(self, *, data: dict[str, Any]) -> None:
+        self._lane(data)
+        self._spinner_msg = f"{self._phase_label}: {len(self._named_lanes())} agents…"
+        self._refresh()
+
+    def _on_lane_end(self, *, data: dict[str, Any]) -> None:
+        lane = self._lane(data)
+        elapsed = time.perf_counter() - lane.start
+        icon = (
+            f"[{theme.color('danger')}]{theme.glyph('error')}[/{theme.color('danger')}]"
+            if lane.status == "error"
+            else f"[{theme.color('success')}]{theme.glyph('done')}[/{theme.color('success')}]"
+        )
+        meta = f"{lane.tool_count} tools, {elapsed:.1f}s" if lane.tool_count else f"{elapsed:.1f}s"
+        self._console.print(f"  {icon} [bold]{lane.name}[/bold] [dim]— {meta}[/dim]")
+        self._lanes.pop(lane.name, None)
+        remaining = len(self._named_lanes())
+        self._spinner_msg = (
+            f"{self._phase_label}: {remaining} agents…"
+            if remaining
+            else f"{self._phase_label}: collecting…"
+        )
+        self._refresh()
+
+    def _on_tool_call(self, *, data: dict[str, Any]) -> None:
+        lane = self._lane(data)
+        lane.tool_count += 1
+        args = data.get("args", {})
+        args_str = ", ".join(f"{k}={v}" for k, v in args.items() if v not in ("", None))
+        lane.tool_batch.append(
+            {
+                "name": data.get("tool", "?"),
+                "args_str": args_str,
+                "status": "running",
+                "error_msg": "",
+                "started": time.perf_counter(),
+                "elapsed": "",
+            }
+        )
+        self._refresh()
+
+    def _find_pending(self, lane: _LaneState, name: str) -> dict[str, Any] | None:
+        for t in lane.tool_batch:
+            if t["name"] == name and t["status"] == "running":
+                return t
+        return None
+
+    @staticmethod
+    def _mark_elapsed(entry: dict[str, Any]) -> None:
+        """Stamp an entry with its wall-clock duration once it settles."""
+        started = entry.get("started")
+        if isinstance(started, float):
+            entry["elapsed"] = f"{time.perf_counter() - started:.1f}s"
+
+    def _maybe_persist_main_batch(self, lane: _LaneState) -> None:
+        """For the sequential main lane: when all tools finish, persist the table."""
+        if lane.name != _MAIN:
+            return
+        if lane.tool_batch and all(t["status"] in ("done", "error") for t in lane.tool_batch):
+            self._console.print(self._build_tool_table(lane))
+            lane.tool_batch.clear()
+            self._spinner_msg = f"{self._phase_label}: analyzing…"
+            self._refresh()
+
+    def _on_tool_result(self, *, data: dict[str, Any]) -> None:
+        lane = self._lane(data)
+        entry = self._find_pending(lane, data.get("tool", "?"))
+        if entry is not None:
+            entry["status"] = "done"
+            self._mark_elapsed(entry)
+            if self._verbose:
+                content = data.get("content", "")
+                entry["args_str"] = content[:120] + "…" if len(content) > 120 else content
+        self._refresh()
+        self._maybe_persist_main_batch(lane)
+
+    def _on_tool_error(self, *, data: dict[str, Any]) -> None:
+        lane = self._lane(data)
+        tool = data.get("tool", "?")
+        error = data.get("error", "unknown error")
+        first_line = error.strip().splitlines()[-1].strip() if error.strip() else "unknown error"
+        error_key = f"{tool}:{first_line}"
+        if error_key in self._seen_errors:
+            self._suppressed_errors += 1
+        else:
+            self._seen_errors.add(error_key)
+        entry = self._find_pending(lane, tool)
+        if entry is not None:
+            entry["status"] = "error"
+            entry["error_msg"] = first_line
+            self._mark_elapsed(entry)
+        if lane.name != _MAIN:
+            lane.status = "error"
+        self._refresh()
+        self._maybe_persist_main_batch(lane)
+
+    def _append_thinking(self, lane: _LaneState, content: str) -> None:
         if not content:
             return
-        if self._live_kind == "tools" and self._tool_batch:
-            self._persist_content()
-            self._tool_batch.clear()
-        self._thinking_text += content
-        self._live_kind = "thinking"
-        self._spinner_msg = f"{self._current_label}: thinking\u2026"
-        self._streaming_tokens = True
-        self._refresh_live()
+        # Main lane: persist any completed tool table before switching to thinking.
+        if lane.name == _MAIN and lane.tool_batch:
+            self._console.print(self._build_tool_table(lane))
+            lane.tool_batch.clear()
+        lane.thinking += content
+        if lane.name == _MAIN:
+            self._spinner_msg = f"{self._phase_label}: thinking…"
+        self._refresh()
 
-    def _on_token(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._append_thinking(data.get("content", ""))
+    def _on_token(self, *, data: dict[str, Any]) -> None:
+        self._append_thinking(self._lane(data), data.get("content", ""))
 
-    def _on_reasoning_trace(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._append_thinking(data.get("content", ""))
-
-    def _on_reasoning(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._append_thinking(data.get("content", ""))
-
-    def _on_summary(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._persist_content()
+    def _on_summary(self, *, data: dict[str, Any]) -> None:
         content = data.get("content", "")
         if content:
             self._console.print()
             self._console.print(
                 Panel(
                     Markdown(content),
-                    title=f"📋 {label} Summary",
-                    border_style="cyan",
+                    title=f"{theme.glyph('summary')} {self._phase_label} Summary",
+                    border_style=theme.color("accent"),
                     padding=(1, 2),
                 )
             )
 
-    def _on_evaluation(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._persist_content()
+    def _on_evaluation(self, *, data: dict[str, Any]) -> None:
         score = data.get("score", 0)
         completeness = data.get("completeness", "?")
         recommendation = data.get("recommendation", "proceed")
@@ -310,39 +394,59 @@ class EventRenderer:
             else "red"
         )
         self._console.print(
-            f"  [{style}]📊 Quality: {completeness} "
+            f"  [{style}]{theme.glyph('quality')} Quality: {completeness} "
             f"(score: {score:.1f}) → {recommendation}[/{style}]",
         )
 
-    def _on_tool_approval(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._persist_content()
+    def _on_tool_approval(self, *, data: dict[str, Any]) -> None:
         self._stop_live()
 
-    def _on_done(self, *, label: str, icon: str, data: dict[str, Any]) -> None:
-        self._persist_content()
-        self._tool_batch.clear()
-        self._thinking_text = ""
+    def _on_done(self, *, data: dict[str, Any]) -> None:
+        # Persist any lingering main-lane content, then close the phase.
+        main = self._lanes.get(_MAIN)
+        if main and main.tool_batch:
+            self._console.print(self._build_tool_table(main))
         self._stop_live()
-        if self._current_label and self._current_label.lower() == "approval":
+        if self._phase_label.lower() == "approval":
+            self._phase = None
             return
         elapsed = time.perf_counter() - self._phase_start
-        meta: list[str] = []
-        if self._tool_count > 0:
-            meta.append(f"{self._tool_count} tool calls")
-        meta.append(f"{elapsed:.1f}s")
+        meta = [f"{elapsed:.1f}s"]
         if self._suppressed_errors > 0:
             meta.append(f"{self._suppressed_errors} duplicate errors hidden")
         meta_str = f" [dim]({', '.join(meta)})[/dim]" if meta else ""
-        self._console.print(f"  [green]✓ {label} complete[/green]{meta_str}")
+        self._console.print(
+            f"  [{theme.color('success')}]{theme.glyph('done')} {self._phase_label} complete"
+            f"[/{theme.color('success')}]{meta_str}"
+        )
+        self._phase = None
+
+    # -- compatibility shim (used by the CLI approval prompt) --------------
+
+    def _persist_content(self) -> None:
+        """Persist pending main-lane content and stop the live area.
+
+        Retained for the approval-prompt flow in ``cli.main`` which pauses the
+        display before asking the operator a question."""
+        main = self._lanes.get(_MAIN)
+        if main and main.tool_batch:
+            self._console.print(self._build_tool_table(main))
+            main.tool_batch.clear()
+        elif main and main.thinking.strip():
+            self._console.print(self._build_thinking_panel(main))
+            main.thinking = ""
+        self._stop_live()
 
     _EVENT_HANDLERS: ClassVar[dict[str, Any]] = {
         "start": _on_start,
+        "lane_start": _on_lane_start,
+        "lane_end": _on_lane_end,
         "tool_call": _on_tool_call,
         "tool_error": _on_tool_error,
         "tool_result": _on_tool_result,
         "token": _on_token,
-        "reasoning_trace": _on_reasoning_trace,
-        "reasoning": _on_reasoning,
+        "reasoning_trace": _on_token,
+        "reasoning": _on_token,
         "summary": _on_summary,
         "evaluation": _on_evaluation,
         "tool_approval": _on_tool_approval,

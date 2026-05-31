@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import requests
 
 from fackel.tooling.circuit_breaker import reset_all as reset_circuits
-from tools.recon.ipinfo_tool import ipinfo_lookup
+from fackel.tools.recon.ipinfo_tool import ipinfo_lookup
 
 
 def _ok_response(json_data: dict, status: int = 200) -> MagicMock:
@@ -29,7 +29,7 @@ def _error_response(status: int, body: str = "") -> MagicMock:
 class TestIpinfoLookupHappyPath:
     """Successful ipinfo.io responses."""
 
-    @patch("tools.recon.ipinfo_tool.get_session")
+    @patch("fackel.tools.recon.ipinfo_tool.get_session")
     def test_returns_parsed_data(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _ok_response(
@@ -53,7 +53,7 @@ class TestIpinfoLookupHappyPath:
         assert data["country"] == "US"
         assert data["anycast"] is True
 
-    @patch("tools.recon.ipinfo_tool.get_session")
+    @patch("fackel.tools.recon.ipinfo_tool.get_session")
     def test_org_without_asn_prefix(self, mock_gs: MagicMock) -> None:
         """When ipinfo returns org without AS prefix."""
         mock_get = mock_gs.return_value.get
@@ -72,7 +72,7 @@ class TestIpinfoLookupHappyPath:
         assert data["org"] == "Some ISP LLC"
         assert data["asn"] == ""
 
-    @patch("tools.recon.ipinfo_tool.get_session")
+    @patch("fackel.tools.recon.ipinfo_tool.get_session")
     def test_minimal_response(self, mock_gs: MagicMock) -> None:
         """ipinfo returns only IP — optional fields default gracefully."""
         mock_get = mock_gs.return_value.get
@@ -95,7 +95,7 @@ class TestIpinfoLookupErrors:
     def teardown_method(self) -> None:
         reset_circuits()
 
-    @patch("tools.recon.ipinfo_tool.get_session")
+    @patch("fackel.tools.recon.ipinfo_tool.get_session")
     def test_http_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.return_value = _error_response(429)
@@ -103,7 +103,7 @@ class TestIpinfoLookupErrors:
         assert isinstance(result, str)
         assert "request failed" in result.lower()
 
-    @patch("tools.recon.ipinfo_tool.get_session")
+    @patch("fackel.tools.recon.ipinfo_tool.get_session")
     def test_non_json_response(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         resp = _ok_response({})
@@ -113,7 +113,7 @@ class TestIpinfoLookupErrors:
         assert isinstance(result, str)
         assert "non-json" in result.lower()
 
-    @patch("tools.recon.ipinfo_tool.get_session")
+    @patch("fackel.tools.recon.ipinfo_tool.get_session")
     def test_connection_error(self, mock_gs: MagicMock) -> None:
         mock_get = mock_gs.return_value.get
         mock_get.side_effect = requests.ConnectionError("Connection refused")

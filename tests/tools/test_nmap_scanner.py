@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.scanning.nmap_scanner import (
+from fackel.tools.scanning.nmap_scanner import (
     _build_scan_args,
     _extract_vulnerabilities,
     _is_root,
@@ -62,7 +62,7 @@ class TestBuildScanArgs:
         args = _build_scan_args("default", "", True)
         assert "-Pn" in args
 
-    @patch("tools.scanning.nmap_scanner._is_root", return_value=True)
+    @patch("fackel.tools.scanning.nmap_scanner._is_root", return_value=True)
     def test_root_adds_os_detection(self, _root):
         args = _build_scan_args("default", "", False)
         assert "-O" in args
@@ -192,14 +192,14 @@ class TestParseServices:
 class TestNmapPortScan:
     """Integration-level tests for the tool entry point."""
 
-    @patch("tools.scanning.nmap_scanner.nmap.PortScanner")
-    @patch("tools.scanning.nmap_scanner.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.nmap_scanner.nmap.PortScanner")
+    @patch("fackel.tools.scanning.nmap_scanner.require_binary", return_value=None)
     def test_invalid_scan_type_returns_error(self, _bin, _nm):
         result = nmap_port_scan.invoke({"host": "example.com", "scan_type": "invalid"})
         assert "invalid scan_type" in result
 
-    @patch("tools.scanning.nmap_scanner.nmap.PortScanner")
-    @patch("tools.scanning.nmap_scanner.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.nmap_scanner.nmap.PortScanner")
+    @patch("fackel.tools.scanning.nmap_scanner.require_binary", return_value=None)
     def test_no_hosts_found_returns_error(self, _bin, mock_scanner_cls):
         mock_nm = MagicMock()
         mock_nm.all_hosts.return_value = []
@@ -208,8 +208,8 @@ class TestNmapPortScan:
         result = nmap_port_scan.invoke({"host": "example.com"})
         assert "Host may be down" in result
 
-    @patch("tools.scanning.nmap_scanner.nmap.PortScanner")
-    @patch("tools.scanning.nmap_scanner.require_binary", return_value=None)
+    @patch("fackel.tools.scanning.nmap_scanner.nmap.PortScanner")
+    @patch("fackel.tools.scanning.nmap_scanner.require_binary", return_value=None)
     def test_successful_scan_returns_data(self, _bin, mock_scanner_cls):
         mock_nm = MagicMock()
         mock_nm.all_hosts.return_value = ["example.com"]

@@ -1,46 +1,45 @@
 # Tool — Port Scanning
 
-## Objetivo
+## Purpose
 
-Identificar portas abertas, serviços ativos e versões de software em
-hosts do alvo para mapeamento da superfície de ataque de rede.
+Identify open ports, active services, and software versions on
+target hosts to map network attack surface.
 
-## Ferramentas
+## Tools
 
-| Ferramenta      | Propósito                                         |
+| Tool            | Purpose                                         |
 |-----------------|---------------------------------------------------|
-| `naabu_scan`    | Scan rápido de portas (SYN scan, top-1000)        |
-| `nmap_port_scan`| Scan profundo — service detection, versões, scripts|
+| `naabu_scan`    | Fast port scan (SYN scan, top-1000)        |
+| `nmap_port_scan`| Deep scan — service detection, versions, scripts|
 
-## Regras de Uso
+## Usage Rules
 
-1. **naabu primeiro** — scan rápido para identificar portas abertas.
-2. **nmap depois** — scan detalhado (-sV -sC) somente nas portas que
-   naabu encontrou.
-3. **Nunca nmap full scan (-p-)** em todos os hosts — usar naabu para
-   filtrar primeiro.
-4. **Service version obrigatório** — `nmap -sV` sempre, versão é
-   essencial para CVE matching.
-5. **Scripts NSE seletivos** — usar `--script=default,vuln` apenas em
-   hosts prioritários.
+1. **naabu first** — fast scan to identify open ports.
+2. **nmap afterwards** — detailed scan (-sV -sC) only on ports that
+   naabu found.
+3. **Never nmap full scan (-p-)** on all hosts — use naabu to filter first.
+4. **Service version mandatory** — `nmap -sV` always, version is
+   essential for CVE matching.
+5. **Selective NSE scripts** — use `--script=default,vuln` only on
+   priority hosts.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente IPs/hosts autorizados.
-- Respeitar rate limits configurados.
-- Não executar exploit scripts (--script=exploit).
-- UDP scan apenas quando justificado (DNS, SNMP, NTP).
+- Only authorized IPs/hosts.
+- Respect configured rate limits.
+- Do not run exploit scripts (--script=exploit).
+- UDP scan only when justified (DNS, SNMP, NTP).
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                  | Ação                                        |
+| Scenario                 | Action                                        |
 |--------------------------|---------------------------------------------|
-| Host filtrado/firewalled | Documentar como "filtered", não insistir    |
-| naabu timeout            | Reduzir rate, tentar top-100 ports          |
-| nmap -sV sem resultado   | Tentar com --version-intensity 9            |
-| IDS/IPS detectado        | Reduzir agressividade, documentar           |
+| Host filtered/firewalled | Document as "filtered", do not retry    |
+| naabu timeout            | Reduce rate, try top-100 ports          |
+| nmap -sV without result  | Try with --version-intensity 9            |
+| IDS/IPS detected         | Reduce aggressiveness, document           |
 
-## Estrutura de Output
+## Output Structure
 
 ```json
 {
@@ -74,19 +73,19 @@ hosts do alvo para mapeamento da superfície de ataque de rede.
 }
 ```
 
-## Normalização
+## Normalization
 
-- Portas como inteiros (não strings).
-- Protocolos lowercase (tcp, udp).
-- State: open, closed, filtered (vocabulário nmap).
-- Service names padronizados (http, https, ssh, não HTTP ou SSH).
+- Ports as integers (not strings).
+- Protocols lowercase (tcp, udp).
+- State: open, closed, filtered (nmap vocabulary).
+- Service names standardized (http, https, ssh, not HTTP or SSH).
 
-## Anomalias
+## Anomalies
 
-- **Portas altas abertas (>10000)** → possível backdoor ou serviço custom.
-- **SSH em porta não-padrão** → possível hardening ou evasão.
-- **Serviços desatualizados** → verificar CVEs imediatamente.
-- **Múltiplas portas web** (80, 443, 8080, 8443) → aplicações múltiplas,
-  cada uma é superfície distinta.
-- **Portas de banco de dados expostas** (3306, 5432, 27017) → risco
-  crítico se acessível externamente.
+- **High ports open (>10000)** → possible backdoor or custom service.
+- **SSH on non-standard port** → possible hardening or evasion.
+- **Outdated services** → check CVEs immediately.
+- **Multiple web ports** (80, 443, 8080, 8443) → multiple applications,
+   each is distinct surface.
+- **Database ports exposed** (3306, 5432, 27017) → critical risk if
+   externally accessible.

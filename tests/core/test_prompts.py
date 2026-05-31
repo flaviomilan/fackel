@@ -37,7 +37,6 @@ class TestLoadSection:
     @pytest.mark.parametrize(
         "path",
         [
-            "stages/recon_initial",
             "stages/enumeration",
             "stages/correlation",
             "stages/gap_identification",
@@ -51,22 +50,13 @@ class TestLoadSection:
             "orchestrator/pivot_priority",
             "tools/port_scanning",
             "tools/vuln_scanning",
-            "tools/js_secrets",
             "tools/api_fuzzing",
             "tools/security_headers",
             "tools/sqli_scanning",
             "tools/jwt_analysis",
             "tools/ssrf_scanning",
-            "tools/api_querying",
-            "tools/asn_whois",
-            "tools/cloud_enum",
-            "tools/content_fingerprint",
-            "tools/ct_lookup",
-            "tools/dns_resolution",
             "tools/graphql_scanning",
             "tools/http_probing",
-            "tools/secret_scanning",
-            "tools/subdomain_enum",
             "tools/web_crawling",
             "tools/wordpress_scanning",
             "tools/xss_scanning",
@@ -108,11 +98,11 @@ class TestComposePrompt:
 
     def test_single_extra_appended(self):
         base = load_prompt("osint")
-        composed = compose_prompt("osint", "stages/recon_initial")
+        composed = compose_prompt("osint", "tools/http_probing")
         assert composed.startswith(base)
         assert len(composed) > len(base)
         # Extra section should be present
-        section = load_section("stages/recon_initial")
+        section = load_section("tools/http_probing")
         assert section in composed
 
     def test_multiple_extras_appended(self):

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.osint.email_analyzer import (
+from fackel.tools.osint.email_analyzer import (
     _check_breaches,
     _check_reputation,
     analyze_email,
 )
-from tools.osint.job_search import job_search
+from fackel.tools.osint.job_search import job_search
 
 
 class TestCheckBreaches:
@@ -20,7 +20,7 @@ class TestCheckBreaches:
         result = _check_breaches("test@example.com")
         assert result == []
 
-    @patch("tools.osint.email_analyzer.get_session")
+    @patch("fackel.tools.osint.email_analyzer.get_session")
     def test_with_api_key_returns_breaches(self, mock_session, monkeypatch):
         monkeypatch.setenv("HIBP_API_KEY", "test-key")
         mock_resp = MagicMock()
@@ -31,7 +31,7 @@ class TestCheckBreaches:
         result = _check_breaches("test@example.com")
         assert len(result) == 1
 
-    @patch("tools.osint.email_analyzer.get_session")
+    @patch("fackel.tools.osint.email_analyzer.get_session")
     def test_api_error_returns_empty(self, mock_session, monkeypatch):
         monkeypatch.setenv("HIBP_API_KEY", "test-key")
         mock_session.return_value.get.side_effect = Exception("timeout")
@@ -48,7 +48,7 @@ class TestCheckReputation:
         result = _check_reputation("test@example.com")
         assert result is None
 
-    @patch("tools.osint.email_analyzer.get_session")
+    @patch("fackel.tools.osint.email_analyzer.get_session")
     def test_with_api_key_returns_data(self, mock_session, monkeypatch):
         monkeypatch.setenv("EMAILREP_API_KEY", "test-key")
         mock_resp = MagicMock()
@@ -68,15 +68,17 @@ class TestAnalyzeEmail:
         result = analyze_email.invoke({"email": "not-an-email"})
         assert "invalid email" in result
 
-    @patch("tools.osint.email_analyzer._check_reputation", return_value=None)
-    @patch("tools.osint.email_analyzer._check_breaches", return_value=[])
+    @patch("fackel.tools.osint.email_analyzer._check_reputation", return_value=None)
+    @patch("fackel.tools.osint.email_analyzer._check_breaches", return_value=[])
     def test_valid_email_returns_ok(self, _breaches, _rep):
         result = analyze_email.invoke({"email": "test@example.com"})
         assert result["status"] == "ok"
         assert result["data"]["breaches"] == []
 
-    @patch("tools.osint.email_analyzer._check_reputation", return_value={"reputation": "high"})
-    @patch("tools.osint.email_analyzer._check_breaches", return_value=[{"Name": "Breach1"}])
+    @patch(
+        "fackel.tools.osint.email_analyzer._check_reputation", return_value={"reputation": "high"}
+    )
+    @patch("fackel.tools.osint.email_analyzer._check_breaches", return_value=[{"Name": "Breach1"}])
     def test_aggregates_results(self, _breaches, _rep):
         result = analyze_email.invoke({"email": "test@example.com"})
         assert len(result["data"]["breaches"]) == 1
@@ -90,7 +92,7 @@ class TestJobSearch:
         result = job_search.invoke({"company_name": ""})
         assert "empty" in result
 
-    @patch("tools.osint.job_search.DDGS")
+    @patch("fackel.tools.osint.job_search.DDGS")
     def test_returns_job_posts(self, mock_ddgs_cls):
         mock_ddgs = MagicMock()
         mock_ddgs.__enter__ = MagicMock(return_value=mock_ddgs)
@@ -108,12 +110,12 @@ class TestJobSearch:
         assert result["status"] == "ok"
         assert len(result["data"]["results"]) >= 1
 
-    @patch("tools.osint.job_search.DDGS", None)
+    @patch("fackel.tools.osint.job_search.DDGS", None)
     def test_ddgs_not_installed_returns_error(self):
         result = job_search.invoke({"company_name": "Acme Corp"})
         assert "not installed" in result
 
-    @patch("tools.osint.job_search.DDGS")
+    @patch("fackel.tools.osint.job_search.DDGS")
     def test_search_error_returns_error(self, mock_ddgs_cls):
         mock_ddgs = MagicMock()
         mock_ddgs.__enter__ = MagicMock(return_value=mock_ddgs)

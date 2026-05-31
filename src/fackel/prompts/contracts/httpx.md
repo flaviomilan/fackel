@@ -13,10 +13,14 @@ redirect analysis, and status code enumeration.
 
 ## Input Contract
 
-| Parameter | Type   | Required | Description                        |
-|-----------|--------|----------|------------------------------------|
-| domain    | string | yes      | Domain or IP to probe              |
-| ports     | string | no       | Ports to check (default: 80,443)   |
+| Parameter        | Type | Required | Description                                                  |
+|------------------|------|----------|--------------------------------------------------------------|
+| domain           | str  | yes      | IP, domain, or full URL to probe                             |
+| ports            | str  | no       | Comma-separated ports (e.g. `80,443,8080`); empty = defaults |
+| tech_detect      | bool | no       | Technology fingerprinting (default `true`)                   |
+| follow_redirects | bool | no       | Follow HTTP redirects (default `true`)                       |
+| status_code      | bool | no       | Include status codes in output (default `true`)              |
+| title            | bool | no       | Include HTML titles (default `true`)                         |
 
 ## Output Contract
 
@@ -24,22 +28,25 @@ redirect analysis, and status code enumeration.
 {
   "tool": "httpx_scan",
   "target": "<domain>",
-  "status": "success|error",
+  "status": "ok|error",
   "data": {
     "results": [
       {
         "url": "https://example.com",
         "status_code": 200,
         "title": "Example Site",
-        "server": "nginx/1.24",
-        "technologies": ["WordPress", "PHP"],
-        "cdn": "cloudflare",
-        "waf": "cloudflare"
+        "webserver": "nginx/1.24",
+        "tech": ["WordPress", "PHP"],
+        "cdn": "cloudflare"
       }
     ]
   }
 }
 ```
+
+> Field set inside each result depends on httpx version and the
+> flags passed; the LLM should treat unknown keys as informational
+> and never assume a field exists before reading it.
 
 ## Expected Discoveries
 

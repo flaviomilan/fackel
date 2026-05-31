@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 
-from tools.osint.js_secret_scanner import (
+from fackel.tools.osint.js_secret_scanner import (
     _extract_script_urls,
     _scan_content,
     js_secret_scan,
@@ -16,14 +17,27 @@ from tools.osint.js_secret_scanner import (
 class TestJsSecretScan:
     """Verify JS secret scanner logic."""
 
-    @patch("tools.osint.js_secret_scanner.requests.get")
-    def test_scan_direct_js_file(self, mock_get):
+    @pytest.fixture(autouse=True)
+    def _http(self):
+        """Patch the pooled session's GET and neutralise the DNS-rebinding
+        guard so these unit tests never touch the network.
+
+        Exposes the underlying ``get`` mock as ``self.mock_get``.
+        """
+        with (
+            patch("fackel.tools.osint.js_secret_scanner.get_session") as mock_session,
+            patch("fackel.tools.osint.js_secret_scanner.guard_request_target"),
+        ):
+            self.mock_get = mock_session.return_value.get
+            yield
+
+    def test_scan_direct_js_file(self):
         resp = MagicMock()
         aws_key = "AKIA" + "IOSFODNN7EXAMPLE1"
         resp.text = f"var apiKey = '{aws_key}';"
         resp.status_code = 200
         resp.raise_for_status = MagicMock()
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         result = js_secret_scan.invoke({"target": "https://example.com/app.js"})
         assert result["status"] == "ok"
@@ -31,8 +45,7 @@ class TestJsSecretScan:
         types = [f["type"] for f in result["data"]["findings"]]
         assert "aws_access_key" in types
 
-    @patch("tools.osint.js_secret_scanner.requests.get")
-    def test_scan_html_page_with_scripts(self, mock_get):
+    def test_scan_html_page_with_scripts(self):
         html = (
             """
         <html>
@@ -55,7 +68,7 @@ class TestJsSecretScan:
             resp.status_code = 200
             return resp
 
-        mock_get.side_effect = get_side_effect
+        self.mock_get.side_effect = get_side_effect
 
         result = js_secret_scan.invoke({"target": "https://example.com"})
         assert result["status"] == "ok"
@@ -63,36 +76,31 @@ class TestJsSecretScan:
         types = [f["type"] for f in result["data"]["findings"]]
         assert "github_token" in types
 
-    @patch("tools.osint.js_secret_scanner.requests.get")
-    def test_adds_scheme_when_missing(self, mock_get):
+    def test_adds_scheme_when_missing(self):
         resp = MagicMock()
         resp.text = "var x = 1;"
         resp.status_code = 200
         resp.raise_for_status = MagicMock()
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         js_secret_scan.invoke({"target": "example.com/app.js"})
-        call_url = mock_get.call_args[0][0]
+        call_url = self.mock_get.call_args[0][0]
         assert call_url.startswith("https://")
 
-    @patch("tools.osint.js_secret_scanner.requests.get")
-    def test_no_secrets_found(self, mock_get):
+    def test_no_secrets_found(self):
         resp = MagicMock()
         resp.text = "console.log('hello world');"
         resp.status_code = 200
         resp.raise_for_status = MagicMock()
-        mock_get.return_value = resp
+        self.mock_get.return_value = resp
 
         result = js_secret_scan.invoke({"target": "https://example.com/clean.js"})
         assert result["status"] == "ok"
         assert result["data"]["total"] == 0
         assert "no secrets" in result["data"]["message"]
 
-    @patch(
-        "tools.osint.js_secret_scanner.requests.get",
-        side_effect=requests.RequestException("connection refused"),
-    )
-    def test_fetch_failure_returns_error(self, _mock):
+    def test_fetch_failure_returns_error(self):
+        self.mock_get.side_effect = requests.RequestException("connection refused")
         result = js_secret_scan.invoke({"target": "https://example.com/app.js"})
         assert "failed to fetch" in str(result)
 

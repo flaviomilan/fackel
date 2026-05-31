@@ -1,47 +1,49 @@
 # Tool — Web Crawling & URL Discovery
 
-## Objetivo
+## Purpose
 
-Descobrir URLs, endpoints, parâmetros e caminhos ocultos em aplicações
-web do alvo para maximizar cobertura de superfície de ataque.
+Discover URLs, endpoints, parameters, and hidden paths in target
+web applications to maximize attack surface coverage.
 
-## Ferramentas
+## Tools
 
-| Ferramenta          | Propósito                                        |
+| Tool                | Purpose                                        |
 |---------------------|--------------------------------------------------|
-| `katana_crawl`      | Crawler headless — SPA support, JS rendering     |
-| `feroxbuster_scan`  | Directory/file brute-force                       |
-| `gau_urls`          | URLs históricas (Wayback Machine, CT, Common Crawl)|
-| `paramspider_crawl` | Descoberta de parâmetros em URLs                 |
+| `katana_crawl`      | Headless crawler — SPA support, JS rendering    |
+| `feroxbuster_scan`  | Directory/file brute-force                      |
+| `gau_urls`          | Historical URLs (Wayback Machine, CT, Common Crawl)|
+| `paramspider_crawl` | Parameter discovery in URLs                     |
 
-## Regras de Uso
+## Usage Rules
 
-1. **GAU primeiro** — coletar URLs históricas (rápido, passivo).
-2. **katana em paralelo com GAU** — crawling ativo com JS rendering.
-3. **feroxbuster seletivo** — brute-force em hosts principais com
-   wordlist direcionada (tecnologia detectada).
-4. **paramspider nas URLs coletadas** — extrair parâmetros para XSS/SQLi.
-5. **Deduplicar** — URLs de múltiplas fontes vão ter overlap significativo.
+1. **GAU first** — collect historical URLs (fast, passive).
+2. **katana in parallel with GAU** — active crawling with JS rendering.
+3. **feroxbuster selective** — brute-force on main hosts with
+   targeted wordlist (detected technology).
+4. **paramspider on collected URLs** — extract parameters for XSS/SQLi.
+   Use `exclude` to filter redundant static extensions
+   (e.g. `exclude="png,jpg,css,woff"`) and cut heavy noise.
+5. **Deduplicate** — URLs from multiple sources will have significant overlap.
 
-## Limites de Escopo
+## Scope Boundaries
 
-- Somente hosts no escopo autorizado.
-- Profundidade máxima de crawling: 5 níveis.
-- Não seguir links para terceiros (ads, analytics, CDNs).
-- feroxbuster: wordlist de 5k max por host (não full dirbuster).
-- Excluir extensões estáticas: .css, .png, .jpg, .gif, .svg, .woff.
+- Only hosts within authorized scope.
+- Maximum crawling depth: 5 levels.
+- Do not follow links to third parties (ads, analytics, CDNs).
+- feroxbuster: 5k max wordlist per host (not full dirbuster).
+- Exclude static extensions: .css, .png, .jpg, .gif, .svg, .woff.
 
-## Estratégia de Fallback
+## Fallback Strategy
 
-| Cenário                     | Ação                                     |
+| Scenario                    | Action                                     |
 |-----------------------------|------------------------------------------|
-| WAF bloqueando crawler      | Reduzir rate, User-Agent genérico        |
-| katana timeout em SPA       | Aumentar timeout JS, reduzir profundidade|
-| feroxbuster muitos 403s     | Parar, WAF ativo — documentar            |
-| GAU sem resultados          | Domínio novo — focar em crawling ativo   |
-| Muitas URLs (>5000)         | Filtrar por unique paths, remover params |
+| WAF blocking crawler        | Reduce rate, generic User-Agent            |
+| katana timeout on SPA       | Increase JS timeout, reduce depth          |
+| feroxbuster many 403s       | Stop, WAF active — document                |
+| GAU no results              | New domain — focus on active crawling       |
+| Many URLs (>5000)           | Filter by unique paths, remove params      |
 
-## Estrutura de Output
+## Output Structure
 
 ```json
 {
@@ -62,19 +64,19 @@ web do alvo para maximizar cobertura de superfície de ataque.
 }
 ```
 
-## Normalização
+## Normalization
 
-- URLs normalizadas (encoding consistente).
-- Remover fragmentos (#).
-- Deduplicar por path (ignorar query params para contagem de paths).
-- Classificar: page, api, form, asset, admin, auth.
+- URLs normalized (consistent encoding).
+- Remove fragments (#).
+- Deduplicate by path (ignore query params for path count).
+- Classify: page, api, form, asset, admin, auth.
 
-## Anomalias
+## Anomalies
 
-- **Endpoint /admin acessível** → verificar autenticação.
-- **GraphQL endpoint** → testar introspection query.
-- **APIs sem autenticação** → testar acesso direto.
-- **URLs em Wayback Machine mas 404 agora** → possível conteúdo removido
-  (info leak histórico).
-- **Diretórios de backup** (.bak, .old, .tar.gz) → data exposure.
-- **Parâmetros com padrão de ID sequencial** → IDOR potential.
+- **Accessible /admin endpoint** → verify authentication.
+- **GraphQL endpoint** → test introspection query.
+- **Unauthenticated APIs** → test direct access.
+- **URLs in Wayback but 404 now** → possible content removal
+  (historical info leak).
+- **Backup directories** (.bak, .old, .tar.gz) → data exposure.
+- **Parameters with sequential ID pattern** → IDOR potential.
