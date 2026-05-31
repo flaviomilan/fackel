@@ -2,6 +2,40 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-05-31)
+
+### Chores
+
+- **deps**: Bump aiohttp from 3.13.3 to 3.13.4
+  ([#23](https://github.com/flaviomilan/fackel/pull/23),
+  [`80008f9`](https://github.com/flaviomilan/fackel/commit/80008f9a672b3a4427afec93b731641beedc9feb))
+
+- **deps**: Bump langchain-core from 1.2.16 to 1.2.22
+  ([#21](https://github.com/flaviomilan/fackel/pull/21),
+  [`d8feee9`](https://github.com/flaviomilan/fackel/commit/d8feee98860fafa1278a8375dd12ea52dd385ee6))
+
+- **deps**: Bump langchain-core from 1.2.22 to 1.2.28
+  ([#24](https://github.com/flaviomilan/fackel/pull/24),
+  [`60d0d03`](https://github.com/flaviomilan/fackel/commit/60d0d03ade260ffa1e1adb7c73bddb45f7acf468))
+
+- **deps**: Bump pygments from 2.19.2 to 2.20.0
+  ([#22](https://github.com/flaviomilan/fackel/pull/22),
+  [`4191add`](https://github.com/flaviomilan/fackel/commit/4191add3a53e00e0e7ed3139e83f0106d9f31a73))
+
+- **deps**: Bump pytest from 9.0.2 to 9.0.3 ([#35](https://github.com/flaviomilan/fackel/pull/35),
+  [`527b12c`](https://github.com/flaviomilan/fackel/commit/527b12cb5d5cb231b5e79fa5b06873410305a9ae))
+
+- **deps**: Bump requests from 2.32.5 to 2.33.0
+  ([#20](https://github.com/flaviomilan/fackel/pull/20),
+  [`b67daf6`](https://github.com/flaviomilan/fackel/commit/b67daf6add42c2fa72251d01c802b56c53b1fe82))
+
+### Features
+
+- Adding improvements on structure, agents and harness
+  ([#50](https://github.com/flaviomilan/fackel/pull/50),
+  [`73a3650`](https://github.com/flaviomilan/fackel/commit/73a3650741b20793c285ee03807eef7dc397596e))
+
+
 ## v1.5.1 (2026-03-21)
 
 ### Bug Fixes
