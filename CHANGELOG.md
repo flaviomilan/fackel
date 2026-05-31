@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-05-31)
+
+### Chores
+
+- Adjusting demo ([#51](https://github.com/flaviomilan/fackel/pull/51),
+  [`a55ff86`](https://github.com/flaviomilan/fackel/commit/a55ff865cdb78523306b22cf305a85cf5f3f8338))
+
+### Features
+
+- Add 6 passive OSINT tools + RoE scope + eval harness
+  ([#52](https://github.com/flaviomilan/fackel/pull/52),
+  [`dd2589c`](https://github.com/flaviomilan/fackel/commit/dd2589c9d194735d70ab823a0ed764e195db86e3))
+
+
 ## v1.6.0 (2026-05-31)
 
 ### Chores
