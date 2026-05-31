@@ -47,14 +47,16 @@ class Specialist:
 SPECIALISTS: list[Specialist] = [
     Specialist(
         "dns_infra",
-        "DNS resolution, WHOIS, reverse DNS, ASN / IP classification, and "
-        "passive open-port / CVE data per IP",
+        "DNS resolution, WHOIS, reverse DNS, ASN / IP classification, IP "
+        "reputation (scan-noise + abuse), and passive open-port / CVE data per IP",
         (
             "dns_resolve",
             "whois_lookup",
             "reverse_dns_lookup",
             "ipinfo_lookup",
             "bgp_lookup",
+            "greynoise_lookup",
+            "abuseipdb_lookup",
             "internetdb_lookup",
             "dnsx_resolve",
         ),
@@ -66,6 +68,7 @@ SPECIALISTS: list[Specialist] = [
         (
             "subfinder_enum",
             "amass_enum",
+            "chaos_enum",
             "crtsh_subdomain_enum",
             "dnsdumpster_lookup",
             "virustotal_subdomain_enum",
@@ -76,11 +79,12 @@ SPECIALISTS: list[Specialist] = [
     ),
     Specialist(
         "scan_dbs",
-        "passive scan databases (Shodan/Censys/FOFA) and historical / cached intel",
+        "passive scan databases (Shodan/Censys/FOFA/Netlas) and historical / cached intel",
         (
             "shodan_lookup",
             "censys_lookup",
             "fofa_search",
+            "netlas_lookup",
             "securitytrails_history",
             "urlscan_search",
             "otx_passive_dns",
@@ -93,8 +97,15 @@ SPECIALISTS: list[Specialist] = [
     ),
     Specialist(
         "surface_urls",
-        "URL / endpoint / parameter discovery and cloud resource enumeration",
-        ("gau_urls", "paramspider_crawl", "linkfinder_extract", "cloudbrute_enum"),
+        "URL / endpoint / parameter discovery, public document dorking, and "
+        "cloud resource enumeration",
+        (
+            "gau_urls",
+            "paramspider_crawl",
+            "linkfinder_extract",
+            "document_search",
+            "cloudbrute_enum",
+        ),
     ),
     Specialist(
         "secrets_code",
@@ -103,8 +114,13 @@ SPECIALISTS: list[Specialist] = [
     ),
     Specialist(
         "people",
-        "people, email, and organisation intelligence",
-        ("hunter_email_search", "analyze_email", "job_search"),
+        "people, email, breach exposure, and organisation intelligence",
+        ("hunter_email_search", "analyze_email", "breach_lookup", "job_search"),
+    ),
+    Specialist(
+        "social",
+        "username and social-account discovery across web platforms (semi-passive; opt-in)",
+        ("maigret_scan",),
     ),
 ]
 

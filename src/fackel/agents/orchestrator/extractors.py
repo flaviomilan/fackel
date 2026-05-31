@@ -211,6 +211,24 @@ def merge_ip_classification_fields(
             }
         )
         entry.setdefault("asn", data.get("asn", ""))
+    elif tool == "greynoise_lookup":
+        entry.update(
+            {
+                "gn_noise": bool(data.get("gn_noise", False)),
+                "gn_riot": bool(data.get("gn_riot", False)),
+                "gn_classification": data.get("gn_classification", ""),
+                "gn_actor": data.get("gn_actor", ""),
+            }
+        )
+    elif tool == "abuseipdb_lookup":
+        entry.update(
+            {
+                "abuse_score": int(data.get("abuse_score", 0) or 0),
+                "abuse_reports": int(data.get("abuse_reports", 0) or 0),
+                "abuse_usage_type": data.get("abuse_usage_type", ""),
+                "abuse_tor": bool(data.get("abuse_tor", False)),
+            }
+        )
 
 
 def build_classification_attrs(
@@ -230,7 +248,7 @@ def build_classification_attrs(
         anycast=bool(data.get("anycast", False)),
         target_domain=target_domain,
     )
-    return {
+    attrs = {
         "ip": ip,
         "ip_class": ip_class,
         "org": data.get("org", ""),
@@ -239,6 +257,27 @@ def build_classification_attrs(
         "country": data.get("country", ""),
         "anycast": bool(data.get("anycast", False)),
     }
+    # Reputation enrichment (greynoise / abuseipdb) — only surfaced when present
+    # so IPs classified by ipinfo/bgp alone keep their existing attribute shape.
+    if "gn_classification" in data or "gn_noise" in data:
+        attrs.update(
+            {
+                "gn_noise": bool(data.get("gn_noise", False)),
+                "gn_riot": bool(data.get("gn_riot", False)),
+                "gn_classification": data.get("gn_classification", ""),
+                "gn_actor": data.get("gn_actor", ""),
+            }
+        )
+    if "abuse_score" in data:
+        attrs.update(
+            {
+                "abuse_score": int(data.get("abuse_score", 0) or 0),
+                "abuse_reports": int(data.get("abuse_reports", 0) or 0),
+                "abuse_usage_type": data.get("abuse_usage_type", ""),
+                "abuse_tor": bool(data.get("abuse_tor", False)),
+            }
+        )
+    return attrs
 
 
 def _collect_ip_data(messages: list[Any]) -> dict[str, dict[str, Any]]:

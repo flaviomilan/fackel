@@ -1,0 +1,50 @@
+{
+  "name": "acme-corp full active scan",
+  "target": "acme-corp.test",
+  "description": "Rich active scan: OSINT subdomains/IPs, port scan, service + tech fingerprints, vulns. Exercises multi-type extraction with intentional coverage gaps (one missing subdomain, one missing technology) so recall floors stay meaningful.",
+  "records": [
+    { "type": "SUBDOMAIN", "value": "www.acme-corp.test", "tool": "subfinder_enum", "phase": "osint" },
+    { "type": "SUBDOMAIN", "value": "api.acme-corp.test", "tool": "crtsh_subdomain_enum", "phase": "osint" },
+    { "type": "SUBDOMAIN", "value": "mail.acme-corp.test", "tool": "dnsdumpster_lookup", "phase": "osint" },
+    { "type": "SUBDOMAIN", "value": "dev.acme-corp.test", "tool": "subfinder_enum", "phase": "osint" },
+    { "type": "SUBDOMAIN", "value": "staging.acme-corp.test", "tool": "crtsh_subdomain_enum", "phase": "osint" },
+    { "type": "IP_ADDRESS", "value": "203.0.113.10", "tool": "dns_resolve", "phase": "osint" },
+    { "type": "IP_ADDRESS", "value": "203.0.113.11", "tool": "dns_resolve", "phase": "osint" },
+    { "type": "OPEN_PORT", "value": "203.0.113.10:443", "tool": "naabu_scan", "phase": "port_scan" },
+    { "type": "OPEN_PORT", "value": "203.0.113.10:22", "tool": "naabu_scan", "phase": "port_scan" },
+    { "type": "OPEN_PORT", "value": "203.0.113.11:443", "tool": "nmap_port_scan", "phase": "port_scan" },
+    { "type": "SERVICE_VERSION", "value": "nginx 1.25.3", "tool": "nmap_port_scan", "phase": "port_scan" },
+    { "type": "SERVICE_VERSION", "value": "OpenSSH 9.2p1", "tool": "nmap_port_scan", "phase": "port_scan" },
+    { "type": "TECH_FINGERPRINT", "value": "WordPress 6.4", "tool": "whatweb_scan", "phase": "vuln_scan" },
+    { "type": "TECH_FINGERPRINT", "value": "PHP 8.2", "tool": "httpx_scan", "phase": "vuln_scan" },
+    { "type": "SECURITY_VULNERABILITY", "value": "exposed-git-config", "tool": "nuclei_scan", "phase": "vuln_scan" },
+    { "type": "SECURITY_VULNERABILITY", "value": "wordpress-outdated-plugin", "tool": "wpscan_scan", "phase": "vuln_scan" },
+    { "type": "EMAIL", "value": "admin@acme-corp.test", "tool": "analyze_email", "phase": "osint" }
+  ],
+  "ground_truth": {
+    "SUBDOMAIN": [
+      "www.acme-corp.test",
+      "api.acme-corp.test",
+      "mail.acme-corp.test",
+      "dev.acme-corp.test",
+      "staging.acme-corp.test",
+      "vpn.acme-corp.test"
+    ],
+    "IP_ADDRESS": ["203.0.113.10", "203.0.113.11"],
+    "OPEN_PORT": ["203.0.113.10:443", "203.0.113.10:22", "203.0.113.11:443"],
+    "SERVICE_VERSION": ["nginx 1.25.3", "OpenSSH 9.2p1"],
+    "TECH_FINGERPRINT": ["WordPress 6.4", "PHP 8.2", "MySQL 8.0"],
+    "SECURITY_VULNERABILITY": ["exposed-git-config", "wordpress-outdated-plugin"],
+    "EMAIL": ["admin@acme-corp.test"]
+  },
+  "thresholds": {
+    "overall": { "recall": 0.85, "precision": 0.95, "f1": 0.88 },
+    "per_type": {
+      "SUBDOMAIN": { "recall": 0.8, "precision": 0.95 },
+      "IP_ADDRESS": { "f1": 1.0 },
+      "OPEN_PORT": { "f1": 1.0 },
+      "TECH_FINGERPRINT": { "recall": 0.6 },
+      "SECURITY_VULNERABILITY": { "f1": 1.0 }
+    }
+  }
+}

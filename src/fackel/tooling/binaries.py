@@ -26,6 +26,7 @@ TOOL_BINARIES: dict[str, str] = {
     "gau_urls": "gau",
     "katana_crawl": "katana",
     "linkfinder_extract": "linkfinder",
+    "maigret_scan": "maigret",
     "naabu_scan": "naabu",
     "nmap_port_scan": "nmap",
     "nuclei_scan": "nuclei",

@@ -38,6 +38,21 @@ _ErrFn = Callable[[str], ToolException]
 
 logger = logging.getLogger(__name__)
 
+
+def _enforce_scope(host: str, _err: _ErrFn) -> None:
+    """Reject *host* when a Rules-of-Engagement scope file excludes it.
+
+    No-op when no scope file is configured (permissive default).  This is the
+    code-level enforcement point for the RoE scope — every tool target flows
+    through :func:`guard_target` and therefore through here.
+    """
+    from fackel.scope import check_scope
+
+    decision = check_scope(host)
+    if not decision.allowed:
+        raise _err(decision.reason or f"target out of scope: {host!r}")
+
+
 _DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$")
 
 _OCTET_QUAD_RE = re.compile(r"^\d{1,3}(?:-\d{1,3}){3}$")
@@ -201,6 +216,7 @@ def _guard_url(raw: str, _err: _ErrFn) -> str:
         raise _err(f"URL has no hostname: {raw}")
     if _SHELL_META_RE.search(parsed.hostname):
         raise _err(f"target contains forbidden characters: {parsed.hostname!r}")
+    _enforce_scope(parsed.hostname, _err)
     return raw
 
 
@@ -209,6 +225,7 @@ def _guard_host_or_url(raw: str, tool_name: str, _err: _ErrFn) -> str:
     if parsed.scheme in ("http", "https") and parsed.hostname:
         if _SHELL_META_RE.search(parsed.hostname):
             raise _err(f"target contains forbidden characters: {parsed.hostname!r}")
+        _enforce_scope(parsed.hostname, _err)
         return raw
     return guard_target(raw, tool_name, TargetType.HOST)
 
@@ -221,6 +238,7 @@ def _guard_domain(host: str, tool_name: str, _err: _ErrFn) -> str:
         )
     if not is_valid_domain(host):
         raise _err(f"invalid domain name: {host!r}")
+    _enforce_scope(host, _err)
     return host
 
 
@@ -229,6 +247,7 @@ def _guard_ip(host: str, tool_name: str, _err: _ErrFn) -> str:
         raise _err(f"{tool_name} requires an IP address, got: {host!r}")
     if is_private_ip(host):
         raise _err(_PRIVATE_IP_MSG.format(host=host))
+    _enforce_scope(host, _err)
     return host
 
 
@@ -237,6 +256,7 @@ def _guard_host(host: str, _err: _ErrFn) -> str:
         raise _err(f"invalid host (not a valid IP or domain): {host!r}")
     if is_valid_ip(host) and is_private_ip(host):
         raise _err(_PRIVATE_IP_MSG.format(host=host))
+    _enforce_scope(host, _err)
     return host
 
 
@@ -254,6 +274,7 @@ def _guard_host_port(raw: str, _err: _ErrFn) -> str:
         raise _err(f"target contains forbidden characters: {bare!r}")
     if not is_valid_ip(bare) and not is_valid_domain(bare):
         raise _err(f"invalid host (not a valid IP or domain): {bare!r}")
+    _enforce_scope(bare, _err)
     return f"{bare}{port_part}"
 
 
