@@ -1,4 +1,4 @@
-.PHONY: install dev lint format test coverage audit hooks clean
+.PHONY: install dev lint format test coverage eval audit hooks clean
 
 ## Install production dependencies
 install:
@@ -29,6 +29,10 @@ test:
 coverage:
 	uv run coverage run -m pytest tests/ -m "not integration" -q
 	uv run coverage report --fail-under=50
+
+## Run the offline scan-quality eval harness (golden fixtures, no LLM/network)
+eval:
+	uv run pytest tests/eval/ -m eval -q
 
 ## Dependency vulnerability audit
 audit:

@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete reference for all 35 tool wrappers in Fackel. Each tool is a
+Complete reference for all 42 tool wrappers in Fackel. Each tool is a
 LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema,
 `ToolException`-based error handling, and standardised output envelope.
 
@@ -17,6 +17,7 @@ LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema,
   - [whois_lookup](#whois_lookup)
   - [shodan_lookup](#shodan_lookup)
   - [censys_lookup](#censys_lookup)
+  - [netlas_lookup](#netlas_lookup)
   - [dnsdumpster_lookup](#dnsdumpster_lookup)
   - [virustotal_subdomain_enum](#virustotal_subdomain_enum)
   - [crtsh_subdomain_enum](#crtsh_subdomain_enum)
@@ -24,15 +25,21 @@ LangChain `@tool`-decorated function with a Pydantic `BaseModel` input schema,
   - [reverse_dns_lookup](#reverse_dns_lookup)
   - [ipinfo_lookup](#ipinfo_lookup)
   - [bgp_lookup](#bgp_lookup)
+  - [greynoise_lookup](#greynoise_lookup)
+  - [abuseipdb_lookup](#abuseipdb_lookup)
   - [tlscert_lookup](#tlscert_lookup)
   - [securitytrails_history](#securitytrails_history)
   - [urlscan_search](#urlscan_search)
   - [otx_passive_dns](#otx_passive_dns)
   - [job_search](#job_search)
+  - [document_search](#document_search)
   - [analyze_email](#analyze_email)
+  - [breach_lookup](#breach_lookup)
+  - [maigret_scan](#maigret_scan)
   - [trufflehog_scan](#trufflehog_scan)
 - [Recon tools (extended)](#recon-tools-extended)
   - [amass_enum](#amass_enum)
+  - [chaos_enum](#chaos_enum)
   - [subzy_check](#subzy_check)
   - [paramspider_crawl](#paramspider_crawl)
   - [whatweb_scan](#whatweb_scan)
@@ -386,6 +393,54 @@ Look up ASN and prefix information for an IP via RIPEstat.
 
 ---
 
+### greynoise_lookup
+
+Check an IP's internet-scan reputation via the GreyNoise Community API. Reports
+whether the IP is mass-scanning "noise", in the known-benign RIOT set, and a
+benign / malicious / unknown classification. Pure passive: only the GreyNoise
+dataset is queried. A `404` ("IP not observed") is treated as a valid result.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ip` | `str` | *(required)* | IPv4 address to check (e.g. `1.2.3.4`). |
+
+**Returns:**
+- `ip` — queried IP address
+- `gn_noise` — whether the IP is opportunistic scan noise
+- `gn_riot` — whether the IP is in the known-benign RIOT set
+- `gn_classification` — `benign` / `malicious` / `unknown`
+- `gn_actor` — associated scanner/actor name
+
+**Requires:** `GREYNOISE_API_KEY` (free community tier)
+
+**Produces:** `IP_CLASSIFICATION` information type (reputation enrichment)
+
+---
+
+### abuseipdb_lookup
+
+Check an IP's abuse reputation via AbuseIPDB — community-reported spam,
+brute-force, and scanning activity. Returns an abuse-confidence score (0-100),
+report count, usage type, and a Tor-exit flag. Pure passive: only the AbuseIPDB
+dataset is queried.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ip` | `str` | *(required)* | IPv4 address to check (e.g. `1.2.3.4`). |
+
+**Returns:**
+- `ip` — queried IP address
+- `abuse_score` — abuse-confidence score (0-100)
+- `abuse_reports` — total community reports
+- `abuse_usage_type` — reported usage type (hosting, ISP, etc.)
+- `abuse_tor` — whether the IP is a known Tor exit node
+
+**Requires:** `ABUSEIPDB_API_KEY` (free tier: 1 000 checks/day)
+
+**Produces:** `IP_CLASSIFICATION` information type (reputation enrichment)
+
+---
+
 ### tlscert_lookup
 
 Inspect the TLS certificate of a host.
@@ -503,6 +558,51 @@ Analyse an email address for breach exposure (HIBP) and reputation (EmailRep).
 
 ---
 
+### breach_lookup
+
+Check an email address against the LeakCheck breach database. Complements
+`analyze_email` (HIBP) with a second breach corpus and feeds the
+`CREDENTIAL_LEAK` information type. Pure passive: only the LeakCheck dataset is
+queried, never the target.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `email` | `str` | *(required)* | Email address to check (e.g. `jane@example.com`). |
+
+**Returns:**
+- `email` — the queried address
+- `found` — number of distinct breaches the address appears in
+- `breaches` — list of `{name, date}` breach records
+
+**Requires:** `LEAKCHECK_API_KEY` (free tier available)
+
+**Produces:** `CREDENTIAL_LEAK` information type
+
+---
+
+### maigret_scan
+
+Search a username across hundreds of social and web platforms and return the
+profiles that exist. **Semi-passive** — unlike the rest of the OSINT surface it
+fans out to many third-party sites, so it is gated behind an explicit opt-in and
+disabled by default.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `username` | `str` | *(required)* | Username / handle to search (e.g. `janedoe`). |
+
+**Returns:**
+- `username` — the queried handle
+- `accounts` — list of `{site, url}` profile records
+- `count` — number of profiles found
+
+**Requires:** `maigret` binary **and** `FACKEL_ENABLE_MAIGRET=1` (opt-in;
+disabled by default because it is semi-passive)
+
+**Produces:** `USERNAME` + `SOCIAL_ACCOUNT` information types
+
+---
+
 ### fofa_search
 
 Search FOFA for internet-connected assets — passive reconnaissance alongside
@@ -521,6 +621,27 @@ certificates indexed by FOFA's global scan engine.
 
 ---
 
+### netlas_lookup
+
+Search the Netlas internet-wide scan database (Shodan/Censys class) for hosts
+indexed under a domain. Returns hosts with their IPs, hostnames, and open
+ports. Pure passive: only the Netlas dataset is queried, never the target.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `domain` | `str` | *(required)* | Domain or IP to search (e.g. `example.com`). |
+
+**Returns:**
+- `domain` — the queried target
+- `hosts` — list of `{ip, hostname, port}` records
+- `count` — number of unique hosts found
+
+**Requires:** `NETLAS_API_KEY` (free tier available)
+
+**Produces:** `IP_ADDRESS` + `SUBDOMAIN` information types
+
+---
+
 ### gau_urls
 
 Fetch known URLs for a domain from passive historical sources (Wayback Machine,
@@ -536,6 +657,27 @@ panels, API paths, and old versions that may still be live.
 - `count` — total number of unique URLs found
 
 **Requires:** `gau` binary
+
+---
+
+### document_search
+
+Discover a domain's publicly indexed documents (PDF, Office files, CSV, TXT) by
+issuing `site:<domain> filetype:<ext>` queries against DuckDuckGo. Surfaces
+exposed reports, spreadsheets, and presentations — a common source of internal
+names, software versions, and metadata. Fully passive: the documents are never
+downloaded and the target host is never contacted, only the search engine.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `domain` | `str` | *(required)* | Domain to discover publicly indexed documents for (e.g. `example.com`). |
+
+**Returns:**
+- `domain` — the queried domain
+- `documents` — list of `{url, title, filetype}` document records
+- `count` — total number of unique documents found
+
+**Produces:** `DOCUMENT` information type
 
 ---
 
@@ -595,6 +737,28 @@ with additional data sources and active techniques.
 - `count` — number of unique subdomains found
 
 **Requires:** `amass` binary
+
+---
+
+### chaos_enum
+
+Enumerate a domain's subdomains from the ProjectDiscovery Chaos dataset — a
+continuously-updated passive DNS dataset. Complements the active resolvers
+(subfinder/amass) and other passive sources (crt.sh, VirusTotal, DNSDumpster).
+Pure passive: the dataset is queried, never the target.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `domain` | `str` | *(required)* | Domain to enumerate subdomains for (e.g. `example.com`). |
+
+**Returns:**
+- `domain` — the queried apex domain
+- `subdomains` — deduplicated list of fully-qualified subdomains
+- `count` — number of unique subdomains found
+
+**Requires:** `CHAOS_API_KEY` (free for registered users)
+
+**Produces:** `SUBDOMAIN` information type
 
 ---
 
@@ -971,6 +1135,7 @@ Fackel wraps several security tools via subprocess. Install the ones you need:
 | `paramspider` | `paramspider_crawl` | `pipx install paramspider` |
 | `whatweb` | `whatweb_scan` | `gem install whatweb` / `apt install whatweb` |
 | `linkfinder` | `linkfinder_extract` | `pipx install linkfinder` |
+| `maigret` | `maigret_scan` | `pipx install maigret` (opt-in: set `FACKEL_ENABLE_MAIGRET=1`) |
 | `trufflehog` | `trufflehog_scan` | `pipx install trufflehog` |
 | `wpscan` | `wpscan_scan` | `gem install wpscan` |
 | `corsy` | `corsy_scan` | `pipx install corsy` |

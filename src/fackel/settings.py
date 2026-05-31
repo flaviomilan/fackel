@@ -216,6 +216,15 @@ class Settings:
     Set to ``false`` (or ``0``) when the terminal font lacks Nerd Font patches; the
     harness then falls back to an ASCII glyph set that keeps column alignment intact."""
 
+    # --- Rules-of-Engagement scope -------------------------------------------
+    scope_file: str
+    """``FACKEL_SCOPE_FILE`` — path to the optional TOML scope file
+    (default ``.fackel/scope.toml``, relative to the working directory).
+
+    When the file exists, :func:`fackel.tooling.validators.guard_target` enforces
+    its ``in_scope`` allowlist / ``out_of_scope`` denylist as code-level policy.
+    When absent, every otherwise-valid target is allowed (permissive default)."""
+
 
 def _load_settings() -> Settings:
     """Build a ``Settings`` instance from the current environment."""
@@ -268,6 +277,8 @@ def _load_settings() -> Settings:
         ),
         # CLI presentation
         nerd_font=_env_bool("FACKEL_NERD_FONT", True),
+        # Rules-of-Engagement scope
+        scope_file=_env_str("FACKEL_SCOPE_FILE", ".fackel/scope.toml"),
     )
 
 

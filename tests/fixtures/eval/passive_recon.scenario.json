@@ -1,0 +1,27 @@
+{
+  "name": "passive-only OSINT recon",
+  "target": "example.com",
+  "description": "Passive-only scan (no active phases): subdomains, a single resolved IP, the registrant organization, and a contact email. Exercises the OSINT-only path where downstream phases are skipped and there must be zero false positives.",
+  "records": [
+    { "type": "SUBDOMAIN", "value": "a.example.com", "tool": "subfinder_enum", "phase": "osint" },
+    { "type": "SUBDOMAIN", "value": "b.example.com", "tool": "crtsh_subdomain_enum", "phase": "osint" },
+    { "type": "SUBDOMAIN", "value": "c.example.com", "tool": "dnsdumpster_lookup", "phase": "osint" },
+    { "type": "IP_ADDRESS", "value": "203.0.113.50", "tool": "dns_resolve", "phase": "osint" },
+    { "type": "ORGANIZATION", "value": "Example Organization, Inc.", "tool": "whois_lookup", "phase": "osint" },
+    { "type": "EMAIL", "value": "contact@example.com", "tool": "analyze_email", "phase": "osint" }
+  ],
+  "ground_truth": {
+    "SUBDOMAIN": ["a.example.com", "b.example.com", "c.example.com", "d.example.com"],
+    "IP_ADDRESS": ["203.0.113.50"],
+    "ORGANIZATION": ["Example Organization, Inc."],
+    "EMAIL": ["contact@example.com"]
+  },
+  "thresholds": {
+    "overall": { "recall": 0.8, "precision": 0.95, "f1": 0.85 },
+    "per_type": {
+      "SUBDOMAIN": { "recall": 0.7, "precision": 0.95 },
+      "IP_ADDRESS": { "f1": 1.0 },
+      "EMAIL": { "f1": 1.0 }
+    }
+  }
+}

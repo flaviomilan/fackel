@@ -38,12 +38,15 @@ detection, and redirect analysis.
 | `crtsh_subdomain_enum`      | Subdomain enum via Certificate Transparency logs — most reliable|
 | `subfinder_enum`            | Aggregate 40+ passive sources for subdomain discovery           |
 | `amass_enum`                | OWASP Amass — deep subdomain enum via CT, APIs, scraping        |
+| `chaos_enum`                | Passive subdomains from the ProjectDiscovery Chaos dataset (key) |
 | `dnsx_resolve`              | Bulk-resolve a subdomain set + filter wildcard DNS (validation) |
 | `subzy_check`               | Subdomain takeover detection — dangling CNAMEs, unclaimed svcs  |
 | `reverse_dns_lookup`        | PTR records + reverse IP for shared hosting detection           |
 | `ipinfo_lookup`             | IP geolocation, ASN, org, anycast flag via ipinfo.io (free)     |
 | `internetdb_lookup`         | Shodan InternetDB — open ports, CPEs, CVEs per IP (free, no key)|
 | `bgp_lookup`                | ASN details, CIDR prefix, RIR allocation via RIPEstat (free)    |
+| `greynoise_lookup`          | IP scan-noise / RIOT reputation + benign/malicious class (key)  |
+| `abuseipdb_lookup`          | IP abuse-confidence score, report count, usage type (key)       |
 | `httpx_scan`                | HTTP fingerprinting — tech stack, server header, redirects, WAF |
 | `whatweb_scan`              | Web tech fingerprinting — CMS, frameworks, JS libs, server      |
 | `linkfinder_extract`        | Extract API endpoints and paths from JavaScript files            |
@@ -56,11 +59,15 @@ detection, and redirect analysis.
 | `trufflehog_scan`           | Scan Git repos for leaked API keys, passwords, tokens            |
 | `js_secret_scan`            | Scan a target's JavaScript bundles for inline API keys/secrets  |
 | `fofa_search`               | Passive asset search — hosts, services, tech — like Shodan (key) |
+| `netlas_lookup`             | Passive host/service search via the Netlas scan database (key)  |
 | `gau_urls`                  | Passive URL discovery — Wayback Machine, Common Crawl, OTX       |
+| `document_search`           | Public document dorking — indexed PDF/Office files via search engine |
 | `cloudbrute_enum`           | Cloud resource discovery — S3, Azure, GCP, DigitalOcean buckets  |
 | `job_search`                | Job posting search to identify tech stack and internal tools    |
 | `hunter_email_search`       | Discover emails + people for a domain (Hunter.io; feeds analyze_email) |
 | `analyze_email`             | Email breach exposure (HIBP), reputation, service registrations |
+| `breach_lookup`             | Email breach exposure via LeakCheck — second corpus beyond HIBP (key) |
+| `maigret_scan`              | Username → social/web accounts (semi-passive; opt-in env, binary)|
 
 > Parameter details (types, defaults, constraints) are defined in each tool's
 > schema and visible to you automatically. The playbook below explains **when**

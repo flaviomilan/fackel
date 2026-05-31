@@ -10,17 +10,21 @@ is available; skip silently if a tool is missing. Group by purpose:
 
 - **Resolution / WHOIS**: `dns_resolve`, `whois_lookup`, `tlscert_lookup`,
   `reverse_dns_lookup`
-- **Subdomain enum**: `subfinder_enum`, `amass_enum`, `crtsh_subdomain_enum`,
-  `dnsdumpster_lookup`, `virustotal_subdomain_enum`; validate with `dnsx_resolve`
-- **IP enrichment**: `ipinfo_lookup`, `bgp_lookup`, `internetdb_lookup` (free,
-  no key), `shodan_lookup`, `censys_lookup`, `fofa_search`
+- **Subdomain enum**: `subfinder_enum`, `amass_enum`, `chaos_enum`,
+  `crtsh_subdomain_enum`, `dnsdumpster_lookup`, `virustotal_subdomain_enum`;
+  validate with `dnsx_resolve`
+- **IP enrichment**: `ipinfo_lookup`, `bgp_lookup`, `greynoise_lookup`,
+  `abuseipdb_lookup`, `internetdb_lookup` (free,
+  no key), `shodan_lookup`, `censys_lookup`, `fofa_search`, `netlas_lookup`
 - **HTTP / tech**: `httpx_scan`, `whatweb_scan`
 - **Historical / passive intel**: `securitytrails_history`, `urlscan_search`,
   `otx_passive_dns`, `gau_urls`
 - **Surface discovery**: `paramspider_crawl`, `linkfinder_extract`,
-  `cloudbrute_enum`, `js_secret_scan`, `github_repo_discovery` → `trufflehog_scan`,
+  `document_search`, `cloudbrute_enum`, `js_secret_scan`,
+  `github_repo_discovery` → `trufflehog_scan`,
   `subzy_check`
-- **People / context**: `job_search`, `hunter_email_search` → `analyze_email`
+- **People / context**: `job_search`, `hunter_email_search` → `analyze_email`,
+  `breach_lookup`; `maigret_scan` (username → social, semi-passive/opt-in)
 
 ## Playbook (all batches run in parallel)
 
