@@ -16,9 +16,7 @@
 </p>
 
 <p align="center">
-  <video src="https://github.com/flaviomilan/fackel/raw/main/docs/assets/demo.mp4" autoplay loop muted playsinline controls width="100%">
-    <a href="docs/assets/demo.mp4">▶ Watch the Fackel interactive harness demo</a>
-  </video>
+  <img src="https://github.com/flaviomilan/fackel/raw/main/docs/assets/demo.webp" width="100%" />
 </p>
 
 <p align="center">
