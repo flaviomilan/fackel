@@ -44,7 +44,7 @@ dev = [
   "python-semantic-release>=9.0",
   "commitizen>=4.0",
   "pre-commit>=4.0",
-  "types-requests>=2.31",
+  "types-requests>=2.33.0.20260712",
   "types-python-nmap>=0.7",
   "types-beautifulsoup4>=4.12",
 ]
