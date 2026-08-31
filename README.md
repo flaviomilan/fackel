@@ -1,3 +1,5 @@
+
+
 # Fackel
 
 <p align="center">
@@ -445,11 +447,11 @@ print(result["report"])
 
 ## Adding new tools
 
-1. Create a new file in `src/tools/` with a `@tool`-decorated function and
+1. Create a new file in `src/fackel/tools/` with a `@tool`-decorated function and
    Pydantic input schema:
 
 ```python
-# src/tools/recon/my_tool.py
+# src/fackel/tools/recon/my_tool.py
 from langchain_core.tools import ToolException, tool
 from pydantic import BaseModel, Field
 
