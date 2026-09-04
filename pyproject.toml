@@ -27,7 +27,7 @@ dependencies = [
   "pydantic>=2.6",
   "typer>=0.12",
   "rich>=13.0",
-  "prompt-toolkit>=3.0",
+  "prompt-toolkit>=3.0.53",
 ]
 
 [project.scripts]
