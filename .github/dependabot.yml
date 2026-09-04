@@ -15,6 +15,11 @@ updates:
       - automated
     commit-message:
       prefix: "deps"
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
 
   # GitHub Actions
   - package-ecosystem: github-actions
@@ -30,3 +35,8 @@ updates:
       - automated
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - minor
+          - patch
