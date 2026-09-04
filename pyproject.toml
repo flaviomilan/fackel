@@ -36,7 +36,7 @@ fackel = "cli.main:app"
 [project.optional-dependencies]
 dev = [
   "ruff>=0.4",
-  "mypy>=1.9",
+  "mypy>=2.3.0",
   "pytest>=9.0.3",
   "pytest-asyncio>=0.24",
   "coverage>=7.5",
