@@ -26,7 +26,7 @@ dependencies = [
   "python-nmap>=0.7",
   "pydantic>=2.6",
   "typer>=0.27.2",
-  "rich>=13.0",
+  "rich>=15.0.0",
   "prompt-toolkit>=3.0",
 ]
 
