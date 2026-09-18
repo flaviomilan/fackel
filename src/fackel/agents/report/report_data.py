@@ -113,6 +113,20 @@ def build_report_context(store: InformationStore, *, max_per_type: int = 60) -> 
     return "\n".join(lines)
 
 
+def build_session_digest(store: InformationStore) -> str:
+    """Return the durable session digest for the interactive ``/compact`` command.
+
+    The grounded report context plus a deterministic verification summary — the
+    memory a fresh REPL turn should carry after the live conversation is cleared.
+    No LLM. Returns ``""`` when the store holds nothing.
+    """
+    from fackel.agents.report.verification import build_verification_md, verify_findings
+
+    note = build_report_context(store)
+    verification = build_verification_md(verify_findings(store))
+    return f"{note}\n\n{verification}".strip()
+
+
 def _fmt_dt(value: datetime) -> str:
     return value.strftime("%Y-%m-%d %H:%M")
 

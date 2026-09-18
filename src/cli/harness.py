@@ -30,7 +30,7 @@ from rich.table import Table
 from cli import presenter, theme
 from cli.context_tracker import ContextTracker
 from cli.renderer import EventRenderer
-from cli.session import HarnessSession
+from cli.session import HarnessSession, approx_tokens
 
 _HELP = """[bold]Commands[/bold]
   [cyan]/scan[/cyan] <target> [--no-active] [--approve-tools]   run a scan
@@ -216,14 +216,11 @@ class Harness:
         if store is None:
             self._console.print("[yellow]nothing to compact — no scan yet[/yellow]")
             return
-        from fackel.agents.report.report_data import build_report_context
-        from fackel.agents.report.verification import build_verification_md, verify_findings
+        from fackel.agents.report.report_data import build_session_digest
 
-        note = build_report_context(store)
-        verification = build_verification_md(verify_findings(store))
-        self._session.memory_note = f"{note}\n\n{verification}".strip()
+        self._session.memory_note = build_session_digest(store)
         self._tracker.reset()
-        tok = len(self._session.memory_note) // 3
+        tok = approx_tokens(self._session.memory_note)
         self._console.print(
             f"[green]✓ compacted[/green] [dim]— session memory ≈ {tok} tokens; live meter reset[/dim]"
         )

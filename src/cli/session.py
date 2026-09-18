@@ -21,6 +21,11 @@ from fackel.settings import get_settings
 logger = logging.getLogger(__name__)
 
 
+def approx_tokens(text: str) -> int:
+    """Cheap char-based token estimate (~3 chars/token) for the session meter."""
+    return len(text) // 3
+
+
 @dataclass(frozen=True)
 class ScanRef:
     """A scan run during this session."""
@@ -64,6 +69,6 @@ class HarnessSession:
             ts = time.strftime("%H:%M:%S", time.localtime(ref.when))
             lines.append(f"  [cyan]{ref.scan_id}[/cyan]  {ref.target}  [dim]{ts}[/dim]")
         if self.memory_note:
-            note_tokens = len(self.memory_note) // 3
+            note_tokens = approx_tokens(self.memory_note)
             lines.append(f"[dim]session memory: ~{note_tokens} tokens[/dim]")
         return "\n".join(lines)
