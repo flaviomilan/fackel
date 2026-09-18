@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from fackel.agents.triage.agent import (
     RiskScore,
     TriageResult,
@@ -206,66 +204,53 @@ class TestTriageNodeStructuredPassthrough:
         assert call_kwargs["phase_evaluations"] == state["phase_evaluations"]
 
 
-class TestOsintNodeLAAJ:
-    """osint_node now includes LLM-as-a-judge evaluation and retry.
-
-    These cover the single-agent path (quality-gated retry), so the specialist
-    decomposition is disabled for the class.
+class TestOsintCollectLAAJ:
+    """osint_collect_node evaluates the fan-in specialist output, and runs a
+    quality-gated self-reflection retry (full-toolset pass) when the judge rates
+    the combined output empty. Specialist messages arrive on ``osint_messages``.
     """
 
-    @pytest.fixture(autouse=True)
-    def _single_agent_mode(self, monkeypatch):
-        import fackel.settings as settings_mod
+    @staticmethod
+    def _make_eval(completeness: str, score: float) -> MagicMock:
+        ev = MagicMock()
+        ev.completeness = completeness
+        ev.score = score
+        ev.recommendation = "proceed"
+        ev.gaps = ["No subdomain enumeration"] if completeness == "empty" else []
+        ev.reasoning = "reason"
+        ev.model_dump.return_value = {
+            "phase": "osint",
+            "completeness": completeness,
+            "score": score,
+        }
+        return ev
 
-        monkeypatch.setenv("FACKEL_OSINT_SPECIALISTS", "false")
-        settings_mod.get_settings.cache_clear()
-        yield
-        settings_mod.get_settings.cache_clear()
+    @staticmethod
+    def _state() -> dict:
+        from langchain_core.messages import AIMessage
+
+        return {
+            "target": "example.com",
+            "active_scan": True,
+            "osint_messages": [AIMessage(content="### OSINT Summary\nFound IPs.")],
+        }
 
     @patch("fackel.agents.orchestrator.streaming.emit")
     @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_returns_phase_evaluation(
-        self,
-        mock_build: MagicMock,
-        mock_eval: MagicMock,
-        _mock_emit: MagicMock,
+        self, mock_build: MagicMock, mock_eval: MagicMock, _mock_emit: MagicMock
     ) -> None:
-        from langchain_core.messages import AIMessage
+        from fackel.agents.orchestrator.nodes import osint_collect_node
 
-        from fackel.agents.orchestrator.nodes import osint_node
+        mock_build.return_value = MagicMock()
+        mock_eval.return_value = self._make_eval("complete", 0.8)
 
-        mock_agent = MagicMock()
-        mock_agent.checkpointer = None
-        mock_agent.stream.return_value = iter(
-            [
-                (
-                    "updates",
-                    {"agent": {"messages": [AIMessage(content="### OSINT Summary\nFound IPs.")]}},
-                ),
-            ]
-        )
-        mock_build.return_value = mock_agent
-
-        mock_evaluation = MagicMock()
-        mock_evaluation.completeness = "complete"
-        mock_evaluation.score = 0.8
-        mock_evaluation.recommendation = "proceed"
-        mock_evaluation.model_dump.return_value = {
-            "phase": "osint",
-            "completeness": "complete",
-            "score": 0.8,
-            "recommendation": "proceed",
-        }
-        mock_eval.return_value = mock_evaluation
-
-        state = {"target": "example.com", "active_scan": True}
-        result = osint_node(state, {})
+        result = osint_collect_node(self._state(), {})
 
         assert "phase_evaluations" in result
         assert len(result["phase_evaluations"]) == 1
         assert result["phase_evaluations"][0]["phase"] == "osint"
-
         mock_eval.assert_called_once()
         assert mock_eval.call_args[0][0] == "osint"
 
@@ -273,52 +258,30 @@ class TestOsintNodeLAAJ:
     @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_retries_on_empty_evaluation(
-        self,
-        mock_build: MagicMock,
-        mock_eval: MagicMock,
-        mock_emit: MagicMock,
+        self, mock_build: MagicMock, mock_eval: MagicMock, mock_emit: MagicMock
     ) -> None:
-        from fackel.agents.orchestrator.nodes import osint_node
+        from langchain_core.messages import AIMessage
+
+        from fackel.agents.orchestrator.nodes import osint_collect_node
 
         call_count = 0
 
         def mock_stream(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            from langchain_core.messages import AIMessage
-
-            return iter(
-                [
-                    (
-                        "updates",
-                        {"agent": {"messages": [AIMessage(content="Summary pass.")]}},
-                    ),
-                ]
-            )
+            return iter([("updates", {"agent": {"messages": [AIMessage(content="Retry pass.")]}})])
 
         mock_agent = MagicMock()
         mock_agent.checkpointer = None
         mock_agent.stream.side_effect = mock_stream
         mock_build.return_value = mock_agent
+        mock_eval.return_value = self._make_eval("empty", 0.1)
 
-        mock_evaluation = MagicMock()
-        mock_evaluation.completeness = "empty"
-        mock_evaluation.score = 0.1
-        mock_evaluation.recommendation = "adapt"
-        mock_evaluation.gaps = ["No subdomain enumeration"]
-        mock_evaluation.reasoning = "Only 1 tool was called"
-        mock_evaluation.model_dump.return_value = {
-            "phase": "osint",
-            "completeness": "empty",
-            "score": 0.1,
-        }
-        mock_eval.return_value = mock_evaluation
+        osint_collect_node(self._state(), {})
 
-        state = {"target": "example.com", "active_scan": True}
-        osint_node(state, {})
-
-        assert call_count == 2
-
+        # No store bound in tests, so the pivot loop is a no-op: the only agent
+        # stream is the single self-reflection retry pass.
+        assert call_count == 1
         retry_events = [
             c for c in mock_emit.call_args_list if len(c.args) >= 2 and c.args[1] == "retry"
         ]
@@ -328,132 +291,46 @@ class TestOsintNodeLAAJ:
     @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_no_retry_on_good_quality(
-        self,
-        mock_build: MagicMock,
-        mock_eval: MagicMock,
-        _mock_emit: MagicMock,
+        self, mock_build: MagicMock, mock_eval: MagicMock, _mock_emit: MagicMock
     ) -> None:
-        from langchain_core.messages import AIMessage
-
-        from fackel.agents.orchestrator.nodes import osint_node
-
-        call_count = 0
-
-        def mock_stream(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            return iter(
-                [
-                    (
-                        "updates",
-                        {"agent": {"messages": [AIMessage(content="Rich OSINT findings.")]}},
-                    ),
-                ]
-            )
+        from fackel.agents.orchestrator.nodes import osint_collect_node
 
         mock_agent = MagicMock()
-        mock_agent.checkpointer = None
-        mock_agent.stream.side_effect = mock_stream
+        mock_agent.stream.side_effect = AssertionError("agent should not stream")
         mock_build.return_value = mock_agent
+        mock_eval.return_value = self._make_eval("complete", 0.9)
 
-        mock_evaluation = MagicMock()
-        mock_evaluation.completeness = "complete"
-        mock_evaluation.score = 0.9
-        mock_evaluation.recommendation = "proceed"
-        mock_evaluation.model_dump.return_value = {
-            "phase": "osint",
-            "completeness": "complete",
-            "score": 0.9,
-        }
-        mock_eval.return_value = mock_evaluation
-
-        state = {"target": "example.com", "active_scan": True}
-        osint_node(state, {})
-
-        assert call_count == 1
+        osint_collect_node(self._state(), {})  # no retry, no pivot → no stream
 
     @patch("fackel.agents.orchestrator.streaming.emit")
     @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_no_retry_on_partial_quality(
-        self,
-        mock_build: MagicMock,
-        mock_eval: MagicMock,
-        _mock_emit: MagicMock,
+        self, mock_build: MagicMock, mock_eval: MagicMock, _mock_emit: MagicMock
     ) -> None:
-        from langchain_core.messages import AIMessage
-
-        from fackel.agents.orchestrator.nodes import osint_node
-
-        call_count = 0
-
-        def mock_stream(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            return iter(
-                [
-                    (
-                        "updates",
-                        {"agent": {"messages": [AIMessage(content="Partial findings.")]}},
-                    ),
-                ]
-            )
+        from fackel.agents.orchestrator.nodes import osint_collect_node
 
         mock_agent = MagicMock()
-        mock_agent.checkpointer = None
-        mock_agent.stream.side_effect = mock_stream
+        mock_agent.stream.side_effect = AssertionError("agent should not stream")
         mock_build.return_value = mock_agent
+        mock_eval.return_value = self._make_eval("partial", 0.5)
 
-        mock_evaluation = MagicMock()
-        mock_evaluation.completeness = "partial"
-        mock_evaluation.score = 0.5
-        mock_evaluation.recommendation = "adapt"
-        mock_evaluation.model_dump.return_value = {
-            "phase": "osint",
-            "completeness": "partial",
-            "score": 0.5,
-        }
-        mock_eval.return_value = mock_evaluation
-
-        state = {"target": "example.com", "active_scan": True}
-        osint_node(state, {})
-
-        assert call_count == 1
+        osint_collect_node(self._state(), {})  # partial → no retry
 
     @patch("fackel.agents.orchestrator.streaming.emit")
     @patch("fackel.agents.orchestrator.evaluator.evaluate_phase")
     @patch("fackel.agents.osint.agent.build")
     def test_osint_evaluation_emitted(
-        self,
-        mock_build: MagicMock,
-        mock_eval: MagicMock,
-        mock_emit: MagicMock,
+        self, mock_build: MagicMock, mock_eval: MagicMock, mock_emit: MagicMock
     ) -> None:
-        from langchain_core.messages import AIMessage
+        from fackel.agents.orchestrator.nodes import osint_collect_node
 
-        from fackel.agents.orchestrator.nodes import osint_node
+        mock_build.return_value = MagicMock()
+        ev = self._make_eval("complete", 0.85)
+        ev.model_dump.return_value = {"phase": "osint", "score": 0.85}
+        mock_eval.return_value = ev
 
-        mock_agent = MagicMock()
-        mock_agent.checkpointer = None
-        mock_agent.stream.return_value = iter(
-            [
-                (
-                    "updates",
-                    {"agent": {"messages": [AIMessage(content="Summary.")]}},
-                ),
-            ]
-        )
-        mock_build.return_value = mock_agent
-
-        mock_evaluation = MagicMock()
-        mock_evaluation.completeness = "complete"
-        mock_evaluation.score = 0.85
-        mock_evaluation.recommendation = "proceed"
-        mock_evaluation.model_dump.return_value = {"phase": "osint", "score": 0.85}
-        mock_eval.return_value = mock_evaluation
-
-        state = {"target": "example.com", "active_scan": True}
-        osint_node(state, {})
+        osint_collect_node(self._state(), {})
 
         eval_events = [
             c for c in mock_emit.call_args_list if len(c.args) >= 2 and c.args[1] == "evaluation"

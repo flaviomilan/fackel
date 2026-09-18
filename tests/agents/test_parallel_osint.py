@@ -99,7 +99,12 @@ class TestCollectNode:
         fake_eval = type(
             "E",
             (),
-            {"recommendation": "proceed", "model_dump": lambda self: {"phase": "osint"}},
+            {
+                "recommendation": "proceed",
+                "completeness": "complete",
+                "score": 0.9,
+                "model_dump": lambda self: {"phase": "osint"},
+            },
         )()
         monkeypatch.setattr(osint_mod.evaluator, "evaluate_phase", lambda *a, **k: fake_eval)
         monkeypatch.setattr(osint_mod, "emit_evaluation", lambda *a, **k: None)

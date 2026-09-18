@@ -187,8 +187,6 @@ overridden via a `FACKEL_*` environment variable.
 | `FACKEL_SCAN_TIMEOUT` | `3600` | Global scan timeout in seconds (SIGALRM on POSIX). Set to `0` to disable. Override per-run with `fackel scan --timeout <s>`. |
 | `FACKEL_MAX_AGENT_ITERATIONS` | `50` | Maximum tool calls per agent phase. Set to `0` to disable the limit (also lifts LangGraph's recursion cap). |
 | `FACKEL_MAX_PIVOTS` | `2` | Max entity-driven OSINT pivot passes (`0` disables the agentic pivot loop). |
-| `FACKEL_OSINT_SPECIALISTS` | `true` | Run OSINT as focused specialist sub-agents (narrow toolsets) instead of one 31-tool agent. Set `false` for the single-agent path. |
-| `FACKEL_VULN_SPECIALISTS` | `true` | Run vuln-scan as parallel specialist sub-agents (surface, nuclei, web-injection, app/config, TLS) fanned out via LangGraph `Send`, instead of one monolithic agent. Vuln scanning is **active**: parallel is faster but sends concurrent traffic to the target (more likely to trip WAF/rate-limits). Per-tool HITL approval (`FACKEL_APPROVE_TOOLS`) forces the single-agent path regardless. Set `false` for the single-agent path. |
 | `FACKEL_BUDGET_WARNING_RATIO` | `0.8` | Fraction of budget at which agents receive a warning prompt. |
 
 #### Default LLM model

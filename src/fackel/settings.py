@@ -109,22 +109,6 @@ class Settings:
     Set to ``0`` to disable the agentic pivot loop (one OSINT pass + retry only).
     """
 
-    osint_specialists: bool
-    """``FACKEL_OSINT_SPECIALISTS`` — run OSINT as focused specialist sub-agents
-    (DNS/infra, subdomains, scan-DBs, web/tech, surface, secrets, people) each with
-    a narrow toolset, instead of one monolithic 31-tool agent (default ``True``).
-    Set to ``false`` to use the single-agent path."""
-
-    vuln_specialists: bool
-    """``FACKEL_VULN_SPECIALISTS`` — run vuln-scan as parallel specialist sub-agents
-    (surface/discovery, nuclei, web-injection, app/config, TLS) fanned out via
-    LangGraph ``Send``, instead of one monolithic agent (default ``True``).
-
-    Note: vuln scanning is **active** — parallel specialists send concurrent traffic
-    to the target, which is faster but more likely to trip WAF/rate-limits. Per-tool
-    HITL approval (``FACKEL_APPROVE_TOOLS``) forces the sequential single-agent path
-    regardless of this flag. Set to ``false`` to always use the single-agent path."""
-
     budget_warning_ratio: float
     """``FACKEL_BUDGET_WARNING_RATIO`` — warn agent at this fraction of budget (default 0.8)."""
 
@@ -233,8 +217,6 @@ def _load_settings() -> Settings:
         scan_timeout=_env_int("FACKEL_SCAN_TIMEOUT", 3600),
         max_agent_iterations=_env_int("FACKEL_MAX_AGENT_ITERATIONS", 50),
         max_pivots=_env_int("FACKEL_MAX_PIVOTS", 2),
-        osint_specialists=_env_bool("FACKEL_OSINT_SPECIALISTS", True),
-        vuln_specialists=_env_bool("FACKEL_VULN_SPECIALISTS", True),
         budget_warning_ratio=_env_float("FACKEL_BUDGET_WARNING_RATIO", 0.8),
         # LLM provider
         default_model=_env_str("FACKEL_DEFAULT_MODEL", "gpt-5-mini"),

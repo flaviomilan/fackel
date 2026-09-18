@@ -8,9 +8,6 @@ TLS configurations, and identify WAF protections.
 
 from __future__ import annotations
 
-from langgraph.graph.state import CompiledStateGraph
-
-from fackel.agents.config import build_react_agent
 from fackel.tools.scanning.feroxbuster_tool import feroxbuster_scan
 from fackel.tools.scanning.ffuf_tool import ffuf_scan
 from fackel.tools.scanning.graphql_scanner import graphql_scan
@@ -54,8 +51,8 @@ TOOLS = [
 ]
 
 
-# Supplementary prompt sections composed onto the vuln-scan skill — shared by the
-# monolithic agent and the parallel specialists (see ``specialists.py``).
+# Supplementary prompt sections composed onto the vuln-scan skill — shared by
+# every vuln specialist (see ``specialists.py`` and the sequential HITL path).
 _VULN_PROMPT_SECTIONS: tuple[str, ...] = (
     "tools/vuln_scanning",
     "tools/security_headers",
@@ -72,29 +69,3 @@ _VULN_PROMPT_SECTIONS: tuple[str, ...] = (
     "contracts/httpx",
     "strategy/error_resilience",
 )
-
-
-def build(
-    model_name: str | None = None,
-    *,
-    approve_tools: bool = False,
-) -> CompiledStateGraph:  # type: ignore[type-arg]
-    """Return a compiled ReAct vulnerability scan agent.
-
-    Parameters
-    ----------
-    approve_tools:
-        When ``True``, wraps active scanning tools with
-        ``HumanInTheLoopMiddleware`` so each tool call requires explicit
-        human approval before execution.
-    """
-    agent = build_react_agent(
-        "vuln_scan",
-        TOOLS,
-        *_VULN_PROMPT_SECTIONS,
-        approve_tools=approve_tools,
-        model_name=model_name,
-    )
-    if agent is None:  # pragma: no cover - phase tools are always available
-        raise RuntimeError("agent build returned no agent (no tools available)")
-    return agent

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import signal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -24,7 +24,6 @@ from fackel.agents.orchestrator.nodes._helpers import (
     _safe_for_prompt,
     build_retry_prompt,
 )
-from fackel.agents.orchestrator.nodes.vuln_scan import _run_vuln_scan_with_retry
 from fackel.formatting import find_evaluation
 
 
@@ -36,51 +35,29 @@ def _reset_streaming():
 
 
 # ---------------------------------------------------------------------------
-# B2 — find_evaluation must return the most recent entry after a retry.
+# B2 — find_evaluation must return the most recent entry when a phase appended
+# more than one evaluation (e.g. an initial pass followed by a retry pass).
 # ---------------------------------------------------------------------------
 
 
 class TestPhaseEvaluationsLatestWins:
-    def _make_eval(self, completeness: str, score: float):
-        ev = MagicMock()
-        ev.completeness = completeness
-        ev.score = score
-        ev.gaps = ["gap"] if completeness == "empty" else []
-        ev.reasoning = "r"
-        ev.model_dump.return_value = {
+    @staticmethod
+    def _dump(completeness: str, score: float) -> dict:
+        return {
             "phase": "vuln_scan",
             "completeness": completeness,
             "score": score,
-            "gaps": ev.gaps,
+            "gaps": ["gap"] if completeness == "empty" else [],
             "reasoning": "r",
         }
-        return ev
 
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.emit_evaluation")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.streaming")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.agent_summary", return_value="s")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.run_and_stream_agent", return_value=[])
-    @patch(
-        "fackel.agents.orchestrator.nodes.vuln_scan._load_retry_guidance",
-        return_value=("loop", "approach"),
-    )
-    def test_find_evaluation_returns_latest_after_retry(
-        self, _g, _r, _s, mock_eval_mod, _stream, _emit
-    ):
-        first = self._make_eval("empty", 0.1)
-        second = self._make_eval("partial", 0.6)
-        mock_eval_mod.evaluate_phase.side_effect = [first, second]
-
-        _msgs, final = _run_vuln_scan_with_retry(MagicMock(), "example.com", [], [], {}, "p", {})
-
-        # Simulate how the reducer would accumulate both dumps in state.
-        evaluations = [first.model_dump(), second.model_dump()]
+    def test_find_evaluation_returns_latest_of_appended_entries(self):
+        # The append-only phase_evaluations channel accumulates both dumps.
+        evaluations = [self._dump("empty", 0.1), self._dump("partial", 0.6)]
         latest = find_evaluation(evaluations, "vuln_scan")
         assert latest is not None
         assert latest["completeness"] == "partial"
         assert latest["score"] == 0.6
-        assert final.completeness == "partial"
 
 
 # ---------------------------------------------------------------------------
