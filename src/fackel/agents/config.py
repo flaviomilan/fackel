@@ -19,10 +19,12 @@ Middleware stack (applied to every ReAct agent):
 
 from __future__ import annotations
 
+import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, cast
 
+from langchain.agents import create_agent
 from langchain.agents.middleware import (
     ClearToolUsesEdit,
     ContextEditingMiddleware,
@@ -38,9 +40,16 @@ from langchain.agents.middleware.types import (
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import ToolMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.state import CompiledStateGraph
 
+from fackel.prompts import compose_prompt
+from fackel.provider_keys import filter_tools
 from fackel.settings import get_settings
+from fackel.tooling import available_binaries
 from fackel.tooling.output_sanitizer import sanitize_tool_output
+
+logger = logging.getLogger(__name__)
 
 # Only genuinely transient, network-level failures are retried.  Bare
 # ``OSError`` is deliberately excluded: ``ConnectionError`` and ``TimeoutError``
@@ -253,7 +262,7 @@ def default_middleware(
     4. ``ContextEditingMiddleware`` *(compact profile only)* — clears
        older tool results when the accumulated context approaches the
        8K-token cap of the GitHub Models free tier.
-    4. ``HumanInTheLoopMiddleware`` *(opt-in)* — when *approve_tools* is
+    5. ``HumanInTheLoopMiddleware`` *(opt-in)* — when *approve_tools* is
        ``True``, interrupts before each active scanning tool call so the
        operator can approve, edit, or reject it.
 
@@ -304,6 +313,60 @@ def default_middleware(
             )
         )
     return mw
+
+
+def build_react_agent(
+    phase: str,
+    tools: Sequence[Any],
+    *extras: str,
+    name: str | None = None,
+    approve_tools: bool = False,
+    model_name: str | None = None,
+    require_tools: bool = False,
+    log_skips: bool = True,
+) -> CompiledStateGraph | None:  # type: ignore[type-arg]
+    """Build a compiled ReAct agent — the shared builder for every phase.
+
+    Absorbs the per-builder incantation: API-key / binary gating (with the
+    standard skip-logging), model construction, the shared middleware stack,
+    and the checkpointer that per-tool HITL approval requires.
+
+    Parameters
+    ----------
+    phase:
+        Logical phase name — used to resolve the model (``FACKEL_MODEL_{PHASE}``)
+        and the skill prompt (``compose_prompt(phase, *extras)``).
+    tools:
+        Candidate tools; those whose API key or binary is unavailable are dropped.
+    extras:
+        Supplementary prompt sections appended to the skill prompt.
+    name:
+        Agent name (defaults to *phase*). Specialists pass ``f"{phase}_{focus}"``.
+    approve_tools:
+        Enable per-tool HITL approval (adds the middleware + a ``MemorySaver``).
+    require_tools:
+        When ``True``, return ``None`` if no tool survived gating (specialist path).
+    log_skips:
+        Emit an ``info`` log for each gated-out tool (monolithic/port-scan path).
+    """
+    available, skipped = filter_tools(list(tools))
+    available, missing_bins = available_binaries(available)
+    if log_skips:
+        for tool_name, provider, _vars in skipped:
+            logger.info("%s: skipping tool %s (%s key not configured)", phase, tool_name, provider)
+        for tool_name, binary in missing_bins:
+            logger.info("%s: skipping tool %s (binary %s not in PATH)", phase, tool_name, binary)
+    if require_tools and not available:
+        return None
+    llm = build_llm(phase, model_name=model_name)
+    return create_agent(
+        llm,
+        available,
+        system_prompt=compose_prompt(phase, *extras),
+        middleware=default_middleware(approve_tools=approve_tools),
+        checkpointer=MemorySaver() if approve_tools else None,
+        name=name or phase,
+    )
 
 
 class ParallelToolCalls(AgentMiddleware):

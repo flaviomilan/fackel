@@ -6,19 +6,11 @@ Current MVP tools: naabu_scan (fast discovery), nmap_port_scan (deep analysis).
 
 from __future__ import annotations
 
-import logging
-
-from langchain.agents import create_agent
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
-from fackel.agents.config import build_llm, default_middleware
-from fackel.prompts import compose_prompt
-from fackel.tooling import available_binaries
+from fackel.agents.config import build_react_agent
 from fackel.tools.scanning.naabu_tool import naabu_scan
 from fackel.tools.scanning.nmap_scanner import nmap_port_scan
-
-logger = logging.getLogger(__name__)
 
 TOOLS = [naabu_scan, nmap_port_scan]
 
@@ -37,19 +29,14 @@ def build(
         ``HumanInTheLoopMiddleware`` so each tool call requires explicit
         human approval before execution.
     """
-    available, missing_bins = available_binaries(TOOLS)
-    for name, binary in missing_bins:
-        logger.info("port_scan: skipping tool %s (binary %s not in PATH)", name, binary)
-    llm = build_llm("port_scan", model_name=model_name)
-    return create_agent(
-        llm,
-        available,
-        system_prompt=compose_prompt(
-            "port_scan",
-            "tools/port_scanning",
-            "contracts/nmap",
-        ),
-        middleware=default_middleware(approve_tools=approve_tools),
-        checkpointer=MemorySaver() if approve_tools else None,
-        name="port_scan",
+    agent = build_react_agent(
+        "port_scan",
+        TOOLS,
+        "tools/port_scanning",
+        "contracts/nmap",
+        approve_tools=approve_tools,
+        model_name=model_name,
     )
+    if agent is None:  # pragma: no cover - phase tools are always available
+        raise RuntimeError("agent build returned no agent (no tools available)")
+    return agent

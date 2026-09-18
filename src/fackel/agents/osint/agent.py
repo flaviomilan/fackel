@@ -8,15 +8,10 @@ is not configured (see ``fackel.provider_keys``).
 from __future__ import annotations
 
 import functools
-import logging
 
-from langchain.agents import create_agent
 from langgraph.graph.state import CompiledStateGraph
 
-from fackel.agents.config import build_llm, default_middleware
-from fackel.prompts import compose_prompt
-from fackel.provider_keys import filter_tools
-from fackel.tooling import available_binaries
+from fackel.agents.config import build_react_agent
 from fackel.tools.osint.breach_tool import breach_lookup
 from fackel.tools.osint.document_search import document_search
 from fackel.tools.osint.email_analyzer import analyze_email
@@ -56,8 +51,6 @@ from fackel.tools.recon.virustotal_tool import virustotal_subdomain_enum
 from fackel.tools.recon.whatweb_tool import whatweb_scan
 from fackel.tools.recon.whois import whois_lookup
 from fackel.tools.scanning.httpx_tool import httpx_scan
-
-logger = logging.getLogger(__name__)
 
 TOOLS = [
     dns_resolve,
@@ -113,23 +106,13 @@ def build(model_name: str | None = None) -> CompiledStateGraph:  # type: ignore[
 
     Tools whose provider API key is missing are silently removed so the
     LLM never wastes a call on a tool that would only return an error.
+
+    The OSINT skill is self-contained — playbook, signals/anomalies, and quality
+    bar are folded into ``skills/osint.md``, and per-tool parameter details are
+    already visible to the LLM via each tool's schema — so no supplementary
+    sections are composed, keeping the prompt lean in both profiles.
     """
-    available, skipped = filter_tools(TOOLS)
-    for name, provider, _vars in skipped:
-        logger.info("osint: skipping tool %s (%s key not configured)", name, provider)
-    available, missing_bins = available_binaries(available)
-    for name, binary in missing_bins:
-        logger.info("osint: skipping tool %s (binary %s not in PATH)", name, binary)
-    llm = build_llm("osint", model_name=model_name)
-    return create_agent(
-        llm,
-        available,
-        # The OSINT skill is self-contained — playbook, signals/anomalies, and
-        # quality bar are folded into skills/osint.md, and per-tool parameter
-        # details are already visible to the LLM via each tool's schema. No
-        # supplementary sections are composed, keeping the prompt lean in both
-        # the full and compact profiles.
-        system_prompt=compose_prompt("osint"),
-        middleware=default_middleware(),
-        name="osint",
-    )
+    agent = build_react_agent("osint", TOOLS, model_name=model_name)
+    if agent is None:  # pragma: no cover - phase tools are always available
+        raise RuntimeError("agent build returned no agent (no tools available)")
+    return agent

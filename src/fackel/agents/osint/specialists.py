@@ -14,38 +14,21 @@ domain's tools, and its task message restricts it to that domain.
 from __future__ import annotations
 
 import functools
-import logging
-from dataclasses import dataclass
 from typing import Any
 
-from langchain.agents import create_agent
-
-from fackel.agents.config import build_llm, default_middleware
+from fackel.agents._specialist import Specialist, specialist_task
+from fackel.agents.config import build_react_agent
 from fackel.agents.osint.agent import TOOLS as _OSINT_TOOLS
-from fackel.prompts import compose_prompt
-from fackel.provider_keys import filter_tools
-from fackel.tooling import available_binaries
-
-logger = logging.getLogger(__name__)
 
 _BY_NAME: dict[str, Any] = {getattr(t, "name", ""): t for t in _OSINT_TOOLS}
 
 
-@dataclass(frozen=True)
-class Specialist:
-    """A focused OSINT sub-agent: a domain, a task focus, and its tools."""
-
-    name: str
-    focus: str
-    tool_names: tuple[str, ...]
-
-    @property
-    def tools(self) -> list[Any]:
-        return [_BY_NAME[n] for n in self.tool_names if n in _BY_NAME]
+def _spec(name: str, focus: str, tool_names: tuple[str, ...]) -> Specialist:
+    return Specialist(name, focus, tool_names, _BY_NAME)
 
 
 SPECIALISTS: list[Specialist] = [
-    Specialist(
+    _spec(
         "dns_infra",
         "DNS resolution, WHOIS, reverse DNS, ASN / IP classification, IP "
         "reputation (scan-noise + abuse), and passive open-port / CVE data per IP",
@@ -61,7 +44,7 @@ SPECIALISTS: list[Specialist] = [
             "dnsx_resolve",
         ),
     ),
-    Specialist(
+    _spec(
         "subdomains",
         "subdomain enumeration from all sources, resolution + wildcard filtering, "
         "takeover detection, and TLS SAN harvesting",
@@ -77,7 +60,7 @@ SPECIALISTS: list[Specialist] = [
             "tlscert_lookup",
         ),
     ),
-    Specialist(
+    _spec(
         "scan_dbs",
         "passive scan databases (Shodan/Censys/FOFA/Netlas) and historical / cached intel",
         (
@@ -90,12 +73,12 @@ SPECIALISTS: list[Specialist] = [
             "otx_passive_dns",
         ),
     ),
-    Specialist(
+    _spec(
         "web_tech",
         "HTTP/TLS fingerprinting and web technology detection",
         ("httpx_scan", "whatweb_scan"),
     ),
-    Specialist(
+    _spec(
         "surface_urls",
         "URL / endpoint / parameter discovery, public document dorking, and "
         "cloud resource enumeration",
@@ -107,17 +90,17 @@ SPECIALISTS: list[Specialist] = [
             "cloudbrute_enum",
         ),
     ),
-    Specialist(
+    _spec(
         "secrets_code",
         "public code discovery and secret/credential exposure",
         ("github_repo_discovery", "trufflehog_scan", "js_secret_scan"),
     ),
-    Specialist(
+    _spec(
         "people",
         "people, email, breach exposure, and organisation intelligence",
         ("hunter_email_search", "analyze_email", "breach_lookup", "job_search"),
     ),
-    Specialist(
+    _spec(
         "social",
         "username and social-account discovery across web platforms (semi-passive; opt-in)",
         ("maigret_scan",),
@@ -137,25 +120,15 @@ def build_specialist(spec: Specialist, model_name: str | None = None) -> Any | N
     binary is unavailable are dropped (same gating as the full OSINT agent); a
     specialist left with no tools is skipped entirely.
     """
-    available, _skipped = filter_tools(spec.tools)
-    available, _missing = available_binaries(available)
-    if not available:
-        return None
-    llm = build_llm("osint", model_name=model_name)
-    return create_agent(
-        llm,
-        available,
-        system_prompt=compose_prompt("osint"),
-        middleware=default_middleware(),
+    return build_react_agent(
+        "osint",
+        spec.tools,
         name=f"osint_{spec.name}",
+        model_name=model_name,
+        require_tools=True,
+        log_skips=False,
     )
 
 
 def _specialist_task(spec: Specialist, target: str) -> str:
-    return (
-        f"You are the **{spec.name}** OSINT specialist for the target: {target}.\n"
-        f"Focus exclusively on: {spec.focus}.\n"
-        "Use only your available tools (do not attempt anything outside your "
-        "domain), be thorough, then produce a concise structured summary of your "
-        "findings."
-    )
+    return specialist_task(spec.name, spec.focus, "OSINT", target=target)

@@ -8,16 +8,9 @@ TLS configurations, and identify WAF protections.
 
 from __future__ import annotations
 
-import logging
-
-from langchain.agents import create_agent
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
-from fackel.agents.config import build_llm, default_middleware
-from fackel.prompts import compose_prompt
-from fackel.provider_keys import filter_tools
-from fackel.tooling import available_binaries
+from fackel.agents.config import build_react_agent
 from fackel.tools.scanning.feroxbuster_tool import feroxbuster_scan
 from fackel.tools.scanning.ffuf_tool import ffuf_scan
 from fackel.tools.scanning.graphql_scanner import graphql_scan
@@ -37,8 +30,6 @@ from fackel.tools.vuln.ssti_tool import ssti_scan
 from fackel.tools.vuln.testssl_tool import testssl_scan
 from fackel.tools.vuln.webpage_extractor import extract_webpage_content
 from fackel.tools.vuln.wpscan_tool import wpscan_scan
-
-logger = logging.getLogger(__name__)
 
 TOOLS = [
     nuclei_scan,
@@ -97,18 +88,13 @@ def build(
         ``HumanInTheLoopMiddleware`` so each tool call requires explicit
         human approval before execution.
     """
-    available, skipped = filter_tools(TOOLS)
-    for name, provider, _vars in skipped:
-        logger.info("vuln_scan: skipping tool %s (%s key not configured)", name, provider)
-    available, missing_bins = available_binaries(available)
-    for name, binary in missing_bins:
-        logger.info("vuln_scan: skipping tool %s (binary %s not in PATH)", name, binary)
-    llm = build_llm("vuln_scan", model_name=model_name)
-    return create_agent(
-        llm,
-        available,
-        system_prompt=compose_prompt("vuln_scan", *_VULN_PROMPT_SECTIONS),
-        middleware=default_middleware(approve_tools=approve_tools),
-        checkpointer=MemorySaver() if approve_tools else None,
-        name="vuln_scan",
+    agent = build_react_agent(
+        "vuln_scan",
+        TOOLS,
+        *_VULN_PROMPT_SECTIONS,
+        approve_tools=approve_tools,
+        model_name=model_name,
     )
+    if agent is None:  # pragma: no cover - phase tools are always available
+        raise RuntimeError("agent build returned no agent (no tools available)")
+    return agent
