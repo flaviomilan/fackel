@@ -1,15 +1,15 @@
 """Standardised input-validation rails for tool wrappers.
 
 Every tool that receives a *target* parameter should call
-:func:`guard_target` at the top of its body.  The function validates
-and normalises the input, returning either a clean string **or** a
-pre-formatted error dict that the tool can return immediately.
+:func:`guard_target` at the top of its body.  The function validates and
+normalises the input, returning the clean string, or **raising**
+``ToolException`` when the target is invalid or out of scope (the ``@fackel_tool``
+decorator sets ``handle_tool_error`` so that surfaces to the LLM as an
+observation).
 
 Usage inside a tool::
 
-    target, err = guard_target(target, "my_tool", TargetType.DOMAIN)
-    if err:
-        return err
+    target = guard_target(target, "my_tool", TargetType.DOMAIN)
     # ... proceed with *target* (already stripped / normalised)
 
 Available target types:

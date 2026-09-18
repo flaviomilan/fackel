@@ -7,7 +7,7 @@ Findings are structured dicts (not free-text) so downstream consumers
 from __future__ import annotations
 
 from operator import add
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, NotRequired
 
 from typing_extensions import TypedDict
 
@@ -69,7 +69,7 @@ def merge_findings(old: list[Finding], new: list[Finding]) -> list[Finding]:
 
 
 class ScanState(TypedDict):
-    scan_id: str
+    scan_id: NotRequired[str]
     """Scan correlation id; set on the result by ``run`` (not an input channel)."""
 
     target: str
