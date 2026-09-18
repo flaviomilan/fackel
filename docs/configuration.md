@@ -14,7 +14,7 @@ model selection, API keys, CLI options, and infrastructure setup.
   - [Tool timeouts](#tool-timeouts)
   - [Operational settings](#operational-settings)
   - [Checkpointer](#checkpointer)
-  - [Infrastructure (MongoDB)](#infrastructure-mongodb)
+  - [Persistence (file-based JSONL store)](#persistence-file-based-jsonl-store)
   - [Observability — LangSmith tracing](#observability--langsmith-tracing)
 - [CLI options](#cli-options)
 - [Provider key gating](#provider-key-gating)
@@ -262,19 +262,13 @@ overridden via a `FACKEL_*` environment variable.
 |----------|---------|-------------|
 | `FACKEL_CHECKPOINT_DB` | `~/.fackel/checkpoints.db` | SQLite path for graph state persistence. Used by `SqliteSaver` to enable interrupt/resume. |
 
-### Infrastructure (MongoDB)
+### Persistence (file-based JSONL store)
 
-Optional — for scan persistence when MongoDB is available:
+Scans persist to a file-based JSONL store — no database or extra service required.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MONGO_URI` | `mongodb://fackel:fackelpass@localhost:27017/fackel?authSource=admin` | MongoDB connection URI |
-| `MONGO_DB_NAME` | `fackel` | Database name |
-| `MONGO_USERNAME` | `fackel` | MongoDB user |
-| `MONGO_PASSWORD` | `fackelpass` | MongoDB password |
-
-> **Security note:** Replace default credentials with strong secrets in
-> production.
+| `FACKEL_DATA_DIR` | `~/.fackel/data` | Root directory for per-scan JSONL stores. Each scan owns a subdirectory with append-only `executions.jsonl`, `records.jsonl`, `timeline.jsonl`, and `edges.jsonl`. Read back by `fackel scans` / `diff` / `graph` / `ask`. |
 
 ### Observability — LangSmith tracing
 
@@ -398,16 +392,14 @@ return "API key not configured" errors.
 
 ---
 
-## Infrastructure — Docker Compose (optional)
+## Persistence storage
 
-A `docker-compose.yml` can be added to provide MongoDB for scan persistence.
+No external service is needed. Scans are written to `FACKEL_DATA_DIR` (default
+`~/.fackel/data`) as append-only JSONL files, one file per concept per scan. To relocate
+the store (e.g. onto a mounted volume in Docker), set `FACKEL_DATA_DIR`:
 
 ```bash
-# Start MongoDB
-docker compose up -d mongodb
-
-# Override credentials
-MONGO_PASSWORD=secure_password docker compose up -d
+FACKEL_DATA_DIR=/data/fackel fackel scan example.com
 ```
 
 All containers should bind to `127.0.0.1` to prevent external access.
@@ -451,8 +443,8 @@ EMAILREP_API_KEY=...
 # Checkpointer (optional)
 # FACKEL_CHECKPOINT_DB=~/.fackel/checkpoints.db
 
-# Infrastructure (optional)
-# MONGO_URI=mongodb://fackel:fackelpass@localhost:27017/fackel?authSource=admin
+# Persistence (optional)
+# FACKEL_DATA_DIR=~/.fackel/data
 ```
 
 ---

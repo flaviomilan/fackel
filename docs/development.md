@@ -540,17 +540,19 @@ branch = true
 
 ## Persistence rules
 
-When working with MongoDB or any persistence layer:
+Persistence is a file-based JSONL store (`InformationStore` in
+`src/fackel/persistence/store.py`) — one append-only file per concept per scan under
+`FACKEL_DATA_DIR`. When working with it:
 
 | Rule | Detail |
 |------|--------|
-| One collection per concept | Each domain concept gets its own collection |
-| No polymorphic documents | Don't store mixed types in one collection |
-| No deep nesting | Prefer references over embedded documents |
+| One file per concept | Each domain concept gets its own JSONL file (`records`, `edges`, `timeline`, `executions`) |
+| No polymorphic records | Don't store mixed types in one file |
+| No deep nesting | Keep record `attributes` flat |
 | Append-only history | **Never** update or delete historical records |
-| Status changes → timeline | Changes create events, not overwrites |
-| Fingerprint deduplication | Always use `Fingerprint`, never tool name or execution ID |
-| Idempotent operations | Safe for concurrent writes |
+| Status changes → timeline | Changes create `TimelineEvent`s, not overwrites |
+| Fingerprint deduplication | Always use `fingerprint`, never tool name or execution ID |
+| Idempotent operations | Single writer per scan (one scan per process) |
 
 ---
 
