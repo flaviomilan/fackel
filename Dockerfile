@@ -5,7 +5,7 @@
 #
 # Usage:
 #   docker build -t fackel .
-#   docker run --rm --env-file .env fackel example.com
+#   docker run --rm --env-file .env fackel scan example.com
 #
 # Minimal build (core tools only — nmap, subfinder, naabu, nuclei, httpx, katana):
 #   docker build --build-arg INSTALL_MODE=minimal -t fackel:minimal .
@@ -81,7 +81,7 @@ ARG INSTALL_MODE
 
 LABEL maintainer="Fackel Team" \
       description="Fackel — Autonomous OSINT and security intelligence agent" \
-      org.opencontainers.image.source="https://github.com/fackel-team/fackel"
+      org.opencontainers.image.source="https://github.com/flaviomilan/fackel"
 
 # Prevent Python from writing .pyc and enable unbuffered output
 ENV PYTHONDONTWRITEBYTECODE=1 \

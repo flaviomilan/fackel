@@ -80,7 +80,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Mypy
-        run: uv run mypy src/fackel/
+        run: uv run mypy src/
 
   # ── Tests ────────────────────────────────────────────────────────────────
   test:

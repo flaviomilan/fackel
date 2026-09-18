@@ -19,7 +19,7 @@ format:
 
 ## Type check
 typecheck:
-	uv run mypy src/fackel/
+	uv run mypy src/
 
 ## Run tests (excluding integration)
 test:
