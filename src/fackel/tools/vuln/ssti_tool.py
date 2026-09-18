@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -51,7 +52,7 @@ class SstiScanInput(BaseModel):
     )
 
 
-@tool(args_schema=SstiScanInput)
+@fackel_tool(args_schema=SstiScanInput)
 def ssti_scan(target: str, severity: str = "") -> dict[str, Any]:
     """Scan for Server-Side Template Injection (SSTI) vulnerabilities.
 
@@ -121,6 +122,3 @@ def ssti_scan(target: str, severity: str = "") -> dict[str, Any]:
         "ok",
         data={"total": len(findings), "findings": findings},
     )
-
-
-ssti_scan.handle_tool_error = True

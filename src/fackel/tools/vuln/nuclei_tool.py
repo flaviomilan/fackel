@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -58,7 +59,7 @@ class NucleiInput(BaseModel):
     )
 
 
-@tool(args_schema=NucleiInput)
+@fackel_tool(args_schema=NucleiInput)
 def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, Any]:
     """Scan for vulnerabilities, misconfigurations, and technologies using
     Nuclei's community-maintained template engine.
@@ -128,6 +129,3 @@ def nuclei_scan(target: str, severity: str = "", tags: str = "") -> dict[str, An
         "ok",
         data={"total": len(findings), "findings": findings},
     )
-
-
-nuclei_scan.handle_tool_error = True

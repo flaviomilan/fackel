@@ -15,10 +15,10 @@ import re
 from typing import Any
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import format_tool_output, get_tool_timeout, require_env
+from fackel.tooling import fackel_tool, format_tool_output, get_tool_timeout, require_env
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -40,7 +40,7 @@ class BreachLookupInput(BaseModel):
     )
 
 
-@tool(args_schema=BreachLookupInput)
+@fackel_tool(args_schema=BreachLookupInput)
 def breach_lookup(email: str) -> dict[str, Any]:
     """Check an email against the LeakCheck breach database.
 
@@ -96,6 +96,3 @@ def breach_lookup(email: str) -> dict[str, Any]:
         "ok",
         data={"email": email, "found": len(breaches), "breaches": breaches},
     )
-
-
-breach_lookup.handle_tool_error = True

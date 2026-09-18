@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import DDGS, format_tool_output
+from fackel.tooling import DDGS, fackel_tool, format_tool_output
 
 
 class JobSearchInput(BaseModel):
@@ -18,7 +18,7 @@ class JobSearchInput(BaseModel):
     )
 
 
-@tool(args_schema=JobSearchInput)
+@fackel_tool(args_schema=JobSearchInput)
 def job_search(company_name: str) -> dict[str, Any]:
     """Search job postings to identify technologies and systems used by the target organisation.
 
@@ -74,6 +74,3 @@ def job_search(company_name: str) -> dict[str, Any]:
             )
     except Exception as exc:
         raise ToolException(f"job_search: {exc}") from exc
-
-
-job_search.handle_tool_error = True

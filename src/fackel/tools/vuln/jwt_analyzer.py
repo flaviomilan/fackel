@@ -13,10 +13,10 @@ import json
 import time
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import format_tool_output
+from fackel.tooling import fackel_tool, format_tool_output
 
 # Well-known weak secrets used in JWT brute-force attacks.
 _WEAK_SECRETS: tuple[str, ...] = (
@@ -96,7 +96,7 @@ def _check_weak_secret(token: str, header: dict[str, Any]) -> str | None:
     return None
 
 
-@tool(args_schema=JwtAnalyzerInput)
+@fackel_tool(args_schema=JwtAnalyzerInput)
 def jwt_analyzer(token: str) -> dict[str, Any]:
     """Decode and analyse a JWT token for security weaknesses.
 
@@ -255,6 +255,3 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
         data["message"] = "no security issues detected in JWT"
 
     return format_tool_output("jwt_analyzer", "jwt_token", "ok", data=data)
-
-
-jwt_analyzer.handle_tool_error = True

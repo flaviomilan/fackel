@@ -12,11 +12,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -43,7 +44,7 @@ class HunterInput(BaseModel):
     )
 
 
-@tool(args_schema=HunterInput)
+@fackel_tool(args_schema=HunterInput)
 def hunter_email_search(domain: str) -> dict[str, Any]:
     """Discover a domain's email addresses and contacts via Hunter.io.
 
@@ -100,6 +101,3 @@ def hunter_email_search(domain: str) -> dict[str, Any]:
             "count": len(emails),
         },
     )
-
-
-hunter_email_search.handle_tool_error = True

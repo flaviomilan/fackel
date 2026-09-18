@@ -11,12 +11,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -40,7 +41,7 @@ class CorsyInput(BaseModel):
     )
 
 
-@tool(args_schema=CorsyInput)
+@fackel_tool(args_schema=CorsyInput)
 def corsy_scan(target: str) -> dict[str, Any]:
     """Test a URL for CORS misconfigurations.
 
@@ -138,6 +139,3 @@ def corsy_scan(target: str) -> dict[str, Any]:
             "findings": findings,
         },
     )
-
-
-corsy_scan.handle_tool_error = True

@@ -12,10 +12,15 @@ import logging
 from typing import Any
 
 import requests
-from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_request_target, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    guard_request_target,
+    guard_target,
+)
 from fackel.tooling.http_client import get_session
 
 logger = logging.getLogger(__name__)
@@ -48,7 +53,7 @@ class GraphqlInput(BaseModel):
     )
 
 
-@tool(args_schema=GraphqlInput)
+@fackel_tool(args_schema=GraphqlInput)
 def graphql_scan(url: str) -> dict[str, Any]:
     """Scan a GraphQL endpoint for security misconfigurations.
 
@@ -98,9 +103,6 @@ def graphql_scan(url: str) -> dict[str, Any]:
             "total_issues": len(issues),
         },
     )
-
-
-graphql_scan.handle_tool_error = True
 
 
 def _probe_introspection(

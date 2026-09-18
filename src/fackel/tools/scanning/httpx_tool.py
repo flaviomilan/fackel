@@ -5,11 +5,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -79,7 +80,7 @@ class HttpxInput(BaseModel):
     )
 
 
-@tool(args_schema=HttpxInput)
+@fackel_tool(args_schema=HttpxInput)
 def httpx_scan(
     domain: str,
     ports: str = "",
@@ -129,6 +130,3 @@ def httpx_scan(
         )
 
     return format_tool_output("httpx_scan", domain, "ok", data={"results": results})
-
-
-httpx_scan.handle_tool_error = True

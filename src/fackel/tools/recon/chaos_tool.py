@@ -13,11 +13,12 @@ from __future__ import annotations
 from typing import Any
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -43,7 +44,7 @@ class ChaosInput(BaseModel):
     )
 
 
-@tool(args_schema=ChaosInput)
+@fackel_tool(args_schema=ChaosInput)
 def chaos_enum(domain: str) -> dict[str, Any]:
     """Enumerate a domain's subdomains from the ProjectDiscovery Chaos dataset.
 
@@ -90,6 +91,3 @@ def chaos_enum(domain: str) -> dict[str, Any]:
         "ok",
         data={"domain": base, "subdomains": subdomains, "count": len(subdomains)},
     )
-
-
-chaos_enum.handle_tool_error = True

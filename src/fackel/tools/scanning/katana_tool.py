@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -33,7 +34,7 @@ class KatanaInput(BaseModel):
     )
 
 
-@tool(args_schema=KatanaInput)
+@fackel_tool(args_schema=KatanaInput)
 def katana_crawl(target: str) -> dict[str, Any]:
     """Crawl a web target to discover URLs, endpoints, and JavaScript routes.
 
@@ -88,6 +89,3 @@ def katana_crawl(target: str) -> dict[str, Any]:
         "ok",
         data={"urls": sorted(set(urls))},
     )
-
-
-katana_crawl.handle_tool_error = True

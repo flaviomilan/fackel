@@ -8,10 +8,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+)
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -31,7 +37,7 @@ class IpInfoInput(BaseModel):
     )
 
 
-@tool(args_schema=IpInfoInput)
+@fackel_tool(args_schema=IpInfoInput)
 def ipinfo_lookup(ip: str) -> dict[str, Any]:
     """Look up IP geolocation, ASN, and organisation via ipinfo.io.
 
@@ -83,6 +89,3 @@ def ipinfo_lookup(ip: str) -> dict[str, Any]:
             "anycast": data.get("anycast", False),
         },
     )
-
-
-ipinfo_lookup.handle_tool_error = True

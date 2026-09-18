@@ -14,10 +14,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import DDGS, TargetType, format_tool_output, guard_target
+from fackel.tooling import DDGS, TargetType, fackel_tool, format_tool_output, guard_target
 
 # Document extensions worth surfacing, ordered by intel value.
 _FILETYPES: tuple[str, ...] = ("pdf", "docx", "xlsx", "pptx", "doc", "xls", "ppt", "csv", "txt")
@@ -38,7 +38,7 @@ class DocumentSearchInput(BaseModel):
     )
 
 
-@tool(args_schema=DocumentSearchInput)
+@fackel_tool(args_schema=DocumentSearchInput)
 def document_search(domain: str) -> dict[str, Any]:
     """Discover a domain's publicly indexed documents via search-engine dorking.
 
@@ -95,6 +95,3 @@ def document_search(domain: str) -> dict[str, Any]:
         "ok",
         data={"domain": domain, "documents": documents, "count": len(documents)},
     )
-
-
-document_search.handle_tool_error = True

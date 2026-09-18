@@ -10,12 +10,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -42,7 +43,7 @@ class LinkFinderInput(BaseModel):
     )
 
 
-@tool(args_schema=LinkFinderInput)
+@fackel_tool(args_schema=LinkFinderInput)
 def linkfinder_extract(target: str) -> dict[str, Any]:
     """Extract API endpoints and paths from JavaScript files.
 
@@ -114,6 +115,3 @@ def linkfinder_extract(target: str) -> dict[str, Any]:
             "total": len(endpoints),
         },
     )
-
-
-linkfinder_extract.handle_tool_error = True

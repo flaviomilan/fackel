@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -41,7 +42,7 @@ class Wafw00fInput(BaseModel):
     )
 
 
-@tool(args_schema=Wafw00fInput)
+@fackel_tool(args_schema=Wafw00fInput)
 def wafw00f_detect(
     target: str,
     check_all: bool = False,
@@ -91,6 +92,3 @@ def wafw00f_detect(
             "manufacturer": data.get("manufacturer"),
         },
     )
-
-
-wafw00f_detect.handle_tool_error = True

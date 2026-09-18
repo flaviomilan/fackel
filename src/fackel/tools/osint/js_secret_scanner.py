@@ -12,12 +12,13 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_request_target,
@@ -254,7 +255,7 @@ def _scan_content(
     return results
 
 
-@tool(args_schema=JsSecretScannerInput)
+@fackel_tool(args_schema=JsSecretScannerInput)
 def js_secret_scan(target: str) -> dict[str, Any]:
     """Scan JavaScript files for leaked secrets, API keys, and tokens.
 
@@ -318,6 +319,3 @@ def js_secret_scan(target: str) -> dict[str, Any]:
         data["message"] = "no secrets or sensitive data found in JavaScript files"
 
     return format_tool_output("js_secret_scan", target, "ok", data=data)
-
-
-js_secret_scan.handle_tool_error = True

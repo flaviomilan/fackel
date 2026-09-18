@@ -23,10 +23,10 @@ import tempfile
 from datetime import UTC, datetime
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, fackel_tool, format_tool_output, guard_target
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ def _connect_and_get_cert(
         return None, None, f"TLS connection to {hostname}:{port} failed: {exc}", False
 
 
-@tool(args_schema=TlsCertInput)
+@fackel_tool(args_schema=TlsCertInput)
 def tlscert_lookup(hostname: str, port: int = _DEFAULT_PORT) -> dict[str, Any]:
     """Inspect the TLS certificate of a host.
 
@@ -208,6 +208,3 @@ def tlscert_lookup(hostname: str, port: int = _DEFAULT_PORT) -> dict[str, Any]:
             "verified": verified,
         },
     )
-
-
-tlscert_lookup.handle_tool_error = True

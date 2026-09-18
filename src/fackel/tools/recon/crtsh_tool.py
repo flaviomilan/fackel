@@ -11,10 +11,16 @@ import time
 from typing import Any
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+)
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -62,7 +68,7 @@ def _fetch_crtsh(domain: str) -> requests.Response:
     raise last_exc  # type: ignore[misc]
 
 
-@tool(args_schema=CrtShInput)
+@fackel_tool(args_schema=CrtShInput)
 def crtsh_subdomain_enum(domain: str) -> dict[str, Any]:
     """Enumerate subdomains via Certificate Transparency logs (crt.sh).
 
@@ -111,6 +117,3 @@ def crtsh_subdomain_enum(domain: str) -> dict[str, Any]:
             "subdomains": sorted(subdomains),
         },
     )
-
-
-crtsh_subdomain_enum.handle_tool_error = True

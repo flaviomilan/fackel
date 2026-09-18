@@ -9,11 +9,12 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     parse_jsonl,
@@ -45,7 +46,7 @@ class TrufflehogInput(BaseModel):
     )
 
 
-@tool(args_schema=TrufflehogInput)
+@fackel_tool(args_schema=TrufflehogInput)
 def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
     """Scan a Git repository or GitHub org for leaked secrets.
 
@@ -151,6 +152,3 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
             "findings": findings,
         },
     )
-
-
-trufflehog_scan.handle_tool_error = True

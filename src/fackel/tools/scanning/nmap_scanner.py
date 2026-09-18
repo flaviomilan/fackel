@@ -7,11 +7,12 @@ import re
 from typing import Any
 
 import nmap
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     guard_target,
     require_binary,
@@ -295,7 +296,7 @@ def _build_scan_result(nm: Any, target: str) -> dict[str, Any]:
     return result
 
 
-@tool(args_schema=NmapInput)
+@fackel_tool(args_schema=NmapInput)
 def nmap_port_scan(
     host: str,
     ports: str = "",
@@ -348,6 +349,3 @@ def nmap_port_scan(
         ) from None
     except Exception as e:
         raise ToolException(f"nmap_port_scan: Unexpected error: {e}") from e
-
-
-nmap_port_scan.handle_tool_error = True

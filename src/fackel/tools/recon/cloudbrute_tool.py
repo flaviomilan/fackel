@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     parse_jsonl,
@@ -45,7 +46,7 @@ class CloudBruteInput(BaseModel):
 _VALID_CLOUDS = frozenset({"aws", "azure", "gcp", "digitalocean", ""})
 
 
-@tool(args_schema=CloudBruteInput)
+@fackel_tool(args_schema=CloudBruteInput)
 def cloudbrute_enum(keyword: str, cloud: str = "") -> dict[str, Any]:
     """Enumerate cloud resources (buckets, apps, databases) for a keyword.
 
@@ -127,6 +128,3 @@ def cloudbrute_enum(keyword: str, cloud: str = "") -> dict[str, Any]:
         "ok",
         data={"results": results, "count": len(results)},
     )
-
-
-cloudbrute_enum.handle_tool_error = True

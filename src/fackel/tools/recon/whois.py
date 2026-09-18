@@ -15,10 +15,10 @@ import urllib.request
 from typing import Any
 
 import whois  # type: ignore[import-untyped]
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, fackel_tool, format_tool_output, guard_target
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +193,7 @@ def _build_rdap_data(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@tool(args_schema=WhoisInput)
+@fackel_tool(args_schema=WhoisInput)
 def whois_lookup(domain: str) -> dict[str, Any]:
     """Query WHOIS registration data for a domain.
 
@@ -221,6 +221,3 @@ def whois_lookup(domain: str) -> dict[str, Any]:
         logger.debug("RDAP fallback failed for %s: %s", domain, exc)
 
     raise ToolException(f"whois_lookup: WHOIS and RDAP lookup returned no data for {domain}")
-
-
-whois_lookup.handle_tool_error = True

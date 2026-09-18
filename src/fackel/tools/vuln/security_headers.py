@@ -12,12 +12,13 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_request_target,
@@ -162,7 +163,7 @@ def _check_cors_headers(headers: dict[str, str]) -> list[dict[str, str]]:
     return warnings
 
 
-@tool(args_schema=SecurityHeadersInput)
+@fackel_tool(args_schema=SecurityHeadersInput)
 def security_headers_audit(target: str) -> dict[str, Any]:
     """Audit HTTP security headers of a web target.
 
@@ -317,6 +318,3 @@ def security_headers_audit(target: str) -> dict[str, Any]:
         "ok",
         data=summary,
     )
-
-
-security_headers_audit.handle_tool_error = True

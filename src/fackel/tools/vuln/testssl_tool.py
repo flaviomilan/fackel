@@ -16,11 +16,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -92,7 +93,7 @@ def _parse_severity(finding: dict[str, Any]) -> str:
     return mapping.get(sev, "info")
 
 
-@tool(args_schema=TestSSLInput)
+@fackel_tool(args_schema=TestSSLInput)
 def testssl_scan(
     target: str,
     severity: str = "",
@@ -227,6 +228,3 @@ def testssl_scan(
             },
         },
     )
-
-
-testssl_scan.handle_tool_error = True

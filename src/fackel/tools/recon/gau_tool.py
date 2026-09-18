@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -36,7 +37,7 @@ class GauInput(BaseModel):
     )
 
 
-@tool(args_schema=GauInput)
+@fackel_tool(args_schema=GauInput)
 def gau_urls(target: str) -> dict[str, Any]:
     """Fetch known URLs for a domain from passive historical sources.
 
@@ -78,6 +79,3 @@ def gau_urls(target: str) -> dict[str, Any]:
         "ok",
         data={"urls": urls, "count": len(urls)},
     )
-
-
-gau_urls.handle_tool_error = True

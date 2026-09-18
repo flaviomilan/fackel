@@ -10,11 +10,12 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -45,7 +46,7 @@ class ParamSpiderInput(BaseModel):
     )
 
 
-@tool(args_schema=ParamSpiderInput)
+@fackel_tool(args_schema=ParamSpiderInput)
 def paramspider_crawl(
     target: str,
     exclude: str = "png,jpg,jpeg,gif,svg,css,js,woff,woff2,ico,ttf,eot",
@@ -112,6 +113,3 @@ def paramspider_crawl(
             "unique_params": sorted(param_names),
         },
     )
-
-
-paramspider_crawl.handle_tool_error = True
