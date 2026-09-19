@@ -446,37 +446,10 @@ print(result["report"])
 
 ## Adding new tools
 
-1. Create a new file in `src/tools/` with a `@tool`-decorated function and
-   Pydantic input schema:
-
-```python
-# src/tools/recon/my_tool.py
-from langchain_core.tools import ToolException, tool
-from pydantic import BaseModel, Field
-
-from fackel.tooling import TargetType, format_tool_output, guard_target
-
-
-class MyToolInput(BaseModel):
-    target: str = Field(description="Domain or IP to scan.")
-
-@tool(args_schema=MyToolInput)
-def my_recon_tool(target: str) -> dict:
-    """Describe what this tool does — the LLM reads this docstring."""
-    target = guard_target(target, "my_recon_tool", TargetType.HOST)
-    #  guard_target raises ToolException on invalid input
-
-    # ... implementation ...
-    return format_tool_output("my_recon_tool", target, "success", data=result)
-
-# Enable LangChain error propagation — the LLM sees errors as tool results.
-my_recon_tool.handle_tool_error = True  # type: ignore[attr-defined]
-```
-
-2. Import and add it to the relevant agent's tools list.
-
-3. The LLM will autonomously decide when and how to use it based on
-   its docstring and the agent's system prompt.
+Add a `@fackel_tool` function under `src/fackel/tools/` (Pydantic input schema,
+`guard_target()` on every target) and wire it into the owning agent. The LLM
+decides when to use it from its docstring and the agent's system prompt. The
+step-by-step checklist is in [docs/development.md](docs/development.md#adding-a-new-tool).
 
 See [docs/development.md](docs/development.md) for the full development guide.
 

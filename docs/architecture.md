@@ -88,11 +88,11 @@ phases, and streams events to the CLI.
 | `src/fackel/agents/config.py` | `build_llm()` factory, `get_model()`, `default_middleware()` |
 | `src/fackel/tooling/` | Tool infrastructure: subprocess runner, validators (`ToolException`), sanitizers, env/binary guards, configurable timeouts |
 | `src/fackel/` | Provider key management, report writer |
-| `src/tools/circuit_breaker.py` | Per-service circuit breaker for HTTP APIs |
-| `src/tools/recon/` | Passive reconnaissance (DNS, subdomains, WHOIS, Shodan, Censys, VirusTotal, Amass, WhatWeb, LinkFinder, ParamSpider, Subzy) |
-| `src/tools/osint/` | Open-source intelligence (web search, email, jobs, TruffleHog secret scanning) |
-| `src/tools/scanning/` | Active scanning (port scanning, HTTP probing, crawling, WAF, GraphQL) |
-| `src/tools/vuln/` | Vulnerability assessment (Nuclei, testssl.sh, WPScan, Corsy, webpage extraction) |
+| `src/fackel/tooling/circuit_breaker.py` | Per-service circuit breaker for HTTP APIs |
+| `src/fackel/tools/recon/` | Passive reconnaissance (DNS, subdomains, WHOIS, Shodan, Censys, VirusTotal, Amass, WhatWeb, LinkFinder, ParamSpider, Subzy) |
+| `src/fackel/tools/osint/` | Open-source intelligence (web search, email, jobs, TruffleHog secret scanning) |
+| `src/fackel/tools/scanning/` | Active scanning (port scanning, HTTP probing, crawling, WAF, GraphQL) |
+| `src/fackel/tools/vuln/` | Vulnerability assessment (Nuclei, testssl.sh, WPScan, Corsy, webpage extraction) |
 
 ---
 

@@ -10,21 +10,12 @@ standards, adding tools and agents, testing, linting, and project conventions.
 - [Prerequisites](#prerequisites)
 - [Environment setup](#environment-setup)
 - [Project structure](#project-structure)
-- [Coding standards](#coding-standards)
-  - [SOLID](#solid)
-  - [YAGNI](#yagni)
-  - [DRY](#dry)
-  - [KISS](#kiss)
-- [Code style](#code-style)
-- [Domain glossary](#domain-glossary)
-- [Anti-patterns](#anti-patterns)
+- [Project rules](#project-rules)
 - [Adding a new tool](#adding-a-new-tool)
 - [Adding a new agent](#adding-a-new-agent)
 - [Linting](#linting)
 - [Type checking](#type-checking)
 - [Testing](#testing)
-- [Persistence rules](#persistence-rules)
-- [AI review checklist](#ai-review-checklist)
 
 ---
 
@@ -173,7 +164,7 @@ src/
 
 **Key conventions:**
 
-- One tool per file in `src/tools/{recon,osint,scanning,vuln}/`
+- One tool per file in `src/fackel/tools/{recon,osint,scanning,vuln}/`
 - One agent builder per file in `src/fackel/agents/{osint,port_scan,vuln_scan,triage,report}/`
 - Orchestrator graph logic isolated in `src/fackel/agents/orchestrator/`
 - Tool infrastructure (validators, execution, sanitizers) in `src/fackel/tooling/`
@@ -181,177 +172,33 @@ src/
 
 ---
 
-## Coding standards
+## Project rules
 
-### SOLID
+Coding standards, code style, anti-patterns, the domain glossary, persistence
+rules and the AI review checklist live in a single place:
+[`.github/instructions/`](../.github/instructions/). Read them before changing
+domain, persistence or tool code; they are not repeated here.
 
-- **Single Responsibility** is mandatory. One reason to change per module.
-- Dependencies point inward: `domain → application → infrastructure`.
-- Prefer **composition** over inheritance.
-
-### YAGNI
-
-- Do **not** introduce abstractions for hypothetical future use.
-- No feature flags or configs without a concrete use case.
-- Remove unused code immediately.
-
-### DRY
-
-- Extract shared logic only when duplication is **real and meaningful**.
-- Avoid "generic helpers" with unclear responsibility.
-
-### KISS
-
-- Prefer explicit and readable code.
-- Avoid clever or overly compact implementations.
-- Optimise for understanding, not brevity.
-
----
-
-## Code style
-
-| Rule | Detail |
-|------|--------|
-| Type hints | Required everywhere — strict mypy enforced |
-| Models | Use `dataclasses` or `Pydantic` for structured data |
-| Functions | Small, focused, single purpose |
-| Side effects | Forbidden in domain logic |
-| Timestamps | UTC everywhere |
-| Global state | Forbidden |
-| Naming | Intention-revealing; matches domain glossary |
-| Comments | Comment **WHY**, not **WHAT** — don't state the obvious |
-| Line length | 100 characters (ruff enforced) |
-| Python target | 3.12 |
-
----
-
-## Domain glossary
-
-The project uses a strict ubiquitous language. Always use these terms; **never**
-use the forbidden alternatives.
-
-| Canonical Term | Definition |
-|----------------|------------|
-| `ToolExecution` | A single, immutable execution of a tool. Contains raw output and metadata only. |
-| `ToolOutputTranslator` | Translates raw tool output into normalized `InformationCandidate`s. |
-| `InformationCandidate` | Temporary, non-persisted representation of extracted information. |
-| `InformationType` | Semantic category of information (e.g. `EMAIL`, `IP`, `VULNERABILITY`). |
-| `InformationRecord` | Persisted, deduplicated, normalised fact. |
-| `InformationTimeline` | Append-only history of state changes for an `InformationRecord`. |
-| `Fingerprint` | Stable hash derived from `(InformationType + normalized_value)`. |
-
-### Forbidden terms
-
-Do **not** use these words in code, comments, or documentation:
-
-- ~~Finding~~ → use `InformationRecord`
-- ~~Artifact~~ → use `InformationRecord`
-- ~~Insight~~ → use `InformationRecord`
-- ~~Signal~~ → use `InformationRecord`
-
-> **Note:** The `Finding` model in `state.py` is used in the scan pipeline
-> output. It should be treated as a pipeline concept distinct from the
-> persistence domain glossary.
-
----
-
-## Anti-patterns
-
-### Forbidden
-
-| Pattern | Why |
-|---------|-----|
-| God classes | Violates SRP — split into focused modules |
-| Generic "utils" modules | Unclear responsibility — give helpers a clear owner |
-| Repositories doing business logic | Mix of concerns — keep persistence pure |
-| Tool-specific logic in domain layer | Domain must be infrastructure-agnostic |
-| Flags for hypothetical future use | YAGNI — add when needed |
-| Overuse of inheritance | Prefer composition |
-
-### Red flags
-
-- Classes with more than one reason to change
-- Methods longer than ~30 lines
-- Helper functions without a clear owner
+| Topic | File |
+|-------|------|
+| Architecture and domain model | `project-architecture.instructions.md` |
+| Standards and style | `coding-standards.instructions.md` |
+| Anti-patterns | `anti-patterns.instructions.md` |
+| Ubiquitous language | `domain-glossary.instructions.md` |
+| Persistence | `persistence-rules.instructions.md` |
+| Review checklist | `ai-review-checklist.instructions.md` |
 
 ---
 
 ## Adding a new tool
 
-### 1. Create the tool file
-
-```python
-# src/tools/recon/my_new_tool.py
-from langchain_core.tools import ToolException, tool
-from pydantic import BaseModel, Field
-
-from fackel.tooling import TargetType, format_tool_output, guard_target, run_command
-
-class MyNewToolInput(BaseModel):
-    """Input schema — Pydantic model with Field descriptions."""
-    target: str = Field(description="Target domain or IP")
-    timeout: int = Field(default=30, description="Timeout in seconds")
-
-@tool(args_schema=MyNewToolInput)
-def my_new_tool(target: str, timeout: int = 30) -> str:
-    """One-line description shown to the LLM."""
-    # 1. Validate input (raises ToolException on invalid target)
-    target = guard_target(target, TargetType.DOMAIN)
-
-    # 2. Execute tool logic
-    result = run_command(["my-binary", target, "--timeout", str(timeout)])
-
-    # 3. Return standardised envelope
-    return format_tool_output("my_new_tool", result)
-
-my_new_tool.handle_tool_error = True  # LLM sees clean error messages
-```
-
-**Key patterns:**
-- `guard_target()` **raises** `ToolException` on invalid input (no tuple return).
-- `handle_tool_error = True` as attribute — LangChain converts `ToolException` into a tool message with `status="error"`, so the LLM can retry or adjust.
-- For binary tools, use `require_binary("my-binary", "my_new_tool")` to raise `ToolException` if the binary is missing.
-- For API tools, use `require_env("MY_API_KEY", "my_new_tool")` to raise `ToolException` if the env var is unset.
-- Use `get_tool_timeout("my_new_tool")` instead of hardcoded timeouts — allows override via `FACKEL_TIMEOUT_MY_NEW_TOOL`.
-- For HTTP-based tools, wrap calls in `circuit_breaker("service_name")` to auto-disable flaky APIs after 3 consecutive failures.
-
-### 2. Wire it into an agent
-
-Add the tool to the agent's tool list in the respective agent builder
-(e.g. `src/fackel/agents/osint/agent.py`):
-
-```python
-from fackel.tools.recon.my_new_tool import my_new_tool
-
-tools = [
-    # ... existing tools ...
-    my_new_tool,
-]
-```
-
-### 3. Add provider key gating (if needed)
-
-If the tool requires an API key, add a `ProviderKeySpec` in
-`src/fackel/provider_keys.py`:
-
-```python
-ProviderKeySpec(
-    env_var="MY_API_KEY",
-    tool_names=["my_new_tool"],
-    hard_fail=True,  # True = remove tool when key missing
-)
-```
-
-### Checklist
-
-- [ ] Pydantic `BaseModel` input schema with `Field(description=...)`
-- [ ] `guard_target()` as first line (raises `ToolException` on invalid input)
-- [ ] `handle_tool_error = True` attribute set on the tool function
-- [ ] `format_tool_output()` for return value (standardised envelope)
-- [ ] `get_tool_timeout()` for subprocess timeouts (allows env var override)
-- [ ] Provider key gating if API key needed
-- [ ] Tool added to agent tool list
-- [ ] Tested manually: `uv run python -c "from fackel.tools.recon.my_new_tool import my_new_tool"`
+Follow the wiring checklist in
+[`.claude/skills/adding-a-tool/SKILL.md`](../.claude/skills/adding-a-tool/SKILL.md)
+(tool file, agent list, specialist, binary/API-key gating, prompts, docs, tests).
+Copy the shape of an existing tool rather than a prose template:
+`src/fackel/tools/recon/subzy_tool.py` (binary wrapper) or
+`src/fackel/tools/recon/crtsh_tool.py` (HTTP API with circuit breaker).
+Input rules: [input-validation.md](input-validation.md).
 
 ---
 
@@ -403,7 +250,7 @@ async def my_agent_node(state: ScanState, config: RunnableConfig) -> dict:
 
 Key points:
 - Node functions accept `(state, config: RunnableConfig)` — config carries LangSmith callbacks and metadata.
-- Use `run_and_stream_agent()` from `streaming.py` for consistent streaming and error handling.
+- Use `run_and_stream_agent()` from `fackel.agents.orchestrator.streaming` for consistent streaming and error handling.
 
 ### 3. Wire into the graph
 
@@ -535,43 +382,3 @@ branch = true
 - File naming: `test_<module>.py`
 - Use `pytest` fixtures for setup/teardown
 - Follow the same coding standards as production code
-
----
-
-## Persistence rules
-
-Persistence is a file-based JSONL store (`InformationStore` in
-`src/fackel/persistence/store.py`) — one append-only file per concept per scan under
-`FACKEL_DATA_DIR`. When working with it:
-
-| Rule | Detail |
-|------|--------|
-| One file per concept | Each domain concept gets its own JSONL file (`records`, `edges`, `timeline`, `executions`) |
-| No polymorphic records | Don't store mixed types in one file |
-| No deep nesting | Keep record `attributes` flat |
-| Append-only history | **Never** update or delete historical records |
-| Status changes → timeline | Changes create `TimelineEvent`s, not overwrites |
-| Fingerprint deduplication | Always use `fingerprint`, never tool name or execution ID |
-| Idempotent operations | Single writer per scan (one scan per process) |
-
----
-
-## AI review checklist
-
-Before submitting or approving code changes, verify:
-
-- [ ] Single Responsibility is respected
-- [ ] No speculative abstractions (YAGNI)
-- [ ] No duplicated logic (DRY)
-- [ ] Code is simple and readable (KISS)
-- [ ] Domain logic is infrastructure-agnostic
-- [ ] No historical data mutation
-- [ ] Naming matches domain glossary
-- [ ] Type hints on all functions
-- [ ] `guard_target()` on all tool functions that accept targets
-- [ ] `handle_tool_error = True` attribute on all tool functions
-- [ ] `format_tool_output()` for all tool return values
-- [ ] `build_llm()` for agent model construction (never direct `ChatOpenAI`)
-- [ ] `name` parameter on all `create_agent()` calls
-
-> **If a change does not clearly improve quality, do not make it.**

@@ -191,7 +191,7 @@ Key directories:
 |------|---------|
 | `src/fackel/agents/` | Agent definitions and orchestrator graph |
 | `src/fackel/tooling/` | Tool wrappers, validators, execution helpers |
-| `src/tools/` | LangChain `@tool` implementations |
+| `src/fackel/tools/` | LangChain tool implementations (`@fackel_tool`) |
 | `src/cli/` | Typer CLI interface |
 | `docs/` | Architecture, configuration, development guides |
 | `scripts/` | Installer scripts for external binaries |

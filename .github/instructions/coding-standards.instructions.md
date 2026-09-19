@@ -16,6 +16,9 @@ applyTo: "**/*.py"
 - Prefer dataclasses or Pydantic
 - Avoid magic methods unless necessary
 - No global mutable state
+- Timestamps in UTC everywhere
+- Comment *why*, not *what*
+- Python 3.12, line length 100 (enforced by ruff and strict mypy)
 
 ## Async
 - Explicit async boundaries
