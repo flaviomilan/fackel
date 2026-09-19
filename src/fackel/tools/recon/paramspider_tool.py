@@ -81,7 +81,6 @@ def paramspider_crawl(
 
     urls = sorted({line.strip() for line in out.splitlines() if line.strip()})
 
-    # Extract unique parameter names across all URLs.
     param_names: set[str] = set()
     for url in urls:
         parsed = urlparse(url)

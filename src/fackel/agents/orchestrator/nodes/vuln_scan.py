@@ -25,7 +25,6 @@ from ._helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Loaded once and cached — supplies node-level prompt context.
 _CORRELATION_GUIDANCE: str | None = None
 _DEPTH_ADJUSTMENT_GUIDANCE: str | None = None
 
@@ -63,7 +62,6 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
 
     messages: list[Any] = []
     for spec in VULN_SPECIALISTS:
-        # Fresh HITL agent per specialist (not cached — it carries interrupt state).
         agent = build_react_agent(
             "vuln_scan",
             spec.tools,
@@ -73,7 +71,7 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
             require_tools=True,
             log_skips=False,
         )
-        if agent is None:  # no usable tools (missing keys/binaries)
+        if agent is None:
             continue
         logger.info("vuln_scan: running specialist %s (sequential HITL)", spec.name)
         with streaming.lane(spec.name):
@@ -98,12 +96,6 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
         "findings": [make_finding("vuln_scan", "Vulnerability Scan Findings", summary)],
         "phase_evaluations": [evaluation.model_dump()],
     }
-
-
-# ---------------------------------------------------------------------------
-# Parallel specialist fan-out (idiomatic LangGraph Send map-reduce) — the
-# default path when per-tool HITL approval is off.
-# ---------------------------------------------------------------------------
 
 
 def vuln_dispatch_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
@@ -160,14 +152,12 @@ def vuln_specialist_node(state: dict[str, Any], config: RunnableConfig) -> dict[
     if spec is None:
         return {}
     agent = build_vuln_specialist(spec)
-    if agent is None:  # no usable tools (missing keys/binaries)
+    if agent is None:
         logger.info("vuln_scan: specialist %s skipped (no usable tools)", name)
         return {}
 
     logger.info("vuln_scan: running specialist %s", name)
     task = _vuln_specialist_task(spec, state.get("base_prompt", ""))
-    # Bind a per-agent lane so the renderer can show this specialist in its own
-    # lane instead of interleaving with the others running in parallel.
     with streaming.lane(name):
         streaming.emit("vuln_scan", "lane_start", {"name": name})
         try:

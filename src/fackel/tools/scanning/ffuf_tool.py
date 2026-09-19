@@ -157,7 +157,6 @@ def ffuf_scan(
 
     target = ensure_scheme(target)
 
-    # Append /FUZZ if not present.
     if "FUZZ" not in target:
         target = target.rstrip("/") + "/FUZZ"
 
@@ -168,10 +167,8 @@ def ffuf_scan(
             "or install SecLists: apt install seclists"
         )
 
-    # Clamp threads.
     threads = max(1, min(threads, 50))
 
-    # Validate method.
     method = method.upper()
     valid_methods = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
     if method not in valid_methods:
@@ -193,7 +190,7 @@ def ffuf_scan(
         "json",
         "-o",
         "/dev/stdout",
-        "-s",  # silent mode
+        "-s",
     ]
 
     if extensions:
@@ -228,7 +225,6 @@ def ffuf_scan(
 
     findings: list[dict[str, Any]] = []
 
-    # ffuf -of json writes a single JSON object to stdout.
     _parse_ffuf_json(out, findings)
 
     if not findings:
@@ -263,7 +259,6 @@ def _parse_ffuf_json(output: str, findings: list[dict[str, Any]]) -> None:
     try:
         data = json.loads(output)
     except json.JSONDecodeError:
-        # Try JSONL as fallback.
         for item in parse_jsonl(output):
             _add_ffuf_result(item, findings)
         return

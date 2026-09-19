@@ -38,7 +38,6 @@ def to_json(store: InformationStore) -> dict[str, Any]:
             "type": e.type.value,
         }
         for e in store.all_edges()
-        # Keep only edges whose endpoints are materialised nodes.
         if e.source_fingerprint in labels and e.target_fingerprint in labels
     ]
     return {"scan_id": store.scan_id, "nodes": nodes, "edges": edges}

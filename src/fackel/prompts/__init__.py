@@ -45,7 +45,7 @@ def _resolve_profile(profile: PromptProfile | None) -> PromptProfile:
     if profile is not None:
         return profile
     try:
-        from fackel.settings import get_settings  # local import: avoid cycle
+        from fackel.settings import get_settings
 
         configured = get_settings().prompt_profile
     except Exception:  # pragma: no cover — defensive

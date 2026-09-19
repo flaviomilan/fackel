@@ -33,7 +33,6 @@ def _find_pd_httpx() -> str:
         if real in seen or not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
             continue
         seen.add(real)
-        # Python scripts start with '#!' and contain 'python'.
         try:
             with open(candidate, "rb") as fh:
                 head = fh.read(64)

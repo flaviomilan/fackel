@@ -59,23 +59,19 @@ def trufflehog_scan(target: str, only_verified: bool = True) -> dict[str, Any]:
     if not target:
         raise ToolException("trufflehog_scan: target must not be empty")
 
-    # Normalise to full URL when a bare host path is given.
     target = ensure_scheme(target)
 
     git_hosts = ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org")
 
-    # Determine scan mode from target format.
     parsed = urlparse(target if "://" in target else f"https://{target}")
     hostname = (parsed.hostname or "").lower()
 
     if hostname == "github.com":
         parts = parsed.path.lstrip("/").split("/")
         if len(parts) >= 2:
-            # GitHub repository: use git scan against the repository URL.
             scan_type = "git"
             scan_target = target
         else:
-            # GitHub organization scan.
             scan_type = "github"
             org = parts[0] if parts and parts[0] else ""
             if not org:

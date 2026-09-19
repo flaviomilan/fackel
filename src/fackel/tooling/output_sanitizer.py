@@ -110,12 +110,9 @@ def sanitize_tool_output(
     if max_bytes is None:
         max_bytes = get_settings().sanitizer_max_bytes
 
-    # 1. Strip null bytes and control characters.
     cleaned = _CONTROL_CHAR_RE.sub("", raw)
 
-    # 2. Size limit — truncate oversized outputs (0 disables).
     if max_bytes and len(cleaned.encode("utf-8", errors="replace")) > max_bytes:
-        # Truncate at character boundary that fits within max_bytes.
         encoded = cleaned.encode("utf-8", errors="replace")[:max_bytes]
         cleaned = encoded.decode("utf-8", errors="ignore")
         logger.warning(
@@ -126,7 +123,6 @@ def sanitize_tool_output(
         )
         cleaned += "\n\n[OUTPUT TRUNCATED — original exceeded size limit]"
 
-    # 3. Strip prompt-injection patterns.
     detections: list[str] = []
     for pattern, label in _INJECTION_PATTERNS:
         if pattern.search(cleaned):

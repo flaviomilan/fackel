@@ -18,7 +18,6 @@ from pydantic import BaseModel, Field
 
 from fackel.tooling import fackel_tool, format_tool_output
 
-# Well-known weak secrets used in JWT brute-force attacks.
 _WEAK_SECRETS: tuple[str, ...] = (
     "secret",
     "password",
@@ -115,7 +114,6 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     alg = header.get("alg", "")
 
-    # -- Algorithm checks --
     if alg.lower() == "none" or not alg:
         findings.append(
             {
@@ -140,7 +138,6 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
             }
         )
 
-    # -- Expiration checks --
     now = int(time.time())
     exp = payload.get("exp")
     if exp is None:
@@ -176,7 +173,6 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
             }
         )
 
-    # -- Missing standard claims --
     if "iat" not in payload:
         findings.append(
             {
@@ -196,7 +192,6 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
             }
         )
 
-    # -- Weak secret check (HMAC only) --
     weak = _check_weak_secret(token, header)
     if weak:
         findings.append(
@@ -208,7 +203,6 @@ def jwt_analyzer(token: str) -> dict[str, Any]:
             }
         )
 
-    # -- Dangerous header parameters --
     if "jku" in header:
         findings.append(
             {

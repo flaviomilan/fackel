@@ -27,9 +27,7 @@ from fackel.persistence.store import InformationStore
 logger = logging.getLogger(__name__)
 
 _HIGH_CONFIDENCE = 0.8
-# Findings that must always be represented in the report.
 _CRITICAL_TYPES = (InformationType.SECURITY_VULNERABILITY, InformationType.CREDENTIAL_LEAK)
-# Assets that must be represented when high-confidence.
 _HIGH_VALUE_ASSET_TYPES = (
     InformationType.SUBDOMAIN,
     InformationType.IP_ADDRESS,

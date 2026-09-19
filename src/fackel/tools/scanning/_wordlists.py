@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# Standard SecLists / dirb locations checked in order.
 DEFAULT_WORDLISTS: tuple[str, ...] = (
     "/usr/share/seclists/Discovery/Web-Content/common.txt",
     "/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt",
@@ -17,7 +16,6 @@ DEFAULT_WORDLISTS: tuple[str, ...] = (
     "/usr/share/dirb/wordlists/common.txt",
 )
 
-# Bundled minimal wordlist shipped with the package.
 _BUNDLED = Path(__file__).resolve().parent / "wordlists" / "common.txt"
 
 

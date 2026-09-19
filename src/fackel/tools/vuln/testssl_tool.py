@@ -113,9 +113,6 @@ def testssl_scan(
 
     openssl_timeout = max(1, min(openssl_timeout, 30))
 
-    # testssl.sh does not support streaming JSON to stdout via "--jsonfile=-";
-    # it treats "-" as a literal filename and creates a file called "-" in cwd.
-    # Use a temporary file and read it back after the scan completes.
     tmpdir = tempfile.mkdtemp(prefix="testssl_")
     json_path = Path(tmpdir) / "results.json"
 

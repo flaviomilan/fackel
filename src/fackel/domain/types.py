@@ -17,22 +17,18 @@ class InformationType(StrEnum):
     stable across versions.  Add new entries; never rename existing ones.
     """
 
-    # Identity & infrastructure
     DOMAIN = "DOMAIN"
     SUBDOMAIN = "SUBDOMAIN"
     IP_ADDRESS = "IP_ADDRESS"
     HISTORICAL_IP_ADDRESS = "HISTORICAL_IP_ADDRESS"
     TLS_SAN_DOMAIN = "TLS_SAN_DOMAIN"
 
-    # Service surface
     OPEN_PORT = "OPEN_PORT"
     SERVICE_VERSION = "SERVICE_VERSION"
 
-    # Profile / classification
     IP_CLASSIFICATION = "IP_CLASSIFICATION"
     TECH_FINGERPRINT = "TECH_FINGERPRINT"
 
-    # People / organisation (entity-OSINT)
     EMAIL = "EMAIL"
     PERSON = "PERSON"
     USERNAME = "USERNAME"
@@ -41,6 +37,5 @@ class InformationType(StrEnum):
     DOCUMENT = "DOCUMENT"
     PHONE = "PHONE"
 
-    # Risk
     SECURITY_VULNERABILITY = "SECURITY_VULNERABILITY"
     CREDENTIAL_LEAK = "CREDENTIAL_LEAK"

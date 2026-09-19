@@ -99,7 +99,6 @@ def wpscan_scan(target: str, enumerate: str = "vp,vt,u") -> dict[str, Any]:
     except (json.JSONDecodeError, TypeError) as exc:
         raise ToolException(f"wpscan_scan: failed to parse output: {exc}") from exc
 
-    # Extract WordPress version info.
     wp_version_info: dict[str, Any] = {}
     wp_version = data.get("version")
     if isinstance(wp_version, dict):
@@ -110,7 +109,6 @@ def wpscan_scan(target: str, enumerate: str = "vp,vt,u") -> dict[str, Any]:
             "vulnerabilities": _extract_vulns(wp_version.get("vulnerabilities", [])),
         }
 
-    # Extract plugins.
     plugins: list[dict[str, Any]] = []
     for name, info in (data.get("plugins") or {}).items():
         if not isinstance(info, dict):
@@ -125,7 +123,6 @@ def wpscan_scan(target: str, enumerate: str = "vp,vt,u") -> dict[str, Any]:
         }
         plugins.append(plugin)
 
-    # Extract themes.
     themes: list[dict[str, Any]] = []
     for name, info in (data.get("themes") or {}).items():
         if not isinstance(info, dict):
@@ -140,7 +137,6 @@ def wpscan_scan(target: str, enumerate: str = "vp,vt,u") -> dict[str, Any]:
         }
         themes.append(theme)
 
-    # Extract users.
     users: list[str] = []
     for _uid, info in (data.get("users") or {}).items():
         if isinstance(info, dict):

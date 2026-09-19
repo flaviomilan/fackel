@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from fackel.agents.orchestrator.streaming import text_tokens
 from fackel.settings import get_settings
 
-# Event types whose ``content`` represents tokens flowing through agent context.
 _COUNTED_EVENTS = frozenset({"token", "reasoning", "reasoning_trace", "tool_result", "summary"})
 
 _BAR_CELLS = 10

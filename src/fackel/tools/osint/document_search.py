@@ -19,7 +19,6 @@ from pydantic import BaseModel, Field
 
 from fackel.tooling import DDGS, TargetType, fackel_tool, format_tool_output, guard_target
 
-# Document extensions worth surfacing, ordered by intel value.
 _FILETYPES: tuple[str, ...] = ("pdf", "docx", "xlsx", "pptx", "doc", "xls", "ppt", "csv", "txt")
 _MAX_PER_FILETYPE = 8
 _MAX_DOCUMENTS = 50
@@ -63,8 +62,6 @@ def document_search(domain: str) -> dict[str, Any]:
             if len(documents) >= _MAX_DOCUMENTS:
                 break
             query = f"site:{domain} filetype:{filetype}"
-            # Per-query isolation: one filetype hitting a rate limit or transient
-            # error must not discard the documents already collected.
             try:
                 results = ddgs.text(query, max_results=_MAX_PER_FILETYPE)
             except Exception as exc:
@@ -85,7 +82,6 @@ def document_search(domain: str) -> dict[str, Any]:
                 if len(documents) >= _MAX_DOCUMENTS:
                     break
 
-    # Only fail outright when every query errored and nothing was collected.
     if not documents and errors:
         raise ToolException(f"document_search: all queries failed ({'; '.join(errors)})")
 

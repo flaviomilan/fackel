@@ -15,11 +15,7 @@ Used by the persistence layer (per-record ``confidence``), the judge
 
 from __future__ import annotations
 
-# Trust tier per tool (0.0-1.0).  Direct/authoritative observation scores
-# highest; third-party aggregators sit in the middle; scraping/community/
-# inference scores lowest.  Unknown tools fall back to ``DEFAULT_TRUST``.
 SOURCE_TRUST: dict[str, float] = {
-    # Direct observation / authoritative
     "dns_resolve": 0.95,
     "dnsx_resolve": 0.95,
     "tlscert_lookup": 0.95,
@@ -32,7 +28,6 @@ SOURCE_TRUST: dict[str, float] = {
     "reverse_dns_lookup": 0.85,
     "ipinfo_lookup": 0.85,
     "whatweb_scan": 0.8,
-    # Scan databases / aggregators
     "shodan_lookup": 0.8,
     "censys_lookup": 0.8,
     "subfinder_enum": 0.8,
@@ -47,7 +42,6 @@ SOURCE_TRUST: dict[str, float] = {
     "urlscan_search": 0.7,
     "hunter_email_search": 0.7,
     "analyze_email": 0.7,
-    # Scraping / community / inference
     "dnsdumpster_lookup": 0.65,
     "gau_urls": 0.6,
     "paramspider_crawl": 0.6,
@@ -72,6 +66,5 @@ def score_confidence(source_tools: list[str]) -> float:
     distinct = set(source_tools)
     best = max(SOURCE_TRUST.get(tool, DEFAULT_TRUST) for tool in distinct)
     extra = len(distinct) - 1
-    # Each extra independent source removes half of the remaining (1 - best) gap.
     confidence = best + (1.0 - best) * (1.0 - 0.5**extra)
     return round(min(confidence, 1.0), 3)

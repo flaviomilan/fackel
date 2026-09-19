@@ -136,8 +136,6 @@ def feroxbuster_scan(  # noqa: C901 - CLI flag assembly + output parsing for one
 
     scan_timeout = get_tool_timeout("feroxbuster_scan", _TIMEOUT)
 
-    # Tell feroxbuster to stop gracefully *before* the subprocess hard-kill.
-    # This lets it flush partial JSON results instead of being killed mid-scan.
     ferox_limit = max(scan_timeout - 30, 60)
 
     cmd = [

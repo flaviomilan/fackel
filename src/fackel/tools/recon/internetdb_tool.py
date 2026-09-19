@@ -66,7 +66,6 @@ def internetdb_lookup(ip: str) -> dict[str, Any]:
         except requests.RequestException as exc:
             raise ToolException(f"internetdb_lookup: request failed: {exc}") from exc
 
-    # InternetDB returns 404 for IPs it has no data on — a valid empty result.
     if resp.status_code == 404:
         return format_tool_output(
             "internetdb_lookup",

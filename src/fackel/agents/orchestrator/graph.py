@@ -48,7 +48,7 @@ from .nodes import (
 from .state import ScanState
 
 _checkpointer: SqliteSaver | None = None
-_checkpointer_cm: Any = None  # context manager returned by from_conn_string
+_checkpointer_cm: Any = None
 
 
 def _get_checkpointer() -> SqliteSaver:
@@ -89,9 +89,6 @@ def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
     graph.add_node("report", report_node)
     graph.add_node("review", review_node)
 
-    # OSINT runs as a parallel specialist fan-out: START dispatches one Send per
-    # specialist; they run concurrently, then fan in at osint_collect (single
-    # post-barrier node) which evaluates, retries, pivots, and builds state.
     graph.add_node("osint_specialist", osint_specialist_node)
     graph.add_node("osint_collect", osint_collect_node)
     graph.add_conditional_edges(START, dispatch_osint_specialists, ["osint_specialist"])
@@ -102,9 +99,6 @@ def build_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
         {"approval_gate": "approval_gate", "report": "report"},
     )
 
-    # Vuln scanning: parallel fan-out (vuln_dispatch builds shared context, then
-    # one Send per specialist fans in at vuln_collect) by default; the sequential
-    # vuln_scan node runs the same specialists one at a time under HITL approval.
     graph.add_node("vuln_scan", vuln_scan_node)
     graph.add_node("vuln_dispatch", vuln_dispatch_node)
     graph.add_node("vuln_specialist", vuln_specialist_node)
