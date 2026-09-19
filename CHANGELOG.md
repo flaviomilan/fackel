@@ -2,6 +2,56 @@
 
 <!-- version list -->
 
+## v1.7.1 (2026-09-19)
+
+### Chores
+
+- Consolidate dependabot updates ([#79](https://github.com/flaviomilan/fackel/pull/79),
+  [`249ee5b`](https://github.com/flaviomilan/fackel/commit/249ee5b48a216d8d955177c5872a132f5776ab28))
+
+- **deps**: Bump langgraph-checkpoint from 4.0.0 to 4.1.1
+  ([#57](https://github.com/flaviomilan/fackel/pull/57),
+  [`f7a9b93`](https://github.com/flaviomilan/fackel/commit/f7a9b93f261438750fe2995aa3de6ca1a84b8ec5))
+
+- **deps**: Bump langgraph-sdk from 0.3.4 to 0.3.15
+  ([#58](https://github.com/flaviomilan/fackel/pull/58),
+  [`5d74ee4`](https://github.com/flaviomilan/fackel/commit/5d74ee4279d2e4846f529fd3415cbc56ddec8a3b))
+
+- **deps**: Bump langsmith from 0.8.7 to 0.8.18
+  ([#56](https://github.com/flaviomilan/fackel/pull/56),
+  [`0102b61`](https://github.com/flaviomilan/fackel/commit/0102b619a6b7cd6e0f4fc54ceaed6df0f0eef257))
+
+- **deps**: Bump msgpack from 1.1.2 to 1.2.1 ([#55](https://github.com/flaviomilan/fackel/pull/55),
+  [`be3907b`](https://github.com/flaviomilan/fackel/commit/be3907bd6fc3073bd5602e1780fbf17b96906c8c))
+
+- **deps**: Bump pip from 26.1.1 to 26.1.2 ([#59](https://github.com/flaviomilan/fackel/pull/59),
+  [`7a5ba90`](https://github.com/flaviomilan/fackel/commit/7a5ba90a8af9c5a9d3a6fe44e8bb8d14fbaf3e9b))
+
+- **deps**: Bump soupsieve from 2.8.3 to 2.8.4
+  ([#60](https://github.com/flaviomilan/fackel/pull/60),
+  [`6e517b0`](https://github.com/flaviomilan/fackel/commit/6e517b05b9a910618650b1d1a031f497126bcbbe))
+
+### Continuous Integration
+
+- Bump actions/checkout from 6 to 7 ([#54](https://github.com/flaviomilan/fackel/pull/54),
+  [`761d465`](https://github.com/flaviomilan/fackel/commit/761d465be6b49332c4d3bc673d58cd5a894b4c50))
+
+- Bump langchain from 1.2.15 to 1.3.9 ([#53](https://github.com/flaviomilan/fackel/pull/53),
+  [`dd0aee6`](https://github.com/flaviomilan/fackel/commit/dd0aee6b42dc434f11a6dbcd15d60b2e44bb6969))
+
+### Documentation
+
+- Fix setup so a fresh clone matches reality
+  ([#108](https://github.com/flaviomilan/fackel/pull/108),
+  [`e5b2141`](https://github.com/flaviomilan/fackel/commit/e5b2141cdf7c88ff106b5584948f29739a28beed))
+
+### Refactoring
+
+- Simplify structure — consolidate duplication, collapse dual pipeline paths
+  ([#109](https://github.com/flaviomilan/fackel/pull/109),
+  [`d32ce8d`](https://github.com/flaviomilan/fackel/commit/d32ce8d9450d32fa568ad4754fb9635f550be0bf))
+
+
 ## v1.7.0 (2026-05-31)
 
 ### Chores
