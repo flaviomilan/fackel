@@ -17,6 +17,8 @@ updates:
       prefix: "deps"
     groups:
       python-minor-patch:
+        patterns:
+          - "*"
         update-types:
           - minor
           - patch
@@ -37,6 +39,8 @@ updates:
       prefix: "ci"
     groups:
       github-actions-minor-patch:
+        patterns:
+          - "*"
         update-types:
           - minor
           - patch
