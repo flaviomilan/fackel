@@ -115,7 +115,7 @@ The orchestrator's `validate_tool_output()` in `streaming.py` detects both
 
 HTTP-based tools (crt.sh, dnsdumpster, virustotal, urlscan, ipinfo, otx,
 censys, securitytrails, shodan, webpage extractor) are wrapped in a
-**per-service circuit breaker** (`src/tools/circuit_breaker.py`).
+**per-service circuit breaker** (`src/fackel/tooling/circuit_breaker.py`).
 
 ```python
 from fackel.tools.circuit_breaker import circuit_breaker

@@ -42,3 +42,5 @@ A stable hash derived from (InformationType + normalized_value).
 - Signal
 
 Use the defined terms instead.
+
+Exception: the `Finding` model in `state.py` is a scan-pipeline concept, distinct from the persistence glossary.
