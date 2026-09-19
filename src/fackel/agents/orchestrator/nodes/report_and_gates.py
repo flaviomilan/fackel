@@ -160,19 +160,15 @@ def route_after_port_scan(state: ScanState) -> str:
     Only skips to triage when the judge explicitly recommends it — default is to
     proceed to vuln scanning (which can still find domain-level issues).
 
-    Picks the vuln entry node: ``vuln_dispatch`` for the parallel specialist
-    fan-out (``FACKEL_VULN_SPECIALISTS`` on), or the monolithic ``vuln_scan``
-    agent.  Per-tool HITL approval forces the monolithic path, since parallel
-    branches can't share one coherent approval interrupt stream.
+    Picks the vuln entry node: the parallel specialist fan-out (``vuln_dispatch``)
+    by default, or the sequential specialist path (``vuln_scan``) when per-tool
+    HITL approval is on — parallel branches can't share one coherent approval
+    interrupt stream.
     """
-    from fackel.settings import get_settings
-
     from ..streaming import is_tool_approval_enabled
 
     port_eval = get_phase_evaluation(state, "port_scan")
     if port_eval and port_eval.get("recommendation") == "skip_downstream":
         logger.info("routing: port_scan judge recommends skip → triage")
         return "triage"
-    if get_settings().vuln_specialists and not is_tool_approval_enabled():
-        return "vuln_dispatch"
-    return "vuln_scan"
+    return "vuln_scan" if is_tool_approval_enabled() else "vuln_dispatch"

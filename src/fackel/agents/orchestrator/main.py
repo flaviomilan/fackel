@@ -52,7 +52,7 @@ def reset_orchestrator() -> None:
     _reset_graph()
 
 
-def _initial_state(target: str, active_scan: bool) -> dict[str, Any]:
+def _initial_state(target: str, active_scan: bool) -> ScanState:
     clean_target = sanitize_target(target)
     return {
         "target": clean_target,

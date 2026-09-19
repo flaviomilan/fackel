@@ -9,10 +9,17 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target, require_binary, run_command
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    guard_target,
+    require_binary,
+    run_command,
+)
 
 
 class SubfinderInput(BaseModel):
@@ -34,7 +41,7 @@ class SubfinderInput(BaseModel):
     )
 
 
-@tool(args_schema=SubfinderInput)
+@fackel_tool(args_schema=SubfinderInput)
 def subfinder_enum(
     domain: str,
     all_sources: bool = False,
@@ -101,6 +108,3 @@ def subfinder_enum(
             "details": details,
         },
     )
-
-
-subfinder_enum.handle_tool_error = True

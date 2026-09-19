@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -57,7 +58,7 @@ class NaabuInput(BaseModel):
     )
 
 
-@tool(args_schema=NaabuInput)
+@fackel_tool(args_schema=NaabuInput)
 def naabu_scan(
     host: str,
     ports: str = "",
@@ -113,6 +114,3 @@ def naabu_scan(
         )
 
     return format_tool_output("naabu_scan", host, "ok", data={"results": results})
-
-
-naabu_scan.handle_tool_error = True

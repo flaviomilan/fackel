@@ -5,10 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 import shodan  # type: ignore[import-untyped]
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target, is_valid_ip, require_env
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    guard_target,
+    is_valid_ip,
+    require_env,
+)
 
 
 class ShodanInput(BaseModel):
@@ -25,7 +32,7 @@ class ShodanInput(BaseModel):
     )
 
 
-@tool(args_schema=ShodanInput)
+@fackel_tool(args_schema=ShodanInput)
 def shodan_lookup(query: str) -> dict[str, Any]:
     """Query Shodan for passive intelligence — no packets sent to the target.
 
@@ -94,6 +101,3 @@ def shodan_lookup(query: str) -> dict[str, Any]:
             )
     except Exception as e:
         raise ToolException(f"shodan_lookup: Shodan query failed: {e}") from e
-
-
-shodan_lookup.handle_tool_error = True

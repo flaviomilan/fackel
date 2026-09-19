@@ -17,10 +17,16 @@ import re
 from typing import Any
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+)
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -71,7 +77,7 @@ def _parse_holder(holder: str) -> tuple[str, str]:
     return short, desc
 
 
-@tool(args_schema=BgpLookupInput)
+@fackel_tool(args_schema=BgpLookupInput)
 def bgp_lookup(ip: str) -> dict[str, Any]:
     """Look up ASN and prefix information for an IP via RIPEstat.
 
@@ -127,6 +133,3 @@ def bgp_lookup(ip: str) -> dict[str, Any]:
             "rir": _parse_rir(block),
         },
     )
-
-
-bgp_lookup.handle_tool_error = True

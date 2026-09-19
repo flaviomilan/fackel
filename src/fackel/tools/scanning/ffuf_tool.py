@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -126,7 +127,7 @@ class FfufInput(BaseModel):
     )
 
 
-@tool(args_schema=FfufInput)
+@fackel_tool(args_schema=FfufInput)
 def ffuf_scan(
     target: str,
     wordlist: str = "",
@@ -293,6 +294,3 @@ def _add_ffuf_result(result: Any, findings: list[dict[str, Any]]) -> None:
             "redirect_location": result.get("redirectlocation", ""),
         }
     )
-
-
-ffuf_scan.handle_tool_error = True

@@ -12,11 +12,12 @@ from __future__ import annotations
 from typing import Any
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -55,7 +56,7 @@ def _host_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
     return {"ip": ip, "hostname": hostname, "port": port}
 
 
-@tool(args_schema=NetlasInput)
+@fackel_tool(args_schema=NetlasInput)
 def netlas_lookup(domain: str) -> dict[str, Any]:
     """Search host and service data for a domain via the Netlas scan database.
 
@@ -105,6 +106,3 @@ def netlas_lookup(domain: str) -> dict[str, Any]:
         "ok",
         data={"domain": domain, "hosts": hosts, "count": len(hosts)},
     )
-
-
-netlas_lookup.handle_tool_error = True

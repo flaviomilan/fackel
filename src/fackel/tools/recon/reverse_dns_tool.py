@@ -12,10 +12,15 @@ import socket
 from typing import Any
 
 import requests
-from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+)
 from fackel.tooling.http_client import get_session
 
 logger = logging.getLogger(__name__)
@@ -35,7 +40,7 @@ class ReverseDnsInput(BaseModel):
     )
 
 
-@tool(args_schema=ReverseDnsInput)
+@fackel_tool(args_schema=ReverseDnsInput)
 def reverse_dns_lookup(ip: str) -> dict[str, Any]:
     """Reverse-resolve an IP to its PTR hostname and discover co-hosted domains.
 
@@ -84,6 +89,3 @@ def reverse_dns_lookup(ip: str) -> dict[str, Any]:
             "shared_domain_count": len(shared_domains),
         },
     )
-
-
-reverse_dns_lookup.handle_tool_error = True

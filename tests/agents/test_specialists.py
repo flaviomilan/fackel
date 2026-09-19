@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from fackel.agents.osint import specialists
+from fackel.agents import config
 from fackel.agents.osint.agent import TOOLS
 from fackel.agents.osint.agent import build as build_osint
 from fackel.agents.osint.specialists import SPECIALISTS, SPECIALISTS_BY_NAME, build_specialist
@@ -49,6 +49,7 @@ class TestBuildSpecialist:
         assert build_specialist(dns_infra) is not None
 
     def test_none_when_no_tools_available(self, monkeypatch) -> None:
-        monkeypatch.setattr(specialists, "filter_tools", lambda tools: ([], []))
-        monkeypatch.setattr(specialists, "available_binaries", lambda tools: ([], []))
+        # Tool gating now lives in the shared config.build_react_agent helper.
+        monkeypatch.setattr(config, "filter_tools", lambda tools: ([], []))
+        monkeypatch.setattr(config, "available_binaries", lambda tools: ([], []))
         assert build_specialist(SPECIALISTS[0]) is None

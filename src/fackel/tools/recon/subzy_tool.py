@@ -9,11 +9,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -37,7 +38,7 @@ class SubzyInput(BaseModel):
     )
 
 
-@tool(args_schema=SubzyInput)
+@fackel_tool(args_schema=SubzyInput)
 def subzy_check(target: str) -> dict[str, Any]:
     """Check subdomains for takeover vulnerabilities.
 
@@ -110,6 +111,3 @@ def subzy_check(target: str) -> dict[str, Any]:
             "findings": findings,
         },
     )
-
-
-subzy_check.handle_tool_error = True

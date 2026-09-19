@@ -16,11 +16,12 @@ import os
 import tempfile
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -103,7 +104,7 @@ def _parse_plain_text(content: str) -> list[dict[str, Any]]:
     return subdomains
 
 
-@tool(args_schema=AmassInput)
+@fackel_tool(args_schema=AmassInput)
 def amass_enum(target: str, passive: bool = True) -> dict[str, Any]:
     """Enumerate subdomains for a domain using OWASP Amass.
 
@@ -177,6 +178,3 @@ def amass_enum(target: str, passive: bool = True) -> dict[str, Any]:
             "count": len(subdomains),
         },
     )
-
-
-amass_enum.handle_tool_error = True

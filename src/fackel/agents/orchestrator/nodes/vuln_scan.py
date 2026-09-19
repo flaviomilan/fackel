@@ -13,11 +13,10 @@ from fackel.prompts import load_section
 
 from .. import evaluator, streaming
 from ..state import ScanState
-from ..streaming import agent_summary, is_tool_approval_enabled, run_and_stream_agent
+from ..streaming import agent_summary, run_and_stream_agent
 from ._helpers import (
     DEFAULT_VULN_SCAN_STRATEGY,
     SUBDOMAIN_CAP,
-    build_retry_prompt,
     emit_evaluation,
     get_phase_evaluation,
     make_finding,
@@ -29,8 +28,6 @@ logger = logging.getLogger(__name__)
 # Loaded once and cached — supplies node-level prompt context.
 _CORRELATION_GUIDANCE: str | None = None
 _DEPTH_ADJUSTMENT_GUIDANCE: str | None = None
-_LOOP_DETECTION_GUIDANCE: str | None = None
-_APPROACH_CHANGE_GUIDANCE: str | None = None
 
 
 def _load_vuln_scan_guidance() -> tuple[str, str]:
@@ -42,47 +39,58 @@ def _load_vuln_scan_guidance() -> tuple[str, str]:
     return _CORRELATION_GUIDANCE, _DEPTH_ADJUSTMENT_GUIDANCE  # type: ignore[return-value]
 
 
-def _load_retry_guidance() -> tuple[str, str]:
-    """Lazy-load loop detection and approach change prompt sections."""
-    global _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE
-    if _LOOP_DETECTION_GUIDANCE is None:
-        _LOOP_DETECTION_GUIDANCE = load_section("orchestrator/loop_detection")
-        _APPROACH_CHANGE_GUIDANCE = load_section("strategy/approach_change")
-    return _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE  # type: ignore[return-value]
-
-
 def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
-    """Run the vuln-scan ReAct agent with quality evaluation and retry.
+    """Run the vuln specialists **sequentially** — the per-tool HITL approval path.
 
-    Includes LLM-as-a-judge quality evaluation and self-reflection retry:
-    if the first pass produces thin output (judge says "empty"), the agent
-    is re-invoked with enriched instructions based on the judge's gaps,
-    focusing on tools that failed or areas left unscanned.
+    Parallel specialist branches can't coherently share one approval interrupt
+    stream, so when ``--approve-tools`` is on the same specialists run one at a
+    time (each built with ``HumanInTheLoopMiddleware`` + a checkpointer), letting
+    ``run_and_stream_agent`` present tool approvals one at a time.  The default
+    (no-approval) path is the parallel fan-out (``vuln_dispatch`` → ``Send`` →
+    ``vuln_specialist`` → ``vuln_collect``); see :func:`build_graph` and
+    :func:`route_after_port_scan`.
     """
-    from fackel.agents.vuln_scan.agent import build
+    from fackel.agents.config import build_react_agent
+    from fackel.agents.vuln_scan.agent import _VULN_PROMPT_SECTIONS
+    from fackel.agents.vuln_scan.specialists import VULN_SPECIALISTS, _vuln_specialist_task
+
+    from ..translators import persist_phase
 
     target = state["target"]
     ips, subdomains = prepare_scan_targets(state)
     capped_subs = subdomains[:SUBDOMAIN_CAP]
+    base_prompt = _build_vuln_scan_prompt(target, ips, capped_subs, state)
 
-    prompt = _build_vuln_scan_prompt(target, ips, capped_subs, state)
-    agent = build(approve_tools=is_tool_approval_enabled())
-
-    messages, evaluation = _run_vuln_scan_with_retry(
-        agent,
-        target,
-        ips,
-        capped_subs,
-        state,
-        prompt,
-        config,
-    )
-
-    from ..translators import persist_phase
-
-    persist_phase(messages, phase="vuln_scan", target=target)
+    messages: list[Any] = []
+    for spec in VULN_SPECIALISTS:
+        # Fresh HITL agent per specialist (not cached — it carries interrupt state).
+        agent = build_react_agent(
+            "vuln_scan",
+            spec.tools,
+            *_VULN_PROMPT_SECTIONS,
+            name=f"vuln_{spec.name}",
+            approve_tools=True,
+            require_tools=True,
+            log_skips=False,
+        )
+        if agent is None:  # no usable tools (missing keys/binaries)
+            continue
+        logger.info("vuln_scan: running specialist %s (sequential HITL)", spec.name)
+        with streaming.lane(spec.name):
+            streaming.emit("vuln_scan", "lane_start", {"name": spec.name})
+            try:
+                msgs = run_and_stream_agent(
+                    agent, "vuln_scan", _vuln_specialist_task(spec, base_prompt), config=config
+                )
+            finally:
+                streaming.emit("vuln_scan", "lane_end", {"name": spec.name})
+        persist_phase(msgs, phase="vuln_scan", target=target)
+        messages += msgs
 
     summary = agent_summary(messages)
+    scan_targets = [target, *capped_subs, *ips]
+    evaluation = evaluator.evaluate_phase("vuln_scan", summary, scan_targets, config=config)
+    emit_evaluation("vuln_scan", evaluation)
     streaming.emit("vuln_scan", "summary", {"content": summary})
     streaming.emit("vuln_scan", "done", {})
 
@@ -93,10 +101,8 @@ def vuln_scan_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Parallel specialist fan-out (idiomatic LangGraph Send map-reduce)
-#
-# Used when ``FACKEL_VULN_SPECIALISTS`` is on AND per-tool HITL approval is off
-# (parallel branches can't coherently share a single approval interrupt stream).
+# Parallel specialist fan-out (idiomatic LangGraph Send map-reduce) — the
+# default path when per-tool HITL approval is off.
 # ---------------------------------------------------------------------------
 
 
@@ -197,72 +203,6 @@ def vuln_collect_node(state: ScanState, config: RunnableConfig) -> dict[str, Any
         "findings": [make_finding("vuln_scan", "Vulnerability Scan Findings", summary)],
         "phase_evaluations": [evaluation.model_dump()],
     }
-
-
-def _run_vuln_scan_with_retry(
-    agent: Any,
-    target: str,
-    ips: list[str],
-    subdomains: list[str],
-    state: ScanState,
-    prompt: str,
-    config: RunnableConfig,
-) -> tuple[list[Any], Any]:
-    """Run vuln-scan agent with quality evaluation and retry on poor output."""
-    messages = run_and_stream_agent(agent, "vuln_scan", prompt, config=config)
-    summary = agent_summary(messages)
-
-    scan_targets = [target, *subdomains, *ips]
-    evaluation = evaluator.evaluate_phase("vuln_scan", summary, scan_targets, config=config)
-    emit_evaluation("vuln_scan", evaluation)
-
-    if evaluation.completeness == "empty" and evaluation.score < 0.3:
-        retry_msgs = _retry_vuln_scan(agent, target, evaluation, config)
-        messages = messages + retry_msgs
-        retry_summary = agent_summary(messages)
-        evaluation = evaluator.evaluate_phase(
-            "vuln_scan",
-            retry_summary,
-            scan_targets,
-            config=config,
-        )
-        emit_evaluation("vuln_scan", evaluation)
-
-    return messages, evaluation
-
-
-def _retry_vuln_scan(
-    agent: Any,
-    target: str,
-    evaluation: Any,
-    config: RunnableConfig,
-) -> list[Any]:
-    """Re-invoke vuln-scan agent with enriched prompt on poor quality."""
-    logger.info(
-        "vuln_scan: judge rated output as empty (score=%.1f) — retrying with enriched prompt",
-        evaluation.score,
-    )
-    loop_guidance, approach_guidance = _load_retry_guidance()
-    body = (
-        f"## Loop Detection\n\n{loop_guidance}\n\n"
-        f"## Strategy Adjustment\n\n{approach_guidance}\n\n"
-        "IMPORTANT: If a tool failed in the first pass (error, missing "
-        "dependency, timeout), try an ALTERNATIVE tool or different "
-        "parameters. For example:\n"
-        "- feroxbuster failed → use ffuf_scan instead (or vice-versa)\n"
-        "- testssl timed out → retry with checks='protocols,vulnerabilities'\n"
-        "- nuclei returned nothing → try with specific tags for detected tech\n\n"
-        f"Please re-scan {target} focusing on the identified gaps. "
-        "Use ALL available tools from your playbook."
-    )
-    retry_prompt = build_retry_prompt(
-        phase="vuln_scan",
-        intro=f"Your first vulnerability scan pass on {target} was insufficient.",
-        evaluation=evaluation,
-        body=body,
-    )
-    streaming.emit("vuln_scan", "retry", {"reason": "judge: empty output"})
-    return run_and_stream_agent(agent, "vuln_scan", retry_prompt, config=config)
 
 
 def _build_vuln_scan_prompt(

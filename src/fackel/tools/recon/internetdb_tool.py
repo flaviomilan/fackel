@@ -13,10 +13,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+)
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -37,7 +43,7 @@ class InternetDbInput(BaseModel):
     )
 
 
-@tool(args_schema=InternetDbInput)
+@fackel_tool(args_schema=InternetDbInput)
 def internetdb_lookup(ip: str) -> dict[str, Any]:
     """Look up an IP's open ports, CPEs, and known CVEs via Shodan InternetDB.
 
@@ -100,6 +106,3 @@ def internetdb_lookup(ip: str) -> dict[str, Any]:
             "tags": data.get("tags", []),
         },
     )
-
-
-internetdb_lookup.handle_tool_error = True

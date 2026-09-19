@@ -6,10 +6,10 @@ import ipaddress
 import socket
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target
+from fackel.tooling import TargetType, fackel_tool, format_tool_output, guard_target
 
 
 class DnsResolveInput(BaseModel):
@@ -23,7 +23,7 @@ class DnsResolveInput(BaseModel):
     )
 
 
-@tool(args_schema=DnsResolveInput)
+@fackel_tool(args_schema=DnsResolveInput)
 def dns_resolve(target: str) -> dict[str, Any]:
     """Resolve a domain to its IP addresses (A + AAAA records), or validate an IP.
 
@@ -56,6 +56,3 @@ def dns_resolve(target: str) -> dict[str, Any]:
         )
     except Exception as exc:
         raise ToolException(f"dns_resolve: {exc}") from exc
-
-
-dns_resolve.handle_tool_error = True

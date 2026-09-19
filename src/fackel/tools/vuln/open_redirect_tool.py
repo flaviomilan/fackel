@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -49,7 +50,7 @@ class OpenRedirectInput(BaseModel):
     )
 
 
-@tool(args_schema=OpenRedirectInput)
+@fackel_tool(args_schema=OpenRedirectInput)
 def open_redirect_scan(target: str, severity: str = "") -> dict[str, Any]:
     """Scan for open redirect vulnerabilities using Nuclei templates.
 
@@ -120,6 +121,3 @@ def open_redirect_scan(target: str, severity: str = "") -> dict[str, Any]:
         "ok",
         data={"total": len(findings), "findings": findings},
     )
-
-
-open_redirect_scan.handle_tool_error = True

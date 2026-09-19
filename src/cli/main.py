@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from fackel.agents.orchestrator.streaming import set_event_callback, set_tool_approval
+from fackel.agents.orchestrator.streaming import run_session
 
 from . import presenter
 from .renderer import EventRenderer
@@ -195,25 +195,29 @@ def scan(
     from fackel.agents.orchestrator import run
 
     renderer = EventRenderer(console, verbose=verbose)
-    set_event_callback(renderer.handle)
     approval_prompt, tool_approval_prompt = _make_approval_prompt(renderer)
 
     if approve_tools:
-        set_tool_approval(enabled=True, callback=tool_approval_prompt)
         console.print("[yellow]⚠ Tool-level approval enabled for active scanning tools[/yellow]")
         console.print()
 
     started_at = time.perf_counter()
 
-    result = _execute_scan(
-        renderer,
-        run,
-        target,
-        active_scan,
-        approval_prompt,
-        started_at,
-        timeout,
-    )
+    # One cohesive binding of the run's streaming wiring; restored on exit.
+    with run_session(
+        event_callback=renderer.handle,
+        tool_approval=tool_approval_prompt if approve_tools else None,
+        approve_tools=approve_tools,
+    ):
+        result = _execute_scan(
+            renderer,
+            run,
+            target,
+            active_scan,
+            approval_prompt,
+            started_at,
+            timeout,
+        )
     _render_report(result, output, target, started_at)
 
 
@@ -266,8 +270,6 @@ def _execute_scan(
         raise typer.Exit(code=1) from exc
     finally:
         renderer.shutdown()
-        set_event_callback(None)
-        set_tool_approval(enabled=False)
 
 
 def _render_report(

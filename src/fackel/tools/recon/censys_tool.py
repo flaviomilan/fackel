@@ -8,10 +8,10 @@ from __future__ import annotations
 from typing import Any
 
 from censys.search import CensysHosts
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, guard_target, require_env
+from fackel.tooling import TargetType, fackel_tool, format_tool_output, guard_target, require_env
 
 
 class CensysInput(BaseModel):
@@ -22,7 +22,7 @@ class CensysInput(BaseModel):
     )
 
 
-@tool(args_schema=CensysInput)
+@fackel_tool(args_schema=CensysInput)
 def censys_lookup(domain: str) -> dict[str, Any]:
     """Search host and service data via the Censys REST API."""
     domain = guard_target(domain, "censys_lookup", TargetType.HOST)
@@ -63,6 +63,3 @@ def censys_lookup(domain: str) -> dict[str, Any]:
 
     except Exception as e:
         raise ToolException(f"censys_lookup: Censys query failed: {e}") from e
-
-
-censys_lookup.handle_tool_error = True

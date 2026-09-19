@@ -6,11 +6,12 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_request_target,
@@ -51,7 +52,7 @@ class WebpageExtractorInput(BaseModel):
     )
 
 
-@tool(args_schema=WebpageExtractorInput)
+@fackel_tool(args_schema=WebpageExtractorInput)
 def extract_webpage_content(url: str) -> dict[str, Any]:
     """Extract relevant text content from a web page, stripping HTML boilerplate.
 
@@ -89,6 +90,3 @@ def extract_webpage_content(url: str) -> dict[str, Any]:
         raise ToolException(f"extract_webpage_content: request failed: {exc}") from exc
     except Exception as exc:
         raise ToolException(f"extract_webpage_content: {exc}") from exc
-
-
-extract_webpage_content.handle_tool_error = True

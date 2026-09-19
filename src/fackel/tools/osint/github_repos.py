@@ -15,10 +15,10 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import format_tool_output, get_tool_timeout
+from fackel.tooling import fackel_tool, format_tool_output, get_tool_timeout
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -49,7 +49,7 @@ def _slug(value: str) -> str:
     return v.split("/")[0]
 
 
-@tool(args_schema=GithubReposInput)
+@fackel_tool(args_schema=GithubReposInput)
 def github_repo_discovery(org: str) -> dict[str, Any]:
     """Discover the public GitHub repositories of an organisation or user.
 
@@ -126,6 +126,3 @@ def github_repo_discovery(org: str) -> dict[str, Any]:
         "ok",
         data={"repositories": repositories, "count": len(repositories)},
     )
-
-
-github_repo_discovery.handle_tool_error = True

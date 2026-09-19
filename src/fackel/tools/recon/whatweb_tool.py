@@ -9,12 +9,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -47,7 +48,7 @@ class WhatWebInput(BaseModel):
     )
 
 
-@tool(args_schema=WhatWebInput)
+@fackel_tool(args_schema=WhatWebInput)
 def whatweb_scan(target: str, aggression: int = 1) -> dict[str, Any]:
     """Fingerprint web technologies on a target.
 
@@ -125,6 +126,3 @@ def whatweb_scan(target: str, aggression: int = 1) -> dict[str, Any]:
             "count": len(technologies),
         },
     )
-
-
-whatweb_scan.handle_tool_error = True

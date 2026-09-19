@@ -10,10 +10,10 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import format_tool_output, require_env
+from fackel.tooling import fackel_tool, format_tool_output, require_env
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -38,7 +38,7 @@ class FofaInput(BaseModel):
     )
 
 
-@tool(args_schema=FofaInput)
+@fackel_tool(args_schema=FofaInput)
 def fofa_search(query: str) -> dict[str, Any]:
     """Search FOFA for internet-connected assets — no packets sent to the target.
 
@@ -119,6 +119,3 @@ def fofa_search(query: str) -> dict[str, Any]:
             "results": results,
         },
     )
-
-
-fofa_search.handle_tool_error = True

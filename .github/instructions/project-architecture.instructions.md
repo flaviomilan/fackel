@@ -125,19 +125,19 @@ Rules:
 
 ---
 
-## 4. Persistence Guidelines (MongoDB)
+## 4. Persistence Guidelines (file-based JSONL store)
 
-- Each core concept has its own collection
-- Avoid deeply nested documents
-- Prefer references over embedding for evolving data
-- Use indexes for:
-  - fingerprint (unique)
-  - type_id
-  - current_status
-  - temporal fields (first_seen_at, last_seen_at)
+Persistence is `InformationStore` in `src/fackel/persistence/store.py`: one append-only
+JSONL file per core concept (`executions.jsonl`, `records.jsonl`, `timeline.jsonl`,
+`edges.jsonl`) inside a per-scan directory under `FACKEL_DATA_DIR`. No external database.
+
+- Each core concept has its own JSONL file
+- Avoid deeply nested records; keep `attributes` flat
+- Records are identified by `fingerprint`; lookups are in-memory over the loaded scan
+- Single writer per scan (one scan per process)
 
 Important:
-- Historical collections must be append-only
+- Historical files must be append-only
 - Never delete or overwrite historical records
 - Masking or resolution changes status, not history
 

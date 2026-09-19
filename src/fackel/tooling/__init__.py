@@ -35,6 +35,7 @@ from fackel.tooling.sanitizers import (
     sanitize_tags,
     sanitize_top_ports,
 )
+from fackel.tooling.tool import fackel_tool
 from fackel.tooling.validators import (
     TargetType,
     ensure_scheme,
@@ -53,6 +54,7 @@ __all__ = [
     "TargetType",
     "available_binaries",
     "ensure_scheme",
+    "fackel_tool",
     "format_tool_output",
     "get_tool_timeout",
     "guard_dns_rebinding",

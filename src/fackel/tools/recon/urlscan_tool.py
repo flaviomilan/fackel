@@ -9,10 +9,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+)
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -35,7 +41,7 @@ class UrlscanInput(BaseModel):
     )
 
 
-@tool(args_schema=UrlscanInput)
+@fackel_tool(args_schema=UrlscanInput)
 def urlscan_search(domain: str) -> dict[str, Any]:
     """Search Urlscan.io for cached scan results of a domain.
 
@@ -101,9 +107,6 @@ def urlscan_search(domain: str) -> dict[str, Any]:
             "results": results,
         },
     )
-
-
-urlscan_search.handle_tool_error = True
 
 
 def _extract_technologies(stats: dict[str, Any]) -> list[str]:

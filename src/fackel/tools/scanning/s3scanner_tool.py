@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     parse_jsonl,
@@ -45,7 +46,7 @@ class S3ScannerInput(BaseModel):
 _VALID_PROVIDERS = frozenset({"aws", "gcp", "digitalocean"})
 
 
-@tool(args_schema=S3ScannerInput)
+@fackel_tool(args_schema=S3ScannerInput)
 def s3scanner_scan(bucket: str, provider: str = "aws") -> dict[str, Any]:
     """Scan an S3 bucket for permission misconfigurations.
 
@@ -126,6 +127,3 @@ def s3scanner_scan(bucket: str, provider: str = "aws") -> dict[str, Any]:
             "results": results,
         },
     )
-
-
-s3scanner_scan.handle_tool_error = True

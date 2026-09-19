@@ -9,12 +9,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -47,7 +48,7 @@ class WPScanInput(BaseModel):
     )
 
 
-@tool(args_schema=WPScanInput)
+@fackel_tool(args_schema=WPScanInput)
 def wpscan_scan(target: str, enumerate: str = "vp,vt,u") -> dict[str, Any]:
     """Scan a WordPress site for vulnerabilities.
 
@@ -183,6 +184,3 @@ def _extract_vulns(vulns: list[Any]) -> list[dict[str, str]]:
             }
         )
     return results
-
-
-wpscan_scan.handle_tool_error = True

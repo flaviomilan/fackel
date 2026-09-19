@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 import requests
-from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -85,7 +85,7 @@ def _fetch_history(
     return records
 
 
-@tool(args_schema=SecurityTrailsInput)
+@fackel_tool(args_schema=SecurityTrailsInput)
 def securitytrails_history(domain: str) -> dict[str, Any]:
     """Look up historical DNS records via SecurityTrails.
 
@@ -113,6 +113,3 @@ def securitytrails_history(domain: str) -> dict[str, Any]:
             "ns_records": ns_records,
         },
     )
-
-
-securitytrails_history.handle_tool_error = True

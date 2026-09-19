@@ -10,11 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -40,7 +41,7 @@ class OtxInput(BaseModel):
     )
 
 
-@tool(args_schema=OtxInput)
+@fackel_tool(args_schema=OtxInput)
 def otx_passive_dns(domain: str) -> dict[str, Any]:
     """Look up passive DNS records via AlienVault OTX.
 
@@ -104,6 +105,3 @@ def otx_passive_dns(domain: str) -> dict[str, Any]:
             "records": records,
         },
     )
-
-
-otx_passive_dns.handle_tool_error = True

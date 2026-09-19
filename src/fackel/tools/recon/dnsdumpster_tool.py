@@ -11,10 +11,16 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import TargetType, format_tool_output, get_tool_timeout, guard_target
+from fackel.tooling import (
+    TargetType,
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    guard_target,
+)
 from fackel.tooling.circuit_breaker import circuit_breaker
 from fackel.tooling.http_client import get_session
 
@@ -84,7 +90,7 @@ def _parse_simple_table(table: BeautifulSoup) -> list[str]:
     return rows
 
 
-@tool(args_schema=DnsDumpsterInput)
+@fackel_tool(args_schema=DnsDumpsterInput)
 def dnsdumpster_lookup(domain: str) -> dict[str, Any]:
     """Discover subdomains, DNS records, and hosting via DNSDumpster.
 
@@ -152,6 +158,3 @@ def dnsdumpster_lookup(domain: str) -> dict[str, Any]:
             raise ToolException(
                 f"dnsdumpster_lookup: failed to parse response: {exc}",
             ) from exc
-
-
-dnsdumpster_lookup.handle_tool_error = True

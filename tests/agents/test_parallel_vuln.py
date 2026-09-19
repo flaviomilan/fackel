@@ -1,7 +1,7 @@
 """Tests for the parallel vuln-scan specialist fan-out (LangGraph ``Send``).
 
-Vuln scanning is active, so the fan-out is gated behind ``FACKEL_VULN_SPECIALISTS``
-and forced sequential under HITL approval; these tests cover the parallel path.
+Vuln scanning is active; the fan-out is the default path and runs sequentially
+instead only under per-tool HITL approval. These tests cover the parallel path.
 """
 
 from __future__ import annotations

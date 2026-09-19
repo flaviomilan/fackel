@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from fackel.agents.orchestrator.nodes._helpers import (
@@ -15,7 +13,6 @@ from fackel.agents.orchestrator.nodes.report_and_gates import (
     route_after_osint,
     route_after_port_scan,
 )
-from fackel.agents.orchestrator.nodes.vuln_scan import _run_vuln_scan_with_retry
 
 
 class TestMakeFinding:
@@ -133,22 +130,19 @@ class TestRouteAfterOsint:
 class TestRouteAfterPortScan:
     """Verify routing decisions after port scan phase.
 
-    With ``FACKEL_VULN_SPECIALISTS`` on (the default), proceeding routes to the
-    parallel ``vuln_dispatch`` entry; otherwise (or under HITL approval) it routes
-    to the monolithic ``vuln_scan`` node.
+    By default (no HITL approval) proceeding routes to the parallel
+    ``vuln_dispatch`` entry; under per-tool approval it routes to the sequential
+    ``vuln_scan`` node. ``skip_downstream`` short-circuits to ``triage``.
     """
 
     @pytest.fixture(autouse=True)
-    def _specialists_on(self, monkeypatch):
-        """Pin the default (specialists on, approval off) unless a test overrides."""
+    def _approval_off(self):
+        """Default to approval off unless a test overrides."""
         from fackel.agents.orchestrator import streaming
-        from fackel.settings import get_settings
 
-        monkeypatch.setenv("FACKEL_VULN_SPECIALISTS", "true")
-        get_settings.cache_clear()
         streaming.set_tool_approval(False)
         yield
-        get_settings.cache_clear()
+        streaming.set_tool_approval(False)
 
     def test_no_evaluation_proceeds_to_vuln_dispatch(self):
         state = {"phase_evaluations": [], "target": "example.com"}
@@ -181,15 +175,7 @@ class TestRouteAfterPortScan:
         }
         assert route_after_port_scan(state) == "vuln_dispatch"
 
-    def test_specialists_off_uses_monolithic(self, monkeypatch):
-        from fackel.settings import get_settings
-
-        monkeypatch.setenv("FACKEL_VULN_SPECIALISTS", "false")
-        get_settings.cache_clear()
-        state = {"phase_evaluations": [], "target": "example.com"}
-        assert route_after_port_scan(state) == "vuln_scan"
-
-    def test_hitl_approval_forces_monolithic(self):
+    def test_hitl_approval_routes_to_sequential_vuln_scan(self):
         from fackel.agents.orchestrator import streaming
 
         streaming.set_tool_approval(True)
@@ -198,114 +184,3 @@ class TestRouteAfterPortScan:
             assert route_after_port_scan(state) == "vuln_scan"
         finally:
             streaming.set_tool_approval(False)
-
-
-class TestRunVulnScanWithRetry:
-    """Verify quality-gated retry logic for the vuln_scan node."""
-
-    def _make_evaluation(self, completeness: str, score: float, gaps: list[str] | None = None):
-        """Build a mock PhaseEvaluation."""
-        eval_obj = MagicMock()
-        eval_obj.completeness = completeness
-        eval_obj.score = score
-        eval_obj.gaps = gaps or []
-        eval_obj.reasoning = "test reasoning"
-        eval_obj.model_dump.return_value = {
-            "phase": "vuln_scan",
-            "completeness": completeness,
-            "score": score,
-            "gaps": gaps or [],
-            "reasoning": "test reasoning",
-        }
-        return eval_obj
-
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.emit_evaluation")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.agent_summary", return_value="summary")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.run_and_stream_agent", return_value=[])
-    def test_no_retry_when_quality_ok(self, mock_run, mock_summary, mock_eval_mod, mock_emit):
-        """When first pass scores well, no retry is triggered."""
-        good_eval = self._make_evaluation("complete", 0.8)
-        mock_eval_mod.evaluate_phase.return_value = good_eval
-
-        agent = MagicMock()
-        _msgs, evaluation = _run_vuln_scan_with_retry(
-            agent,
-            "example.com",
-            ["1.2.3.4"],
-            [],
-            {},
-            "scan prompt",
-            {},
-        )
-
-        assert mock_run.call_count == 1
-        assert evaluation.completeness == "complete"
-
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.emit_evaluation")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.streaming")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.agent_summary", return_value="retry summary")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.run_and_stream_agent", return_value=[])
-    @patch(
-        "fackel.agents.orchestrator.nodes.vuln_scan._load_retry_guidance",
-        return_value=("loop", "approach"),
-    )
-    def test_retry_when_empty_and_low_score(
-        self,
-        mock_guidance,
-        mock_run,
-        mock_summary,
-        mock_eval_mod,
-        mock_streaming,
-        mock_emit,
-    ):
-        """When first pass is empty with score < 0.3, retry is triggered."""
-        empty_eval = self._make_evaluation("empty", 0.1, ["no vuln data"])
-        retry_eval = self._make_evaluation("partial", 0.6)
-        mock_eval_mod.evaluate_phase.side_effect = [empty_eval, retry_eval]
-
-        agent = MagicMock()
-        _msgs, evaluation = _run_vuln_scan_with_retry(
-            agent,
-            "example.com",
-            [],
-            [],
-            {},
-            "scan prompt",
-            {},
-        )
-
-        assert mock_run.call_count == 2  # initial + retry
-        assert evaluation.completeness == "partial"
-        mock_streaming.emit.assert_any_call("vuln_scan", "retry", {"reason": "judge: empty output"})
-
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.emit_evaluation")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.agent_summary", return_value="summary")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.run_and_stream_agent", return_value=[])
-    def test_no_retry_when_empty_but_high_score(
-        self, mock_run, mock_summary, mock_eval_mod, mock_emit
-    ):
-        """Empty completeness but score >= 0.3 does NOT trigger retry."""
-        eval_obj = self._make_evaluation("empty", 0.4)
-        mock_eval_mod.evaluate_phase.return_value = eval_obj
-
-        agent = MagicMock()
-        _run_vuln_scan_with_retry(agent, "example.com", [], [], {}, "prompt", {})
-
-        assert mock_run.call_count == 1  # no retry
-
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.emit_evaluation")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.evaluator")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.agent_summary", return_value="summary")
-    @patch("fackel.agents.orchestrator.nodes.vuln_scan.run_and_stream_agent", return_value=[])
-    def test_no_retry_when_partial(self, mock_run, mock_summary, mock_eval_mod, mock_emit):
-        """Partial completeness does NOT trigger retry even with low score."""
-        eval_obj = self._make_evaluation("partial", 0.2)
-        mock_eval_mod.evaluate_phase.return_value = eval_obj
-
-        agent = MagicMock()
-        _run_vuln_scan_with_retry(agent, "example.com", [], [], {}, "prompt", {})
-
-        assert mock_run.call_count == 1  # no retry

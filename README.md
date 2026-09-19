@@ -410,15 +410,12 @@ export FACKEL_MODEL_VULN_SCAN=openai:gpt-4o       # Capable OpenAI model
 Tools with missing API keys (and `hard_fail=True`) are **automatically removed**
 from agents, preventing the LLM from attempting calls that would fail.
 
-### Infrastructure (optional)
+### Persistence
 
-```bash
-# Start MongoDB persistence stack
-docker compose up -d
-```
-
-The `docker-compose.yml` provides:
-- **MongoDB 7** — scan persistence and query system
+Scans persist to a **file-based JSONL store** — no database or extra service to run.
+Each scan writes an append-only set of JSONL files (`executions.jsonl`, `records.jsonl`,
+`timeline.jsonl`, `edges.jsonl`) under `FACKEL_DATA_DIR` (default `~/.fackel/data`), which
+the `fackel scans`, `fackel diff`, `fackel graph`, and `fackel ask` commands read back.
 
 ### Observability (optional)
 

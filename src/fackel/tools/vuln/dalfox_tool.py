@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
     ensure_scheme,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -38,7 +39,7 @@ class DalfoxInput(BaseModel):
     )
 
 
-@tool(args_schema=DalfoxInput)
+@fackel_tool(args_schema=DalfoxInput)
 def dalfox_scan(target: str) -> dict[str, Any]:
     """Scan a URL for XSS vulnerabilities using DalFox.
 
@@ -112,6 +113,3 @@ def _map_severity(raw: str) -> str:
     if "low" in raw_lower or "grep" in raw_lower:
         return "low"
     return "info"
-
-
-dalfox_scan.handle_tool_error = True

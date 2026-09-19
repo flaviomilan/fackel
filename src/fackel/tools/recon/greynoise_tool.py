@@ -15,11 +15,12 @@ from __future__ import annotations
 from typing import Any
 
 import requests
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -44,7 +45,7 @@ class GreyNoiseInput(BaseModel):
     )
 
 
-@tool(args_schema=GreyNoiseInput)
+@fackel_tool(args_schema=GreyNoiseInput)
 def greynoise_lookup(ip: str) -> dict[str, Any]:
     """Check an IP's internet-scan reputation via GreyNoise Community.
 
@@ -86,6 +87,3 @@ def greynoise_lookup(ip: str) -> dict[str, Any]:
             "gn_actor": str(payload.get("name", "")),
         },
     )
-
-
-greynoise_lookup.handle_tool_error = True

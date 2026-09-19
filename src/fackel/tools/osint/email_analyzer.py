@@ -7,10 +7,10 @@ import os
 import re
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import format_tool_output
+from fackel.tooling import fackel_tool, format_tool_output
 from fackel.tooling.http_client import get_session
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ def _check_reputation(email: str) -> dict[str, Any] | None:
     return None
 
 
-@tool(args_schema=EmailAnalyzerInput)
+@fackel_tool(args_schema=EmailAnalyzerInput)
 def analyze_email(email: str) -> dict[str, Any]:
     """Analyse an email address across multiple sources: data breach exposure
     (HIBP) and reputation scoring (EmailRep).
@@ -89,6 +89,3 @@ def analyze_email(email: str) -> dict[str, Any]:
             "reputation": reputation,
         },
     )
-
-
-analyze_email.handle_tool_error = True

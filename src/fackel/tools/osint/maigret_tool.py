@@ -19,10 +19,16 @@ import os
 import re
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
-from fackel.tooling import format_tool_output, get_tool_timeout, require_binary, run_command
+from fackel.tooling import (
+    fackel_tool,
+    format_tool_output,
+    get_tool_timeout,
+    require_binary,
+    run_command,
+)
 
 _TIMEOUT = 180
 _MAX_ACCOUNTS = 200
@@ -49,7 +55,7 @@ def _enabled() -> bool:
     return os.getenv("FACKEL_ENABLE_MAIGRET", "").strip().lower() in ("1", "true", "yes", "on")
 
 
-@tool(args_schema=MaigretInput)
+@fackel_tool(args_schema=MaigretInput)
 def maigret_scan(username: str) -> dict[str, Any]:
     """Discover a username's social/web accounts via Maigret.
 
@@ -98,6 +104,3 @@ def maigret_scan(username: str) -> dict[str, Any]:
         "ok",
         data={"username": username, "accounts": accounts, "count": len(accounts)},
     )
-
-
-maigret_scan.handle_tool_error = True

@@ -8,7 +8,6 @@ node functions and routing functions for use by ``graph.py``.
 from .osint import (
     dispatch_osint_specialists,
     osint_collect_node,
-    osint_node,
     osint_specialist_node,
 )
 from .port_scan import port_scan_node
@@ -33,7 +32,6 @@ __all__ = [
     "dispatch_osint_specialists",
     "dispatch_vuln_specialists",
     "osint_collect_node",
-    "osint_node",
     "osint_specialist_node",
     "port_scan_node",
     "report_node",

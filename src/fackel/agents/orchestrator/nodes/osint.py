@@ -42,23 +42,6 @@ def _load_retry_guidance() -> tuple[str, str]:
     return _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE  # type: ignore[return-value]
 
 
-def osint_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
-    """Monolithic single-agent OSINT (the ``FACKEL_OSINT_SPECIALISTS=false`` path).
-
-    Runs one 31-tool agent with LLM-as-a-judge evaluation + self-reflection
-    retry, then the agentic pivot loop.  The default path is the parallel
-    specialist fan-out (``dispatch_osint_specialists`` → ``osint_specialist`` →
-    ``osint_collect``); see :func:`build_graph`.
-    """
-    from fackel.agents.osint.agent import build
-
-    target = sanitize_target(state["target"])
-    agent = build()
-    messages, evaluation = _run_osint_with_retry(agent, target, config)
-    messages = messages + _run_pivot_loop(agent, target, config)
-    return _build_osint_result(messages, target, evaluation)
-
-
 # ---------------------------------------------------------------------------
 # Parallel specialist fan-out (idiomatic LangGraph Send map-reduce)
 # ---------------------------------------------------------------------------
@@ -127,12 +110,18 @@ def osint_collect_node(state: ScanState, config: RunnableConfig) -> dict[str, An
 
     target = sanitize_target(state["target"])
     messages: list[Any] = list(state.get("osint_messages", []))
+    agent = build()
 
     evaluation = evaluator.evaluate_phase("osint", agent_summary(messages), [target], config=config)
     emit_evaluation("osint", evaluation)
 
+    # Quality-gated self-reflection retry: if the judge rated the combined
+    # specialist output as empty, run one enriched full-toolset pass.
+    if evaluation.completeness == "empty" and evaluation.score < 0.3:
+        messages = messages + _retry_osint(agent, target, evaluation, config)
+
     # Cross-domain pivots (sequential, post-barrier) use the full toolset.
-    messages = messages + _run_pivot_loop(build(), target, config)
+    messages = messages + _run_pivot_loop(agent, target, config)
     return _build_osint_result(messages, target, evaluation)
 
 
@@ -171,30 +160,6 @@ def _run_pivot_loop(agent: Any, target: str, config: RunnableConfig) -> list[Any
         extra += pivot_msgs
 
     return extra
-
-
-def _run_osint_with_retry(
-    agent: Any,
-    target: str,
-    config: RunnableConfig,
-) -> tuple[list[Any], Any]:
-    """Run OSINT agent with quality evaluation and retry on poor output."""
-    messages = run_and_stream_agent(
-        agent,
-        "osint",
-        f"Perform passive OSINT reconnaissance on: {target}",
-        config=config,
-    )
-    summary = agent_summary(messages)
-
-    evaluation = evaluator.evaluate_phase("osint", summary, [target], config=config)
-    emit_evaluation("osint", evaluation)
-
-    if evaluation.completeness == "empty" and evaluation.score < 0.3:
-        retry_msgs = _retry_osint(agent, target, evaluation, config)
-        messages = messages + retry_msgs
-
-    return messages, evaluation
 
 
 def _retry_osint(agent: Any, target: str, evaluation: Any, config: RunnableConfig) -> list[Any]:

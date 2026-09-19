@@ -17,11 +17,12 @@ import os
 import tempfile
 from typing import Any
 
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, Field
 
 from fackel.tooling import (
     TargetType,
+    fackel_tool,
     format_tool_output,
     get_tool_timeout,
     guard_target,
@@ -57,7 +58,7 @@ class DnsxInput(BaseModel):
     )
 
 
-@tool(args_schema=DnsxInput)
+@fackel_tool(args_schema=DnsxInput)
 def dnsx_resolve(hosts: list[str], wildcard_domain: str = "") -> dict[str, Any]:
     """Bulk-resolve hostnames and filter wildcard DNS with dnsx.
 
@@ -141,6 +142,3 @@ def dnsx_resolve(hosts: list[str], wildcard_domain: str = "") -> dict[str, Any]:
             "wildcard_filtered": bool(wildcard),
         },
     )
-
-
-dnsx_resolve.handle_tool_error = True
