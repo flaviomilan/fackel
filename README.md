@@ -91,7 +91,7 @@ See [docs/tools.md](docs/tools.md) for the full list of required binaries per to
 
 ```bash
 # Clone and install
-git clone https://github.com/your-org/fackel.git
+git clone https://github.com/flaviomilan/fackel.git
 cd fackel
 uv sync --python 3.12
 ```
@@ -348,6 +348,10 @@ export FACKEL_DEFAULT_MODEL=gpt-5-mini
 # or per-agent:
 export FACKEL_MODEL_REPORT=gpt-4o
 ```
+
+> The default model is `gpt-5-mini`, which your OpenAI account must have access to. If a
+> scan fails immediately with a model/authorization error, set `FACKEL_DEFAULT_MODEL` to a
+> model you can use (e.g. `gpt-4o-mini`).
 
 #### Ollama
 

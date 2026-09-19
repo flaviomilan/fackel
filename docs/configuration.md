@@ -39,7 +39,7 @@ degrades gracefully.
 ### Model selection
 
 Each agent reads its model from a dedicated environment variable, falling back to
-`gpt-5-mini` (defined in `src/fackel/agents/config.py`).
+`gpt-5-mini` (the `FACKEL_DEFAULT_MODEL` default in `src/fackel/settings.py`).
 
 | Variable | Agent | Default |
 |----------|-------|---------|
@@ -190,6 +190,7 @@ overridden via a `FACKEL_*` environment variable.
 | `FACKEL_OSINT_SPECIALISTS` | `true` | Run OSINT as focused specialist sub-agents (narrow toolsets) instead of one 31-tool agent. Set `false` for the single-agent path. |
 | `FACKEL_VULN_SPECIALISTS` | `true` | Run vuln-scan as parallel specialist sub-agents (surface, nuclei, web-injection, app/config, TLS) fanned out via LangGraph `Send`, instead of one monolithic agent. Vuln scanning is **active**: parallel is faster but sends concurrent traffic to the target (more likely to trip WAF/rate-limits). Per-tool HITL approval (`FACKEL_APPROVE_TOOLS`) forces the single-agent path regardless. Set `false` for the single-agent path. |
 | `FACKEL_BUDGET_WARNING_RATIO` | `0.8` | Fraction of budget at which agents receive a warning prompt. |
+| `FACKEL_ENABLE_MAIGRET` | _(unset)_ | Opt in to the maigret / social-account OSINT specialist (semi-passive). Requires the `maigret` binary (`pipx install maigret`); disabled by default. |
 
 #### Default LLM model
 
