@@ -45,5 +45,4 @@ Add one only for a responsibility that recurs, is bounded, and is not already co
 ## Keeping contexts apart
 
 - Dev-time names (`.claude/`) and runtime names (`src/fackel/agents`, `prompts/skills/`) stay separate; the word "skill" under `prompts/` is historical and means a per-agent role prompt.
-- Examples and fixtures use reserved targets only (`example.com`, `*.test`, RFC 5737), as in `tests/fixtures/eval/README.md`.
-- Real credentials (`.env`) and real scan data (`FACKEL_DATA_DIR`, `reports/`) are never read or quoted.
+- The credentials, scan-data and reserved-target rules live in `CLAUDE.md` → Boundaries (always loaded, enforced every session); `tests/fixtures/eval/README.md` shows the reserved targets in use.
