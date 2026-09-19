@@ -17,7 +17,7 @@ applyTo: "**/*.py"
 - Avoid magic methods unless necessary
 - No global mutable state
 - Timestamps in UTC everywhere
-- Comment *why*, not *what*
+- Knowledge lives in docstrings, not `#` comments — see `comment-style.instructions.md`
 - Python 3.12, line length 100 (enforced by ruff and strict mypy)
 
 ## Async

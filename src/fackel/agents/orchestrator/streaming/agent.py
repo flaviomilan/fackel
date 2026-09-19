@@ -66,6 +66,15 @@ class _AgentStreamer:
     """
 
     def __init__(self, agent: Any, phase: str, config: RunnableConfig | None = None) -> None:
+        """Wire the streamer and derive its run config.
+
+        ``recursion_limit`` is aligned with the tool-call budget so LangGraph's
+        default (25 super-steps) does not silently cap the agent below the
+        configured limit; a ReAct round is ~2 super-steps, and ``max_iter <= 0``
+        disables the budget entirely (limit lifted to 10_000).  ``merge_configs``
+        preserves callbacks, metadata, tags, run_name and run_id from the outer
+        orchestrator *config* so LangSmith traces nest under the parent run.
+        """
         self._agent = agent
         self._phase = phase
         self._messages: list[Any] = []
@@ -77,16 +86,9 @@ class _AgentStreamer:
         if self._has_checkpointer:
             inner.setdefault("configurable", {})["thread_id"] = str(uuid.uuid4())
 
-        # Align LangGraph's recursion limit with the tool-call budget so the
-        # default (25 super-steps) doesn't silently cap the agent below the
-        # configured limit. A ReAct round is ~2 super-steps; ``<= 0`` disables
-        # the budget entirely, so we lift the recursion limit too.
         max_iter = get_settings().max_agent_iterations
         inner["recursion_limit"] = 10_000 if max_iter <= 0 else max(2 * max_iter + 10, 25)
 
-        # merge_configs preserves callbacks, metadata, tags, run_name,
-        # and run_id from the outer orchestrator config so that
-        # LangSmith traces nest correctly under the parent run.
         self._config: RunnableConfig | None = (
             merge_configs(config, inner) if config else inner
         ) or None
@@ -234,7 +236,7 @@ class _AgentStreamer:
         """
         max_iterations = get_settings().max_agent_iterations
         if max_iterations <= 0:
-            return  # disabled — no hard tool-call cap
+            return
 
         if self._tool_call_count >= max_iterations:
             logger.warning(

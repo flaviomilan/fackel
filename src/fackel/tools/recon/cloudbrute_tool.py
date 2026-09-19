@@ -92,7 +92,6 @@ def cloudbrute_enum(keyword: str, cloud: str = "") -> dict[str, Any]:
         line = line.strip()
         if not line:
             continue
-        # CloudBrute outputs lines with format: [provider] resource_url
         for raw in parse_jsonl(line):
             results.append(
                 {
@@ -103,7 +102,6 @@ def cloudbrute_enum(keyword: str, cloud: str = "") -> dict[str, Any]:
             )
             break
         else:
-            # Plain text output — parse [provider] url pattern
             if line.startswith("["):
                 bracket_end = line.find("]")
                 if bracket_end > 0:

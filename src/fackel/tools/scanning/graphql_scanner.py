@@ -61,7 +61,6 @@ def graphql_scan(url: str) -> dict[str, Any]:
     suggestion leaks, GET-method queries (CSRF risk), and schema enumeration.
     """
     url = guard_target(url, "graphql_scan", TargetType.URL)
-    # Guard the connect-to-target host against DNS rebinding to private IPs.
     guard_request_target(url, "graphql_scan")
 
     headers = {

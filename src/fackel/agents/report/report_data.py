@@ -19,7 +19,6 @@ from datetime import datetime
 from fackel.domain import InformationType
 from fackel.persistence.store import InformationStore
 
-# Report sections, in order, mapped to the entity types they cover.
 _SECTIONS: list[tuple[str, list[InformationType]]] = [
     (
         "Infrastructure & Assets",

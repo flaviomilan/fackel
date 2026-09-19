@@ -19,12 +19,9 @@ from dataclasses import dataclass, field
 from fackel.domain import InformationType
 from fackel.persistence.store import InformationStore
 
-# A fact is "verified" when corroborated by at least this many distinct source
-# tools, OR carries at least this confidence from a single authoritative source.
 MIN_SOURCES = 2
 MIN_CONFIDENCE = 0.85
 
-# Finding types where a single, uncorroborated source warrants an explicit flag.
 HIGH_IMPACT_TYPES = (
     InformationType.SECURITY_VULNERABILITY,
     InformationType.CREDENTIAL_LEAK,
@@ -56,10 +53,6 @@ class VerificationSummary:
     @property
     def verified_ratio(self) -> float:
         return round(self.verified / self.total, 3) if self.total else 0.0
-
-
-def _is_verified(distinct_sources: int, confidence: float) -> bool:
-    return distinct_sources >= MIN_SOURCES or confidence >= MIN_CONFIDENCE
 
 
 def verify_findings(

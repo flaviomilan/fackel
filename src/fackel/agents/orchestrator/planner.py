@@ -40,8 +40,6 @@ def plan_osint_pivots(store: InformationStore) -> list[PivotDirective]:
     directives: list[PivotDirective] = []
     executed = store.tools_executed()
 
-    # Emails were discovered (e.g. via hunter_email_search) but never checked
-    # for breach exposure.
     emails = sorted({r.normalized_value for r in store.records_by_type(InformationType.EMAIL)})
     if emails and "analyze_email" not in executed:
         directives.append(
@@ -55,7 +53,6 @@ def plan_osint_pivots(store: InformationStore) -> list[PivotDirective]:
             )
         )
 
-    # An organisation was identified but its public code surface was not searched.
     orgs = sorted({r.original_value for r in store.records_by_type(InformationType.ORGANIZATION)})
     if orgs and "github_repo_discovery" not in executed:
         directives.append(

@@ -55,9 +55,6 @@ def _safe_for_prompt(text: str | None, *, max_chars: int = _INJECTION_MAX_CHARS)
     """
     if not text:
         return ""
-    # The replacement glyphs (modifier-letter apostrophe, small tilde) are
-    # intentional look-alikes that defuse fenced-code/escape sequences
-    # without losing visual context for downstream readers.
     cleaned = (
         sanitize_tool_output(text, tool_name="judge_feedback")
         .replace("```", "ʼʼʼ")  # noqa: RUF001

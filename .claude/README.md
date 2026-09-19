@@ -33,6 +33,7 @@ adding-a-tool ──(last step)──> tool-safety-reviewer
 | Rule | Single source |
 |------|---------------|
 | Coding standards, anti-patterns, glossary, persistence, review checklist | `.github/instructions/` |
+| Comment / docstring style (docstrings only, no prose `#` comments) | `.github/instructions/comment-style.instructions.md` |
 | Target validation, SSRF, secrets | `docs/input-validation.md` and docstrings in `src/fackel/tooling/` |
 | Tool wiring checklist | `adding-a-tool` |
 | Prompt composition rules | `editing-prompts` |

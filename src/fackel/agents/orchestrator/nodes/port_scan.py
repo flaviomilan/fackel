@@ -22,7 +22,6 @@ from ._helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Loaded once and cached — supplies node-level prompt context.
 _ENUMERATION_GUIDANCE: str | None = None
 _PIVOT_PRIORITY_GUIDANCE: str | None = None
 

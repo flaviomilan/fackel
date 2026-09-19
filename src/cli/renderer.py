@@ -44,7 +44,7 @@ class _LaneState:
     """Mutable per-agent state within the current phase."""
 
     name: str
-    status: str = "running"  # running | done | error
+    status: str = "running"
     tool_batch: list[dict[str, Any]] = field(default_factory=list)
     thinking: str = ""
     tool_count: int = 0
@@ -77,9 +77,7 @@ class EventRenderer:
         self._seen_errors: set[str] = set()
         self._suppressed_errors = 0
         self._spinner_msg = ""
-        self._live: Any = None  # rich.live.Live, imported lazily
-
-    # -- lane helpers ------------------------------------------------------
+        self._live: Any = None
 
     def _lane(self, data: dict[str, Any]) -> _LaneState:
         """Return (creating if needed) the lane state for an event."""
@@ -92,8 +90,6 @@ class EventRenderer:
 
     def _named_lanes(self) -> list[_LaneState]:
         return [lane for lane in self._lanes.values() if lane.name != _MAIN]
-
-    # -- live area ---------------------------------------------------------
 
     def _build_display(self) -> Group:
         spinner = Spinner("dots", text=f"  {self._spinner_msg}", style="dim")
@@ -141,8 +137,6 @@ class EventRenderer:
     def shutdown(self) -> None:
         self._stop_live()
 
-    # -- phase framing -----------------------------------------------------
-
     def _ensure_phase(self, phase: str) -> None:
         """Open a new phase (print header, reset lanes) when the phase changes.
 
@@ -176,8 +170,6 @@ class EventRenderer:
         handler = self._EVENT_HANDLERS.get(event_type)
         if handler is not None:
             handler(self, data=data)
-
-    # -- main-lane content (single sequential agent) -----------------------
 
     def _build_tool_table(self, lane: _LaneState) -> Table:
         table = Table(box=None, show_header=False, padding=(0, 1), pad_edge=False, expand=True)
@@ -222,8 +214,6 @@ class EventRenderer:
             expand=True,
         )
 
-    # -- parallel-lane content ---------------------------------------------
-
     def _lane_activity(self, lane: _LaneState) -> str:
         running = [t for t in lane.tool_batch if t["status"] == "running"]
         if running:
@@ -249,11 +239,7 @@ class EventRenderer:
             table.add_row(icon, f"[bold]{lane.name}[/bold]", self._lane_activity(lane))
         return table
 
-    # -- event handlers ----------------------------------------------------
-
     def _on_start(self, *, data: dict[str, Any]) -> None:
-        # Lane-scoped start (a parallel specialist) is handled by lane_start;
-        # a bare start just (re)affirms the phase already opened by _ensure_phase.
         if data.get("lane"):
             self._lane(data)
             self._refresh()
@@ -357,7 +343,6 @@ class EventRenderer:
     def _append_thinking(self, lane: _LaneState, content: str) -> None:
         if not content:
             return
-        # Main lane: persist any completed tool table before switching to thinking.
         if lane.name == _MAIN and lane.tool_batch:
             self._console.print(self._build_tool_table(lane))
             lane.tool_batch.clear()
@@ -402,7 +387,6 @@ class EventRenderer:
         self._stop_live()
 
     def _on_done(self, *, data: dict[str, Any]) -> None:
-        # Persist any lingering main-lane content, then close the phase.
         main = self._lanes.get(_MAIN)
         if main and main.tool_batch:
             self._console.print(self._build_tool_table(main))
@@ -420,8 +404,6 @@ class EventRenderer:
             f"[/{theme.color('success')}]{meta_str}"
         )
         self._phase = None
-
-    # -- compatibility shim (used by the CLI approval prompt) --------------
 
     def _persist_content(self) -> None:
         """Persist pending main-lane content and stop the live area.

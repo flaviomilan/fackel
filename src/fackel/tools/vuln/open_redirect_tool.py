@@ -27,7 +27,6 @@ from fackel.tooling import (
 
 _TIMEOUT = 300
 
-# Tags covering open redirect templates in nuclei.
 _REDIRECT_TAGS = "redirect,open-redirect"
 
 

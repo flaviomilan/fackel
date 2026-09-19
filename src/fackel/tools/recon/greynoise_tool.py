@@ -64,7 +64,6 @@ def greynoise_lookup(ip: str) -> dict[str, Any]:
                 headers={"key": api_key, "Accept": "application/json"},
                 timeout=get_tool_timeout("greynoise_lookup", _TIMEOUT),
             )
-            # 404 = IP not observed; still a valid, useful answer.
             if resp.status_code != 404:
                 resp.raise_for_status()
         except requests.RequestException as exc:

@@ -195,8 +195,6 @@ def build_full_report(state: dict[str, Any]) -> str:  # noqa: C901 - sequential 
         sections.append("_No LLM report was generated._")
     sections.append("")
 
-    # Deterministic, complete inventory straight from the knowledge graph — the
-    # zero-loss guarantee that every discovered record appears in the report.
     asset_inventory: str = state.get("asset_inventory", "")
     if asset_inventory.strip():
         section_idx += 1

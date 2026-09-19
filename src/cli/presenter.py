@@ -26,9 +26,6 @@ from rich.text import Text
 
 from cli import theme
 
-# Block wordmark (figlet "ANSI Shadow"), painted top-to-bottom with the Fackel
-# brand gradient.  Shown when the terminal is wide enough; narrower terminals fall
-# back to a compact panel.
 _WORDMARK: tuple[str, ...] = (
     "███████╗ █████╗  ██████╗██╗  ██╗███████╗██╗     ",
     "██╔════╝██╔══██╗██╔════╝██║ ██╔╝██╔════╝██║     ",
@@ -38,10 +35,8 @@ _WORDMARK: tuple[str, ...] = (
     "╚═╝     ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝",
 )
 
-# Brand palette anchors (cyan → teal → emerald → mint), interpolated to one stop
-# per wordmark row for a smooth gradient.
 _BRAND_ANCHORS: tuple[str, ...] = ("#08f0f1", "#07a4b3", "#01efb0", "#5bfec2")
-BRAND_PRIMARY = _BRAND_ANCHORS[0]  # brightest cyan — used for compact fallbacks
+BRAND_PRIMARY = _BRAND_ANCHORS[0]
 
 
 def _lerp_hex(a: str, b: str, t: float) -> str:
@@ -79,9 +74,6 @@ def resolve_version() -> str:
 def _fmt_args(args: dict[str, Any]) -> str:
     """Render tool args as a stable ``k=v, k=v`` string (shared by approvals)."""
     return ", ".join(f"{k}={v}" for k, v in args.items())
-
-
-# -- framing ---------------------------------------------------------------
 
 
 def print_banner(console: Console) -> None:
@@ -136,9 +128,6 @@ def print_scan_header(
     console.print()
 
 
-# -- approvals (rendering only; confirmation mechanism is the caller's) -----
-
-
 def render_gate_approval(console: Console, question: str) -> None:
     """Render the active-scan gate approval panel."""
     console.print()
@@ -179,9 +168,6 @@ def render_tool_approval(
             expand=True,
         )
     )
-
-
-# -- final report ----------------------------------------------------------
 
 
 def present_report(
