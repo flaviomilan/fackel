@@ -40,7 +40,7 @@ Issues = "https://github.com/flaviomilan/fackel/issues"
 
 [project.optional-dependencies]
 dev = [
-  "ruff>=0.16.7",
+  "ruff>=0.16.8",
   "mypy>=2.3.1",
   "pytest>=9.0.3",
   "pytest-asyncio>=1.4.0",
