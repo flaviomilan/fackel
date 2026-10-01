@@ -1,8 +1,11 @@
 version: 2
 
 updates:
-  # Python dependencies (pip ecosystem)
-  - package-ecosystem: pip
+  # Python dependencies. This project is uv-managed (pyproject.toml + uv.lock),
+  # so use the `uv` ecosystem: it is what Dependabot already picks for this
+  # repo's security alerts, and keeping version and security updates under one
+  # ecosystem lets both be grouped.
+  - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
@@ -15,11 +18,17 @@ updates:
       - automated
     commit-message:
       prefix: "deps"
-    # Collapse every pip update into a single PR. Omitting `update-types`
-    # groups all semver levels; restricting it lets updates escape the group
-    # and open one PR each (what previously happened).
+    # One PR for all version updates, one PR for all security updates.
+    # A group matches version updates unless `applies-to: security-updates`
+    # is set, and omitting `update-types` keeps every semver level in the
+    # group (restricting it was why updates used to escape into one PR each).
     groups:
       python-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      python-security:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -37,8 +46,12 @@ updates:
       - automated
     commit-message:
       prefix: "ci"
-    # Same policy for Actions: one grouped PR covering all update types.
     groups:
       github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      github-actions-security:
+        applies-to: security-updates
         patterns:
           - "*"
