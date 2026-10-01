@@ -28,8 +28,6 @@ from fackel.tooling.http_client import get_session
 
 _TIMEOUT = 30
 
-# Regex patterns for common secrets in JavaScript files.
-# Each entry: (name, regex_pattern, severity, description).
 _SECRET_PATTERNS: list[tuple[str, str, str, str]] = [
     (
         "aws_access_key",
@@ -165,7 +163,6 @@ _SECRET_PATTERNS: list[tuple[str, str, str, str]] = [
     ),
 ]
 
-# Compile regexes once.
 _COMPILED_PATTERNS: list[tuple[str, re.Pattern[str], str, str]] = [
     (name, re.compile(pattern, re.IGNORECASE), severity, desc)
     for name, pattern, severity, desc in _SECRET_PATTERNS
@@ -211,7 +208,6 @@ def _fetch(url: str, timeout: int) -> str:
 def _extract_script_urls(html: str, base_url: str) -> list[str]:
     """Extract JavaScript URLs from HTML script tags."""
     urls: list[str] = []
-    # Simple regex to find <script src="..."> without pulling in a full parser.
     for match in re.finditer(r'<script[^>]+src=["\']([^"\']+)["\']', html, re.IGNORECASE):
         src = match.group(1)
         if src.startswith(("data:", "blob:")):
@@ -232,14 +228,12 @@ def _scan_content(
     for name, pattern, severity, description in _COMPILED_PATTERNS:
         for match in pattern.finditer(content):
             value = match.group(0)
-            # Truncate long matches for readability.
             display = value[:80] + "..." if len(value) > 80 else value
             dedup_key = f"{name}:{value}"
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
 
-            # Approximate line number.
             line_num = content[: match.start()].count("\n") + 1
 
             results.append(
@@ -270,7 +264,6 @@ def js_secret_scan(target: str) -> dict[str, Any]:
 
     timeout = get_tool_timeout("js_secret_scan", _TIMEOUT)
 
-    # Determine if target is a direct JS file or an HTML page.
     parsed = urlparse(target)
     path_lower = parsed.path.lower()
     is_js = path_lower.endswith((".js", ".mjs", ".cjs"))
@@ -279,19 +272,16 @@ def js_secret_scan(target: str) -> dict[str, Any]:
     scanned_urls: list[str] = []
 
     if is_js:
-        # Direct JS file scan.
         content = _fetch(target, timeout)
         if not content:
             raise ToolException(f"js_secret_scan: failed to fetch {target}")
         all_findings.extend(_scan_content(content, target))
         scanned_urls.append(target)
     else:
-        # HTML page — extract inline + external scripts.
         page_content = _fetch(target, timeout)
         if not page_content:
             raise ToolException(f"js_secret_scan: failed to fetch {target}")
 
-        # Scan inline scripts on the page.
         for inline_match in re.finditer(
             r"<script[^>]*>(.*?)</script[^>]*>", page_content, re.DOTALL | re.IGNORECASE
         ):
@@ -299,10 +289,9 @@ def js_secret_scan(target: str) -> dict[str, Any]:
             if inline:
                 all_findings.extend(_scan_content(inline, f"{target} (inline)"))
 
-        # Extract and scan external JS files.
         js_urls = _extract_script_urls(page_content, target)
         scanned_urls.append(target)
-        for js_url in js_urls[:20]:  # Cap at 20 to avoid excessive fetches.
+        for js_url in js_urls[:20]:
             js_content = _fetch(js_url, timeout)
             if js_content:
                 all_findings.extend(_scan_content(js_content, js_url))

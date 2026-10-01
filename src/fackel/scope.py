@@ -61,7 +61,6 @@ def _matches(target: str, pattern: str) -> bool:
     if not pattern:
         return False
 
-    # IP / CIDR entry: only an IP target can match.
     try:
         network = ipaddress.ip_network(pattern, strict=False)
     except ValueError:
@@ -72,12 +71,10 @@ def _matches(target: str, pattern: str) -> bool:
         except ValueError:
             return False
 
-    # Wildcard domain: "*.example.com" matches any subdomain of example.com.
     if pattern.startswith("*."):
-        suffix = pattern[1:]  # ".example.com"
+        suffix = pattern[1:]
         return target == pattern[2:] or target.endswith(suffix)
 
-    # Exact domain — the apex also covers its subdomains.
     return target == pattern or target.endswith("." + pattern)
 
 

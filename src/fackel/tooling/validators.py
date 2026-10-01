@@ -143,10 +143,9 @@ def _extract_host(value: str) -> str:
     Handles bare IPv6 addresses (e.g. ``fc00::1``) which ``urlparse``
     misinterprets as having a scheme.
     """
-    # Detect bare IPv6 first — urlparse misparses these.
     try:
         ipaddress.ip_address(value)
-        return value  # Already a valid IP literal.
+        return value
     except ValueError:
         pass
 
@@ -187,7 +186,6 @@ def guard_target(
     if accept is TargetType.HOST_PORT:
         return _guard_host_port(raw, _err)
 
-    # DOMAIN / IP / HOST share host extraction + shell-meta rejection.
     host = _extract_host(raw)
     if _SHELL_META_RE.search(host):
         raise _err(f"target contains forbidden characters: {host!r}")
@@ -347,7 +345,6 @@ def guard_dns_rebinding(hostname: str, tool_name: str) -> None:
         When the hostname resolves to one or more private/reserved IPs.
     """
     if is_valid_ip(hostname):
-        # Already checked by guard_target — skip resolution.
         return
 
     resolved = resolve_host(hostname)
@@ -356,7 +353,7 @@ def guard_dns_rebinding(hostname: str, tool_name: str) -> None:
             "guard_dns_rebinding(%s): DNS resolution returned no results",
             hostname,
         )
-        return  # Tool will fail on its own when it can't connect.
+        return
 
     private_addrs = [ip for ip in resolved if is_private_ip(ip)]
     if private_addrs:

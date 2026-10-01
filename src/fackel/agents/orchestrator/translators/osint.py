@@ -33,9 +33,6 @@ from ..extractors import (
 )
 from ._common import _iter_tool_messages, _make
 
-# ----------------------------------------------------------------------
-# Per-record candidate builders
-
 
 def _osint_ip_candidates(
     msg: ToolMessage,
@@ -201,7 +198,6 @@ def _osint_classification_candidates(
             continue
         entry = per_ip.setdefault(ip, {})
         merge_ip_classification_fields(entry, tool, data)
-        # ipinfo wins provenance (richest infra fields); the others only fill in.
         if tool == "ipinfo_lookup":
             source_msg[ip] = msg
             source_tool[ip] = tool
@@ -256,10 +252,6 @@ def _osint_tech_fingerprint_candidates(
                 )
             )
     return out
-
-
-# ----------------------------------------------------------------------
-# People / document / social emitters
 
 
 def _emit_breach_lookup_leaks(
@@ -482,10 +474,6 @@ def _osint_social_candidates(
     return out
 
 
-# ----------------------------------------------------------------------
-# Public OSINT entry points
-
-
 def translate_osint(
     messages: list[Any],
     *,
@@ -495,8 +483,6 @@ def translate_osint(
     candidates: list[InformationCandidate] = []
     seen: set[str] = set()
 
-    # Materialise the apex domain as a graph node so subdomain_of / resolves_to /
-    # has_email edges are rooted at a real record.
     base = target.strip().lower().rstrip(".")
     if is_valid_domain(base):
         seen.add(f"dom:{base}")
@@ -572,13 +558,11 @@ def _osint_edges(  # noqa: C901 - relationship inference across record types; ta
             )
         )
 
-    # subdomain_of: every discovered subdomain belongs to the apex domain.
     if domain_fp:
         for cand in candidates:
             if cand.type == InformationType.SUBDOMAIN:
                 _add(cand.fingerprint, RelationshipType.SUBDOMAIN_OF, domain_fp, cand.source_tool)
 
-    # resolves_to: host → IP, from dns_resolve and any hosts[{hostname, ip}] payload.
     for _msg, tool, data in _iter_tool_messages(messages):
         if data.get("type") == "domain" and data.get("ips"):
             src = _host_fp(str(data.get("target", "")))
@@ -601,7 +585,6 @@ def _osint_edges(  # noqa: C901 - relationship inference across record types; ta
                         tool,
                     )
 
-    # people / organisation edges: apex domain → email/org, org → person.
     org_cands = [c for c in candidates if c.type == InformationType.ORGANIZATION]
     if domain_fp:
         for cand in candidates:

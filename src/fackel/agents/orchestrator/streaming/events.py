@@ -19,8 +19,6 @@ EventCallback = Callable[[str, str, dict[str, Any]], None] | None
 
 ToolApprovalCallback = Callable[[dict[str, Any]], str] | None
 
-# Per-context state (asyncio tasks / threads get isolated values).  See
-# the module docstring for the rationale.
 _event_callback_var: contextvars.ContextVar[EventCallback] = contextvars.ContextVar(
     "fackel_event_callback", default=None
 )
@@ -31,7 +29,6 @@ _tool_approval_enabled_var: contextvars.ContextVar[bool] = contextvars.ContextVa
     "fackel_tool_approval_enabled", default=False
 )
 
-# Scan-level correlation id; used by structured logging and event payloads.
 current_scan_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "fackel_current_scan_id", default=None
 )
@@ -45,18 +42,11 @@ class StreamCancelledError(RuntimeError):
     graph from a worker thread (signals only work on the main thread)."""
 
 
-# Scan cancel flag; when set, the next emitted event raises ``StreamCancelledError``.
-# Bound per-run by the harness worker so it propagates into specialist threads.
 current_cancel: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
     "fackel_current_cancel", default=None
 )
 
 
-# Per-agent "lane" id; identifies which parallel specialist emitted an event so
-# the renderer can show concurrent agents in separate lanes instead of one
-# interleaved stream.  ``None`` (the default) means the single sequential "main"
-# lane.  LangGraph copies the parent context into worker threads, so setting this
-# inside a specialist node propagates to every event that node emits.
 current_lane: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "fackel_current_lane", default=None
 )
@@ -150,8 +140,6 @@ def reset_streaming_context() -> None:
     current_scan_id.set(None)
 
 
-# Serialises event-callback invocations: parallel specialist nodes run on
-# separate threads, and the CLI's Rich renderer is not thread-safe.
 _emit_lock = threading.Lock()
 
 

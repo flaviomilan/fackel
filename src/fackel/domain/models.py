@@ -148,20 +148,35 @@ class RelationshipType(StrEnum):
     These edges turn the flat record set into a knowledge graph, enabling
     pivoting, relationship queries, and visualisation.  Endpoints are
     referenced by record fingerprint.
+
+    Direction (source -> target):
+
+    - ``SUBDOMAIN_OF``: subdomain -> apex domain
+    - ``RESOLVES_TO``: domain/subdomain -> ip
+    - ``HOSTED_ON``: service/host -> ip
+    - ``BELONGS_TO_ASN``: ip -> ASN/org
+    - ``SHARES_CERT_WITH``: host <-> host (same cert)
+    - ``ISSUED_FOR``: certificate -> domain
+    - ``RUNS_SERVICE``: ip -> open port / service
+    - ``HAS_TECH``: host -> technology fingerprint
+    - ``HAS_VULNERABILITY``: host/ip -> vulnerability
+    - ``OWNED_BY``: domain/asn -> organization
+    - ``HAS_EMAIL``: organization/domain -> email
+    - ``EMPLOYS``: organization -> person
     """
 
-    SUBDOMAIN_OF = "subdomain_of"  # subdomain -> apex domain
-    RESOLVES_TO = "resolves_to"  # domain/subdomain -> ip
-    HOSTED_ON = "hosted_on"  # service/host -> ip
-    BELONGS_TO_ASN = "belongs_to_asn"  # ip -> ASN/org
-    SHARES_CERT_WITH = "shares_cert_with"  # host <-> host (same cert)
-    ISSUED_FOR = "issued_for"  # certificate -> domain
-    RUNS_SERVICE = "runs_service"  # ip -> open port / service
-    HAS_TECH = "has_tech"  # host -> technology fingerprint
-    HAS_VULNERABILITY = "has_vulnerability"  # host/ip -> vulnerability
-    OWNED_BY = "owned_by"  # domain/asn -> organization
-    HAS_EMAIL = "has_email"  # organization/domain -> email
-    EMPLOYS = "employs"  # organization -> person
+    SUBDOMAIN_OF = "subdomain_of"
+    RESOLVES_TO = "resolves_to"
+    HOSTED_ON = "hosted_on"
+    BELONGS_TO_ASN = "belongs_to_asn"
+    SHARES_CERT_WITH = "shares_cert_with"
+    ISSUED_FOR = "issued_for"
+    RUNS_SERVICE = "runs_service"
+    HAS_TECH = "has_tech"
+    HAS_VULNERABILITY = "has_vulnerability"
+    OWNED_BY = "owned_by"
+    HAS_EMAIL = "has_email"
+    EMPLOYS = "employs"
 
 
 class EdgeCandidate(BaseModel):

@@ -52,7 +52,6 @@ def _get_secret_values() -> list[str]:
             continue
         if any(pat in key.upper() for pat in _SECRET_ENV_PATTERNS):
             values.append(val)
-    # Sort longest-first so longer secrets are matched before substrings.
     values.sort(key=len, reverse=True)
     _secret_values = values
     return _secret_values
@@ -94,7 +93,6 @@ def _truncate(text: str, max_bytes: int) -> str:
     encoded = text.encode()
     if len(encoded) <= max_bytes:
         return text
-    # Decode safely to avoid splitting a multi-byte char
     return encoded[:max_bytes].decode(errors="ignore") + "\n[OUTPUT TRUNCATED]"
 
 
@@ -122,7 +120,6 @@ def run_command(
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # noqa: S603
     stdout = _truncate(proc.stdout, max_output) if max_output else proc.stdout
     stderr = _truncate(proc.stderr, max_output) if max_output else proc.stderr
-    # Redact secrets from both streams to prevent leakage to the LLM.
     stdout = redact_secrets(stdout)
     stderr = redact_secrets(stderr)
     return proc.returncode, stdout, stderr

@@ -54,9 +54,6 @@ def generate_report(
         f"Active scanning: {'enabled' if active_scan else 'disabled'}",
     ]
 
-    # The structured knowledge graph is the authoritative source — present it
-    # first so the report is grounded in the real data, not just the agents'
-    # free-text summaries (which are supplementary narrative below).
     if graph_context:
         parts.append(f"\n{graph_context}")
 

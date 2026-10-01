@@ -73,9 +73,6 @@ class InformationStore:
         self._load_existing_edges()
         self._load_executed_tools()
 
-    # ------------------------------------------------------------------
-    # Loading
-
     def _load_existing_records(self) -> None:
         """Hydrate the in-memory record cache from the JSONL snapshot."""
         if not self._records_path.exists():
@@ -137,9 +134,6 @@ class InformationStore:
                 exc_info=True,
             )
 
-    # ------------------------------------------------------------------
-    # Writers
-
     def record_execution(self, execution: ToolExecution) -> None:
         """Append a :class:`ToolExecution` to ``executions.jsonl``."""
         with self._lock:
@@ -170,7 +164,6 @@ class InformationStore:
             for candidate in candidates:
                 fp = candidate.fingerprint
                 if fp in seen:
-                    # Same fingerprint twice in the same batch — already merged.
                     continue
                 existing = self._records.get(fp)
                 if existing is None:
@@ -178,8 +171,6 @@ class InformationStore:
                     event_type = TimelineEventType.CREATED
                 else:
                     record = self._update_record(existing, candidate, phase)
-                    # UPDATED when the re-observation actually changed the record
-                    # (new source, confidence shift, attributes); else REOBSERVED.
                     changed = (
                         existing.attributes != record.attributes
                         or existing.confidence != record.confidence
@@ -234,9 +225,6 @@ class InformationStore:
                 seen[eid] = edge
         return list(seen.values())
 
-    # ------------------------------------------------------------------
-    # Readers
-
     def all_records(self) -> list[InformationRecord]:
         """Return all known records (in fingerprint-insertion order)."""
         with self._lock:
@@ -275,9 +263,6 @@ class InformationStore:
         """Return the set of tool names executed so far in this scan."""
         with self._lock:
             return set(self._executed_tools)
-
-    # ------------------------------------------------------------------
-    # Internals
 
     @staticmethod
     def _create_record(candidate: InformationCandidate, phase: str) -> InformationRecord:
@@ -366,10 +351,6 @@ class InformationStore:
                 fh.write("\n")
         except OSError:
             logger.warning("store: failed to append to %s", path, exc_info=True)
-
-
-# ----------------------------------------------------------------------
-# Per-scan binding via contextvar (mirrors ``current_scan_id``)
 
 
 current_store: contextvars.ContextVar[InformationStore | None] = contextvars.ContextVar(

@@ -42,10 +42,6 @@ from .osint import _osint_edges, translate_osint
 logger = logging.getLogger(__name__)
 
 
-# ----------------------------------------------------------------------
-# ToolExecution extraction
-
-
 def _tool_call_params(messages: list[Any]) -> dict[str, dict[str, Any]]:
     """Index tool-call arguments by ``tool_call_id`` from preceding AIMessages."""
     params: dict[str, dict[str, Any]] = {}
@@ -117,10 +113,6 @@ def extract_tool_executions(
             )
         )
     return executions
-
-
-# ----------------------------------------------------------------------
-# Port-scan translator
 
 
 _PORT_SCAN_TOOLS = {"naabu_scan", "nmap_scan"}
@@ -196,10 +188,6 @@ def translate_port_scan(messages: list[Any]) -> list[InformationCandidate]:
     return candidates
 
 
-# ----------------------------------------------------------------------
-# Vuln-scan translator
-
-
 _VULN_SCAN_TOOLS = {"nuclei_scan"}
 
 
@@ -247,10 +235,6 @@ def translate_vuln_scan(messages: list[Any]) -> list[InformationCandidate]:
     return candidates
 
 
-# ----------------------------------------------------------------------
-# Public entry point
-
-
 def translate_phase_messages(
     messages: list[Any],
     *,
@@ -292,10 +276,6 @@ def translate_phase_messages(
     return executions, candidates
 
 
-# ----------------------------------------------------------------------
-# Relationship (knowledge-graph edge) extraction
-
-
 def translate_phase_edges(
     messages: list[Any],
     candidates: list[InformationCandidate],
@@ -307,10 +287,6 @@ def translate_phase_edges(
     if phase == "osint":
         return _osint_edges(messages, candidates, target)
     return []
-
-
-# ----------------------------------------------------------------------
-# Convenience: persist into the scan-bound store
 
 
 def persist_phase(

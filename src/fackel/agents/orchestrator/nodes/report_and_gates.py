@@ -26,16 +26,10 @@ def report_node(state: ScanState, config: RunnableConfig) -> dict[str, Any]:
 
     streaming.emit("report", "start", {})
 
-    # Source the report from the structured store (all tool output, deduplicated
-    # and confidence-scored) instead of only the lossy agent summaries.  No-op
-    # when no store is bound (e.g. unit tests bypassing orchestrator.run).
     store = get_current_store()
     graph_context = build_report_context(store) if store is not None else ""
     asset_inventory = build_asset_inventory_md(store) if store is not None else ""
 
-    # Corroborate findings before writing: append a deterministic verification
-    # section so the report distinguishes verified facts from single-source ones
-    # and flags high-impact uncorroborated findings for manual confirmation.
     if store is not None and graph_context:
         summary = verify_findings(store)
         streaming.emit(

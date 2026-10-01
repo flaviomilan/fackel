@@ -32,9 +32,7 @@ from fackel.tooling import (
 
 _TIMEOUT = 180
 _MAX_ACCOUNTS = 200
-# Conservative username charset: letters, digits, dot, underscore, hyphen.
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-# Maigret prints found accounts as: "[+] SiteName: https://site/user"
 _FOUND_RE = re.compile(r"^\[\+\]\s*(?P<site>[^:]+):\s*(?P<url>https?://\S+)\s*$")
 
 

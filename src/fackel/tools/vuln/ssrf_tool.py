@@ -27,7 +27,6 @@ from fackel.tooling import (
 
 _TIMEOUT = 600
 
-# Tags that cover SSRF-related nuclei templates.
 _SSRF_TAGS = "ssrf,oast"
 
 

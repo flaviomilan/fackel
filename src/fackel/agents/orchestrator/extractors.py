@@ -85,9 +85,6 @@ def _add_unique_ip(ips: list[str], value: object) -> None:
         ips.append(ip_str)
 
 
-# --- shared payload-parsing primitives (also used by ``translators``) ---
-
-
 def raw_ips_from_payload(data: dict[str, Any]) -> list[str]:
     """Collect candidate IP strings from one tool payload — unvalidated, ordered.
 
@@ -257,8 +254,6 @@ def build_classification_attrs(
         "country": data.get("country", ""),
         "anycast": bool(data.get("anycast", False)),
     }
-    # Reputation enrichment (greynoise / abuseipdb) — only surfaced when present
-    # so IPs classified by ipinfo/bgp alone keep their existing attribute shape.
     if "gn_classification" in data or "gn_noise" in data:
         attrs.update(
             {

@@ -51,8 +51,6 @@ TOOLS = [
 ]
 
 
-# Supplementary prompt sections composed onto the vuln-scan skill — shared by
-# every vuln specialist (see ``specialists.py`` and the sequential HITL path).
 _VULN_PROMPT_SECTIONS: tuple[str, ...] = (
     "tools/vuln_scanning",
     "tools/security_headers",

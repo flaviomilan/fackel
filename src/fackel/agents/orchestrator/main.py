@@ -106,8 +106,6 @@ def _interrupt_handler(signum: int, frame: Any) -> None:
     raise ScanInterruptedError(f"Scan interrupted by {sig_name}")
 
 
-# SIGALRM is only available on POSIX.  On Windows / environments where it
-# is missing, we fall back to a threading.Timer that sets an event.
 _HAS_SIGALRM = hasattr(signal, "SIGALRM")
 
 
@@ -121,7 +119,10 @@ class _TimeoutGuard:
     Parameters
     ----------
     timeout:
-        Timeout in seconds.
+        Timeout in seconds.  A value ``<= 0`` disables the global scan
+        timeout entirely: no alarm or timer is armed.  ``SIGINT``/``SIGTERM``
+        handling is independent and still installed per
+        *install_signal_handlers*.
     install_signal_handlers:
         When ``True`` (default), overrides ``SIGINT``/``SIGTERM`` for the
         duration of the scan so they raise :class:`ScanInterruptedError`.
@@ -130,6 +131,10 @@ class _TimeoutGuard:
         worker, notebook) that owns its own signal handlers.  The
         ``SIGALRM``-based timeout (POSIX) is independent of this flag and
         is always installed.
+    use_signals:
+        ``signal.signal``/``signal.alarm`` only work on the main thread.
+        When the orchestrator runs in a worker thread (interactive harness),
+        pass ``False`` to force the ``threading.Timer`` timeout path.
 
     Usage::
 
@@ -147,23 +152,14 @@ class _TimeoutGuard:
         use_signals: bool = True,
     ) -> None:
         self._timeout = timeout
-        # A timeout of 0 (or negative) disables the global scan timeout — no
-        # alarm/timer is armed.  SIGINT/SIGTERM handling is independent and
-        # still installed per ``install_signal_handlers``.
         self._enabled = timeout > 0
         self._install_signal_handlers = install_signal_handlers
-        # ``signal.signal`` / ``signal.alarm`` only work on the main thread; when
-        # the orchestrator runs in a worker thread (interactive harness), set
-        # ``use_signals=False`` to force the ``threading.Timer`` timeout path and
-        # skip SIGINT/SIGTERM installation.
         self._use_signals = use_signals and _HAS_SIGALRM
         self._prev_alarm: Any = None
         self._prev_int: Any = None
         self._prev_term: Any = None
         self._timer: threading.Timer | None = None
         self._expired = threading.Event()
-
-    # -- context manager interface -----------------------------------------
 
     def __enter__(self) -> _TimeoutGuard:
         if self._enabled:
@@ -196,8 +192,6 @@ class _TimeoutGuard:
         if self._install_signal_handlers:
             signal.signal(signal.SIGINT, self._prev_int)
             signal.signal(signal.SIGTERM, self._prev_term)
-
-    # -- polling interface for the threading fallback ----------------------
 
     def check(self) -> None:
         """Raise ``ScanTimeoutError`` if the timer has expired (threading path)."""

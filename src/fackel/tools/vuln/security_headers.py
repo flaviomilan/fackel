@@ -28,7 +28,6 @@ from fackel.tooling.http_client import get_session
 
 _TIMEOUT = 30
 
-# Headers to audit and their expected properties.
 _SECURITY_HEADERS: dict[str, dict[str, Any]] = {
     "Strict-Transport-Security": {
         "severity": "high",
@@ -67,7 +66,6 @@ _SECURITY_HEADERS: dict[str, dict[str, Any]] = {
     },
 }
 
-# CSP directives that weaken the policy significantly.
 _WEAK_CSP_DIRECTIVES: list[str] = [
     "unsafe-inline",
     "unsafe-eval",
@@ -178,7 +176,6 @@ def security_headers_audit(target: str) -> dict[str, Any]:
 
     timeout = get_tool_timeout("security_headers_audit", _TIMEOUT)
 
-    # Guard the connect-to-target host against DNS rebinding to private IPs.
     guard_request_target(target, "security_headers_audit")
 
     try:
@@ -190,9 +187,6 @@ def security_headers_audit(target: str) -> dict[str, Any]:
             headers={"User-Agent": "Fackel-SecurityAudit/1.0"},
         )
     except (requests.ConnectionError, requests.Timeout) as exc:
-        # Unreachable hosts are common in recon — return a structured
-        # result so the agent can move on instead of treating it as a
-        # tool failure.
         return format_tool_output(
             "security_headers_audit",
             target,
@@ -210,7 +204,6 @@ def security_headers_audit(target: str) -> dict[str, Any]:
     except requests.RequestException as exc:
         raise ToolException(f"security_headers_audit: {exc}") from exc
 
-    # Normalise header names to lower-case for lookups.
     resp_headers_lower = {k.lower(): v for k, v in resp.headers.items()}
 
     findings: list[dict[str, Any]] = []
@@ -231,7 +224,6 @@ def security_headers_audit(target: str) -> dict[str, Any]:
         else:
             present_headers[header] = value
 
-    # Deep analysis on present headers.
     csp_value = present_headers.get("Content-Security-Policy", "")
     if csp_value:
         for warn in _analyse_csp(csp_value):
@@ -258,7 +250,6 @@ def security_headers_audit(target: str) -> dict[str, Any]:
                 }
             )
 
-    # CORS analysis.
     cors_warnings = _check_cors_headers(resp_headers_lower)
     for warn in cors_warnings:
         findings.append(
@@ -270,9 +261,7 @@ def security_headers_audit(target: str) -> dict[str, Any]:
             }
         )
 
-    # Check for information disclosure headers.
     server_header = resp_headers_lower.get("server", "")
-    # Detailed version info is a disclosure risk.
     if server_header and any(ch.isdigit() for ch in server_header):
         findings.append(
             {
@@ -296,7 +285,6 @@ def security_headers_audit(target: str) -> dict[str, Any]:
             }
         )
 
-    # Parse domain for reporting.
     parsed = urlparse(target)
     hostname = parsed.hostname or target
 

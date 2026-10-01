@@ -51,12 +51,6 @@ from fackel.tooling.output_sanitizer import sanitize_tool_output
 
 logger = logging.getLogger(__name__)
 
-# Only genuinely transient, network-level failures are retried.  Bare
-# ``OSError`` is deliberately excluded: ``ConnectionError`` and ``TimeoutError``
-# (its transient subclasses) are listed explicitly, while non-transient
-# ``OSError`` variants — ``FileNotFoundError``, ``PermissionError``, disk-full —
-# must fail fast rather than waste retries.  ``ToolRetryMiddleware`` already
-# applies exponential backoff with jitter.
 _RETRYABLE_ERRORS: tuple[type[Exception], ...] = (
     ConnectionError,
     TimeoutError,
@@ -78,7 +72,6 @@ ACTIVE_SCAN_TOOLS: frozenset[str] = frozenset(
         "open_redirect_scan",
         "ssti_scan",
         "ffuf_scan",
-        # Tools that send traffic to the target — must require approval too.
         "wafw00f_detect",
         "s3scanner_scan",
         "graphql_scan",
@@ -259,6 +252,9 @@ def default_middleware(
        persisted to agent state and re-read by the model.
     3. ``ToolRetryMiddleware`` — retries transient network errors with
        exponential backoff (max 2 retries, 1 s initial delay, 2x factor).
+       Only ``ConnectionError`` and ``TimeoutError`` are retried; other
+       ``OSError`` variants (``FileNotFoundError``, ``PermissionError``,
+       disk-full) must fail fast rather than waste retries.
     4. ``ContextEditingMiddleware`` *(compact profile only)* — clears
        older tool results when the accumulated context approaches the
        8K-token cap of the GitHub Models free tier.
@@ -275,8 +271,6 @@ def default_middleware(
     s = get_settings()
     mw: list[AgentMiddleware] = [
         ParallelToolCalls(),
-        # Outermost tool wrapper: sanitises the final (post-retry) tool result
-        # before it is checkpointed and re-read by the model.
         ToolOutputSanitizer(),
         ToolRetryMiddleware(
             max_retries=s.tool_retry_max_retries,
@@ -286,11 +280,6 @@ def default_middleware(
             on_failure="continue",
         ),
     ]
-    # Prune stale tool results before the request exceeds the model's context
-    # window.  This is critical on the GitHub Models ('copilot') endpoint
-    # whose free tier enforces an 8K-token request cap (every model): a long
-    # OSINT scan accumulates ~30 tool results that easily blow past the cap
-    # mid-run and surface as HTTP 413 'tokens_limit_reached'.
     if s.prompt_profile == "compact":
         mw.append(
             ContextEditingMiddleware(

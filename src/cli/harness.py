@@ -51,7 +51,7 @@ class _PendingApproval:
     """An approval request raised by the worker, answered on the main thread."""
 
     data: dict[str, Any]
-    kind: str  # "gate" | "tool"
+    kind: str
     event: threading.Event = field(default_factory=threading.Event)
     result: Any = None
 
@@ -69,8 +69,6 @@ class Harness:
         )
         self._prompt: PromptSession[str] = PromptSession(history=InMemoryHistory())
 
-    # -- main loop ---------------------------------------------------------
-
     def run(self) -> None:
         presenter.print_banner(self._console)
         self._console.print(
@@ -80,9 +78,9 @@ class Harness:
             try:
                 line = self._prompt.prompt("fackel> ", bottom_toolbar=self._toolbar).strip()
             except KeyboardInterrupt:
-                continue  # clear the line
+                continue
             except EOFError:
-                break  # Ctrl-D
+                break
             if not line:
                 continue
             if not self._dispatch(line):
@@ -120,11 +118,9 @@ class Harness:
             return True
         try:
             handler(rest)
-        except Exception as exc:  # never crash the REPL on a command error
+        except Exception as exc:
             self._console.print(f"[red]error:[/red] {exc}")
         return True
-
-    # -- commands ----------------------------------------------------------
 
     def _cmd_help(self, _rest: str) -> None:
         self._console.print(_HELP)
@@ -239,9 +235,14 @@ class Harness:
             table.add_row("vuln_scan", v.name, v.focus)
         self._console.print(table)
 
-    # -- scan execution (producer/consumer) --------------------------------
-
     def _run_scan(self, target: str, *, active_scan: bool, approve_tools: bool) -> None:
+        """Run one scan on a worker thread while the caller drives the renderer.
+
+        The worker is started via ``contextvars.copy_context().run`` because a raw
+        thread does not inherit the parent's ContextVars: the copy carries the
+        ``run_session`` bindings (event callback and cancel flag) so the worker — and
+        the specialist threads LangGraph spawns from it — see them.
+        """
         from fackel.agents.orchestrator import run
         from fackel.agents.orchestrator import streaming as st
 
@@ -263,7 +264,7 @@ class Harness:
                 events.put(("__done__", result))
             except st.StreamCancelledError:
                 events.put(("__cancelled__", None))
-            except Exception as exc:  # surfaced to the operator, REPL survives
+            except Exception as exc:
                 events.put(("__error__", exc))
 
         self._console.print()
@@ -273,17 +274,12 @@ class Harness:
         )
         started = time.perf_counter()
 
-        # One cohesive binding of the run's streaming wiring; restored on exit.
         with st.run_session(
             event_callback=lambda p, e, d: events.put((p, e, d)),
             tool_approval=tool_cb,
             approve_tools=approve_tools,
             cancel=cancel,
         ):
-            # A raw thread does NOT inherit the parent's ContextVars; copy the
-            # current context (now holding the run_session bindings, incl. cancel)
-            # so the worker — and the specialist threads LangGraph spawns from it —
-            # see the callback and cancel flag.
             ctx = contextvars.copy_context()
             worker = threading.Thread(
                 target=lambda: ctx.run(_worker), name="fackel-scan", daemon=True
@@ -302,7 +298,7 @@ class Harness:
             presenter.present_report(self._console, payload, target, duration)
         elif kind == "cancelled":
             self._console.print(f"[yellow]{theme.glyph('stop')} scan cancelled[/yellow]")
-        else:  # error
+        else:
             self._console.print(
                 Panel(
                     f"[red]{payload}[/red]",

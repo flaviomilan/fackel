@@ -40,8 +40,6 @@ def _count(text: str, encoder: Any) -> int:
             return len(encoder.encode(text))
         except Exception:  # noqa: S110 - fall through to heuristic
             pass
-    # Conservative fallback: ~3 chars/token (overestimates slightly so
-    # we never exceed the real context window).
     return len(text) // 3 + 1
 
 

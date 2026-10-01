@@ -27,7 +27,6 @@ from fackel.tooling import (
 
 _TIMEOUT = 300
 
-# Tags covering SSTI-related nuclei templates.
 _SSTI_TAGS = "ssti"
 
 

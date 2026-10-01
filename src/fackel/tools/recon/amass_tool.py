@@ -141,14 +141,12 @@ def amass_enum(target: str, passive: bool = True) -> dict[str, Any]:
         except Exception as exc:
             raise ToolException(f"amass_enum: {exc}") from exc
 
-        # Prefer the structured JSON file written by ``-oA``.
         json_file = oa_prefix + ".json"
         json_content = ""
         if os.path.isfile(json_file):
             with open(json_file) as fh:
                 json_content = fh.read()
 
-        # Parse: JSON file → stdout JSONL → stdout plain text.
         subdomains = _parse_jsonl(json_content or out)
         if not subdomains:
             subdomains = _parse_plain_text(out)

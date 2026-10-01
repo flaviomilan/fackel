@@ -60,7 +60,6 @@ def extract_webpage_content(url: str) -> dict[str, Any]:
     or intel from discovered web endpoints.
     """
     url = guard_target(url, "extract_webpage_content", TargetType.URL)
-    # Guard the connect-to-target host against DNS rebinding to private IPs.
     guard_request_target(url, "extract_webpage_content")
 
     try:

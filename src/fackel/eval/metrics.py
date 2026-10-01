@@ -95,7 +95,6 @@ def evaluate_store(
         g_fp += result.fp
         g_fn += result.fn
 
-    # Micro-averaged overall from summed confusion counts.
     precision = g_tp / (g_tp + g_fp) if (g_tp + g_fp) else 1.0
     recall = g_tp / (g_tp + g_fn) if (g_tp + g_fn) else 1.0
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0

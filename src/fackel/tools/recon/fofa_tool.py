@@ -74,7 +74,6 @@ def fofa_search(query: str) -> dict[str, Any]:
 
     if data.get("error") and data.get("errmsg"):
         errmsg = data["errmsg"]
-        # Extract numeric error code from "[820031] ..." format.
         code = None
         if errmsg.startswith("["):
             with contextlib.suppress(ValueError, IndexError):

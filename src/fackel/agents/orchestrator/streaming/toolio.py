@@ -32,7 +32,6 @@ def validate_tool_output(msg: ToolMessage) -> ToolMessage:
         logger.debug("tool %s raised ToolException: %s", msg.name, msg.content)
         return msg
 
-    # --- sanitize raw content before structural checks ---
     if isinstance(msg.content, str):
         sanitized = _sanitize_output(msg.content, tool_name=msg.name or "")
         if sanitized != msg.content:

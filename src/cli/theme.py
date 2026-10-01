@@ -9,6 +9,9 @@ font lacks Nerd Font patches, set ``FACKEL_NERD_FONT=0`` and every glyph falls b
 to a width-1 ASCII/symbol that keeps table columns aligned.  Both the phase labels
 and ordering are imported from :mod:`fackel.formatting` so there is still one
 source for those.
+
+``_GLYPHS`` maps each name to a ``(nerd_font, ascii_fallback)`` pair; fallbacks stay
+within the width-1 symbol set (✓ ✗ → • ─) so columns do not shift when Nerd Font is off.
 """
 
 from __future__ import annotations
@@ -16,33 +19,25 @@ from __future__ import annotations
 from fackel.formatting import PHASE_LABELS, PHASE_ORDER
 from fackel.settings import get_settings
 
-# -- glyphs ----------------------------------------------------------------
-# Each entry is ``(nerd_font, ascii_fallback)``.  Fallbacks are restricted to the
-# width-1 symbol set already used by the renderer (✓ ✗ → • ─) so column widths do
-# not shift when Nerd Font is disabled.
-
 _GLYPHS: dict[str, tuple[str, str]] = {
-    # phase markers
-    "osint": ("", "▸"),  # nf-fa-search
-    "port_scan": ("", "▸"),  # nf-fa-plug
-    "vuln_scan": ("", "▸"),  # nf-fa-shield
-    "triage": ("", "▸"),  # nf-fa-bar_chart
-    "report": ("", "▸"),  # nf-fa-file_text_o
-    "approval": ("", "!"),  # nf-fa-exclamation_triangle
-    "phase": ("", "▸"),  # nf-fa-play (generic/default phase)
-    # tool / lane status
-    "done": ("", "✓"),  # nf-fa-check
-    "error": ("", "✗"),  # nf-fa-times
-    "running": ("", "→"),  # nf-fa-arrow_right
-    "pending": ("", "○"),  # nf-fa-circle_o
-    "active": ("", "●"),  # nf-fa-dot_circle_o (stepper marker)
-    "bullet": ("", "•"),  # nf-fa-circle
-    # framing / actions
-    "scan": ("", "»"),  # nf-fa-fire
-    "saved": ("", "+"),  # nf-fa-save
-    "stop": ("", "■"),  # nf-fa-stop
-    "summary": ("", "≡"),  # nf-fa-clipboard
-    "quality": ("", "%"),  # nf-fa-pie_chart
+    "osint": ("", "▸"),
+    "port_scan": ("", "▸"),
+    "vuln_scan": ("", "▸"),
+    "triage": ("", "▸"),
+    "report": ("", "▸"),
+    "approval": ("", "!"),
+    "phase": ("", "▸"),
+    "done": ("", "✓"),
+    "error": ("", "✗"),
+    "running": ("", "→"),
+    "pending": ("", "○"),
+    "active": ("", "●"),
+    "bullet": ("", "•"),
+    "scan": ("", "»"),
+    "saved": ("", "+"),
+    "stop": ("", "■"),
+    "summary": ("", "≡"),
+    "quality": ("", "%"),
 }
 
 
@@ -63,14 +58,10 @@ def phase_glyph(phase: str) -> str:
     return glyph(phase if phase in _GLYPHS else "phase")
 
 
-# -- semantic colour tokens ------------------------------------------------
-# Map intent → Rich style.  Callers reference the intent (``color("phase")``)
-# instead of repeating raw colour names, so the palette can shift in one place.
-
 _COLORS: dict[str, str] = {
-    "phase": "bold blue",  # phase rule / header
-    "scan": "bold red",  # scan framing (Fackel's flame)
-    "report": "bold green",  # report rule
+    "phase": "bold blue",
+    "scan": "bold red",
+    "report": "bold green",
     "success": "green",
     "warn": "yellow",
     "danger": "red",
@@ -84,25 +75,11 @@ def color(token: str) -> str:
     return _COLORS.get(token, "dim")
 
 
-# -- labels / progress -----------------------------------------------------
-
-
 def phase_label(phase: str) -> str:
     """Human label for *phase* (re-exported from :mod:`fackel.formatting`)."""
     return PHASE_LABELS.get(phase, phase)
 
 
-def phase_step(phase: str) -> str:
-    """Return a ``· n/N`` step suffix for *phase*, or ``""`` if not a scan phase.
-
-    Uses :data:`fackel.formatting.PHASE_ORDER` so the breadcrumb stays in sync with
-    the canonical pipeline ordering; ``report`` (outside that order) yields ``""``."""
-    if phase in PHASE_ORDER:
-        return f" · {PHASE_ORDER.index(phase) + 1}/{len(PHASE_ORDER)}"
-    return ""
-
-
-# Visible pipeline for the persistent stepper (PHASE_ORDER + the report stage).
 STEP_ORDER: tuple[str, ...] = (*PHASE_ORDER, "report")
 
 

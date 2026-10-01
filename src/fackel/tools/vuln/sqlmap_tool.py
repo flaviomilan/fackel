@@ -135,7 +135,6 @@ def sqlmap_scan(
 
     target = ensure_scheme(target)
 
-    # Clamp level/risk to safe automated ranges.
     level = max(1, min(level, 3))
     risk = max(1, min(risk, 2))
     threads = max(1, min(threads, 5))
@@ -166,7 +165,6 @@ def sqlmap_scan(
         cmd.extend(["--cookie", cookie])
 
     if technique:
-        # Validate technique characters.
         valid_chars = set("BEUTQS")
         sanitized = "".join(c for c in technique.upper() if c in valid_chars)
         if sanitized:
@@ -182,16 +180,13 @@ def sqlmap_scan(
 
     findings: list[dict[str, Any]] = []
 
-    # Parse sqlmap text output for confirmed injections.
     _parse_sqlmap_text(out, findings)
 
-    # Also attempt to parse log files in output dir.
     try:
         _parse_sqlmap_output_dir(output_dir, findings, target)
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
 
-    # Deduplicate by (parameter, technique).
     seen: set[str] = set()
     unique: list[dict[str, Any]] = []
     for f in findings:
@@ -230,9 +225,7 @@ def _parse_sqlmap_text(output: str, findings: list[dict[str, Any]]) -> None:
     for line in lines:
         stripped = line.strip()
 
-        # Detect parameter context.
         if "parameter '" in stripped.lower() or 'parameter "' in stripped.lower():
-            # Extract parameter name
             for quote in ("'", '"'):
                 if f"parameter {quote}" in stripped.lower():
                     start = stripped.lower().index(f"parameter {quote}") + len(f"parameter {quote}")
@@ -242,7 +235,6 @@ def _parse_sqlmap_text(output: str, findings: list[dict[str, Any]]) -> None:
                         current_param = rest[:end]
                     break
 
-        # Detect confirmed injection.
         if "is vulnerable" in stripped.lower() or "injectable" in stripped.lower():
             findings.append(
                 {
@@ -253,7 +245,6 @@ def _parse_sqlmap_text(output: str, findings: list[dict[str, Any]]) -> None:
                 }
             )
 
-        # Detect specific techniques.
         for technique in (
             "boolean-based blind",
             "time-based blind",

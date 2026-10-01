@@ -101,7 +101,6 @@ def s3scanner_scan(bucket: str, provider: str = "aws") -> dict[str, Any]:
         results.append(result)
 
     if not results:
-        # Fallback: parse plain text output
         result_text = out.strip() or stderr.strip()
         if code and not result_text:
             raise ToolException(f"s3scanner_scan: {stderr.strip() or 'scan failed'}")

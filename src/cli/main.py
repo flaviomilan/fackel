@@ -203,7 +203,6 @@ def scan(
 
     started_at = time.perf_counter()
 
-    # One cohesive binding of the run's streaming wiring; restored on exit.
     with run_session(
         event_callback=renderer.handle,
         tool_approval=tool_approval_prompt if approve_tools else None,

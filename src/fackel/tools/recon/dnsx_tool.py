@@ -118,8 +118,6 @@ def dnsx_resolve(hosts: list[str], wildcard_domain: str = "") -> dict[str, Any]:
         a_records = entry.get("a") or []
         if isinstance(a_records, list) and a_records:
             for ip in a_records:
-                # `hostname`/`ip` keys are the shape the orchestrator's
-                # extractors and translators already parse → automatic parity.
                 resolved_hosts.append({"hostname": host, "ip": str(ip)})
         else:
             resolved_hosts.append({"hostname": host, "ip": ""})

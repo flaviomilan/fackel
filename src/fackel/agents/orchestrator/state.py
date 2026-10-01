@@ -58,7 +58,6 @@ def merge_findings(old: list[Finding], new: list[Finding]) -> list[Finding]:
     for f in new:
         fp = _finding_fingerprint(f)
         if fp in seen:
-            # Keep the version with higher severity/confidence
             existing = merged[seen[fp]]
             if f.get("confidence", 0.0) > existing.get("confidence", 0.0):
                 merged[seen[fp]] = f

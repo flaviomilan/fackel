@@ -26,7 +26,6 @@ from ._helpers import build_retry_prompt, emit_evaluation, make_finding
 
 logger = logging.getLogger(__name__)
 
-# Loaded once and cached — supplies retry enrichment context.
 _LOOP_DETECTION_GUIDANCE: str | None = None
 _APPROACH_CHANGE_GUIDANCE: str | None = None
 
@@ -40,11 +39,6 @@ def _load_retry_guidance() -> tuple[str, str]:
         _LOOP_DETECTION_GUIDANCE = load_section("orchestrator/loop_detection")
         _APPROACH_CHANGE_GUIDANCE = load_section("strategy/approach_change")
     return _LOOP_DETECTION_GUIDANCE, _APPROACH_CHANGE_GUIDANCE  # type: ignore[return-value]
-
-
-# ---------------------------------------------------------------------------
-# Parallel specialist fan-out (idiomatic LangGraph Send map-reduce)
-# ---------------------------------------------------------------------------
 
 
 def dispatch_osint_specialists(state: ScanState) -> list[Send]:
@@ -81,13 +75,11 @@ def osint_specialist_node(state: dict[str, Any], config: RunnableConfig) -> dict
     if spec is None:
         return {}
     agent = build_specialist(spec)
-    if agent is None:  # no usable tools (missing keys/binaries)
+    if agent is None:
         logger.info("osint: specialist %s skipped (no usable tools)", name)
         return {}
 
     logger.info("osint: running specialist %s", name)
-    # Bind a per-agent lane so the renderer can show this specialist in its own
-    # lane instead of interleaving with the others running in parallel.
     with streaming.lane(name):
         streaming.emit("osint", "lane_start", {"name": name})
         try:
@@ -115,12 +107,9 @@ def osint_collect_node(state: ScanState, config: RunnableConfig) -> dict[str, An
     evaluation = evaluator.evaluate_phase("osint", agent_summary(messages), [target], config=config)
     emit_evaluation("osint", evaluation)
 
-    # Quality-gated self-reflection retry: if the judge rated the combined
-    # specialist output as empty, run one enriched full-toolset pass.
     if evaluation.completeness == "empty" and evaluation.score < 0.3:
         messages = messages + _retry_osint(agent, target, evaluation, config)
 
-    # Cross-domain pivots (sequential, post-barrier) use the full toolset.
     messages = messages + _run_pivot_loop(agent, target, config)
     return _build_osint_result(messages, target, evaluation)
 

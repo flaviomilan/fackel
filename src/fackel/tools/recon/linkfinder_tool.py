@@ -71,7 +71,6 @@ def linkfinder_extract(target: str) -> dict[str, Any]:
     except Exception as exc:
         raise ToolException(f"linkfinder_extract: {exc}") from exc
 
-    # Parse endpoints from output lines.
     endpoints: set[str] = set()
     for line in out.splitlines():
         line = line.strip()
@@ -79,12 +78,10 @@ def linkfinder_extract(target: str) -> dict[str, Any]:
             continue
         matches = _URL_PATTERN.findall(line)
         for match in matches:
-            # Skip common noise.
             if match in ("/", "//") or len(match) > 500:
                 continue
             endpoints.add(match)
 
-    # Separate absolute URLs from relative paths.
     absolute_urls = sorted(e for e in endpoints if e.startswith("http"))
     relative_paths = sorted(e for e in endpoints if not e.startswith("http"))
 
