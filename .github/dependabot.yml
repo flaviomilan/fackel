@@ -15,13 +15,13 @@ updates:
       - automated
     commit-message:
       prefix: "deps"
+    # Collapse every pip update into a single PR. Omitting `update-types`
+    # groups all semver levels; restricting it lets updates escape the group
+    # and open one PR each (what previously happened).
     groups:
-      python-minor-patch:
+      python-dependencies:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
 
   # GitHub Actions
   - package-ecosystem: github-actions
@@ -37,10 +37,8 @@ updates:
       - automated
     commit-message:
       prefix: "ci"
+    # Same policy for Actions: one grouped PR covering all update types.
     groups:
-      github-actions-minor-patch:
+      github-actions:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
