@@ -2,6 +2,37 @@
 
 <!-- version list -->
 
+## v1.7.2 (2026-10-01)
+
+### Chores
+
+- **deps**: Bump rich to 15.x, ruff to 0.16.x, python-semantic-release to 10.6.2
+  ([#112](https://github.com/flaviomilan/fackel/pull/112),
+  [`f22c2ea`](https://github.com/flaviomilan/fackel/commit/f22c2ea329e61522a3ad4d98717154ff2731bc67))
+
+- **deps**: Consolidate 10 minor/patch dependency updates
+  ([#111](https://github.com/flaviomilan/fackel/pull/111),
+  [`7e37774`](https://github.com/flaviomilan/fackel/commit/7e37774cf9aaba07eacb661a8862a9b730a260b7))
+
+### Continuous Integration
+
+- Fix dependabot grouping to actually match all dependencies
+  ([#110](https://github.com/flaviomilan/fackel/pull/110),
+  [`c4015ce`](https://github.com/flaviomilan/fackel/commit/c4015ce88c217d40532a7a49433d2d2959a4dabe))
+
+### Documentation
+
+- Add Claude Code agents/skills for dev workflow, dedupe dev rules
+  ([#118](https://github.com/flaviomilan/fackel/pull/118),
+  [`966a823`](https://github.com/flaviomilan/fackel/commit/966a82397e4582757c7d04b313bf31413c6ccee2))
+
+### Refactoring
+
+- Docstrings-only comments, drop dead code, add comment-style rule
+  ([#119](https://github.com/flaviomilan/fackel/pull/119),
+  [`9b6957b`](https://github.com/flaviomilan/fackel/commit/9b6957ba7271cc80bf4d625a35cd12916e1291ac))
+
+
 ## v1.7.1 (2026-09-19)
 
 ### Chores
