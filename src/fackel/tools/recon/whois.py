@@ -101,7 +101,7 @@ def _build_whois_data(record: Any) -> dict[str, Any]:
 def _rdap_server_for_tld(tld: str) -> str | None:
     """Look up the RDAP base URL for *tld* via the IANA bootstrap file."""
     try:
-        req = urllib.request.Request(  # noqa: S310
+        req = urllib.request.Request(
             _RDAP_BOOTSTRAP_URL,
             headers={"Accept": "application/json"},
         )
