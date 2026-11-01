@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.7.3 (2026-11-01)
+
+### Bug Fixes
+
+- **deps**: Upgrade packages with open security advisories
+  ([#154](https://github.com/flaviomilan/fackel/pull/154),
+  [`08e5915`](https://github.com/flaviomilan/fackel/commit/08e5915d550b69ba636d736a2655b4611c097a64))
+
+
 ## v1.7.2 (2026-10-01)
 
 ### Chores
